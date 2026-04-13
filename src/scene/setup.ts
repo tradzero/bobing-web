@@ -21,7 +21,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap
 
   // 摄像机：俯视 + 轻微倾斜
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)

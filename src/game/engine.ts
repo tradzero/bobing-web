@@ -25,9 +25,9 @@ export interface Engine {
  * 每帧顺序执行：物理步进 → body→mesh 同步 → 停稳检测 → 渲染
  */
 export function createEngine(opts: EngineOptions): Engine {
-  const { sceneCtx, world, worldStep, dicePairs, onSettled } = opts
+  const { sceneCtx, worldStep, dicePairs, onSettled } = opts
   const { scene, camera, renderer } = sceneCtx
-  const clock = new THREE.Clock(false)
+  const timer = new THREE.Timer()
 
   let rafId: number | null = null
   let settleState: SettleState | null = null
@@ -36,10 +36,11 @@ export function createEngine(opts: EngineOptions): Engine {
 
   const bodies = dicePairs.map((p) => p.body)
 
-  function tick() {
+  function tick(timestamp: number) {
     rafId = requestAnimationFrame(tick)
 
-    const dt = clock.getDelta()
+    timer.update(timestamp)
+    const dt = timer.getDelta()
     elapsedTime += dt
 
     // 1. 物理步进
@@ -70,8 +71,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
   function start() {
     if (rafId !== null) return
-    clock.start()
-    tick()
+    rafId = requestAnimationFrame(tick)
   }
 
   function stop() {
@@ -79,7 +79,6 @@ export function createEngine(opts: EngineOptions): Engine {
       cancelAnimationFrame(rafId)
       rafId = null
     }
-    clock.stop()
   }
 
   function beginSettle() {

@@ -1,4 +1,3 @@
-import * as CANNON from 'cannon-es'
 import type { DicePair } from './create'
 import { THROW } from '@/config/throw'
 import { random, randomRange } from '@/utils/random'
