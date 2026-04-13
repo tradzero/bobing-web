@@ -1,35 +1,37 @@
 /**
- * 博饼奖级枚举
+ * 博饼奖级常量
  * 按优先级从高到低排列（数值越小优先级越高）
  */
-export enum Prize {
+export const Prize = {
   /** 状元插金花：4个四 + 2个一 */
-  ZhuangYuanChaJinHua = 'zhuangyuan_chajinhua',
+  ZhuangYuanChaJinHua: 'zhuangyuan_chajinhua',
   /** 满堂红：6个四 */
-  ManTangHong = 'mantanghong',
+  ManTangHong: 'mantanghong',
   /** 遍地锦：6个一 */
-  BianDiJin = 'biandijin',
+  BianDiJin: 'biandijin',
   /** 六子：6个相同（非四非一） */
-  LiuZi = 'liuzi',
+  LiuZi: 'liuzi',
   /** 五红：5个四 */
-  WuHong = 'wuhong',
+  WuHong: 'wuhong',
   /** 五子登科：5个相同（非四） */
-  WuZiDengKe = 'wuzidengke',
+  WuZiDengKe: 'wuzidengke',
   /** 状元：4个四（不满足插金花） */
-  ZhuangYuan = 'zhuangyuan',
+  ZhuangYuan: 'zhuangyuan',
   /** 对堂：1-2-3-4-5-6各一 */
-  DuiTang = 'duitang',
+  DuiTang: 'duitang',
   /** 三红：3个四 */
-  SanHong = 'sanhong',
+  SanHong: 'sanhong',
   /** 四进：4个相同（非四） */
-  SiJin = 'sijin',
+  SiJin: 'sijin',
   /** 二举：2个四 */
-  ErJu = 'erju',
+  ErJu: 'erju',
   /** 一秀：1个四 */
-  YiXiu = 'yixiu',
+  YiXiu: 'yixiu',
   /** 未中奖 */
-  None = 'none',
-}
+  None: 'none',
+} as const
+
+export type Prize = (typeof Prize)[keyof typeof Prize]
 
 /** 判定结果完整对象 */
 export interface JudgeResult {
