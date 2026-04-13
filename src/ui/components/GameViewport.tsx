@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, type ReactNode } from 'react'
+import * as THREE from 'three'
 import { createScene } from '@/scene/setup'
 import { createTable } from '@/scene/table'
 import { createBowl } from '@/scene/bowl'
@@ -10,19 +11,40 @@ import { createEngine } from '@/game/engine'
 import { createGameStore } from '@/game/store'
 import { GameController } from '@/game/controller'
 import { GameControllerContext } from './GameControllerContext'
+import { GameStoreContext } from './GameStoreContext'
 
 interface GameViewportProps {
   children?: ReactNode
 }
 
+/** 递归释放 scene 中所有 geometry / material / texture */
+function disposeSceneResources(scene: THREE.Scene) {
+  scene.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) {
+      obj.geometry?.dispose()
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+      for (const mat of mats) {
+        if (mat instanceof THREE.Material) {
+          // 释放材质上的所有贴图
+          for (const value of Object.values(mat)) {
+            if (value instanceof THREE.Texture) value.dispose()
+          }
+          mat.dispose()
+        }
+      }
+    }
+  })
+}
+
 /**
  * 3D 容器组件
  * 持有 canvas ref，useEffect 中创建/销毁引擎实例（幂等，兼容 StrictMode 双调用）
- * 通过 Provider 包裹 children，确保 overlay 组件能获取 controller
+ * 通过 Provider 包裹 children，确保 overlay 组件能获取 controller 和 store
  */
 export function GameViewport({ children }: GameViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [controller, setController] = useState<GameController | null>(null)
+  const [store, setStore] = useState<ReturnType<typeof createGameStore> | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -60,11 +82,10 @@ export function GameViewport({ children }: GameViewportProps) {
       body.position.set(Math.cos(angle) * 0.3, 1.5, Math.sin(angle) * 0.3)
     })
 
-    // 创建 store、engine、controller
-    const store = createGameStore()
+    // 创建 store、controller、engine
+    const gameStore = createGameStore()
     const ctrl = new GameController({
-      store,
-      engine: null!, // 先占位
+      store: gameStore,
       dicePairs,
     })
 
@@ -76,35 +97,40 @@ export function GameViewport({ children }: GameViewportProps) {
       onSettled: () => ctrl.onSettled(),
     })
 
-    // 回填 engine 引用
-    ;(ctrl as any).engine = engine
+    // 注入 engine（解决循环依赖）
+    ctrl.setEngine(engine)
 
     engine.start()
+    setStore(gameStore)
     setController(ctrl)
 
     return () => {
       engine.dispose()
+      disposeSceneResources(sceneCtx.scene)
       sceneCtx.dispose()
       physics.dispose()
       container.removeChild(canvas)
       setController(null)
+      setStore(null)
     }
   }, [])
 
   return (
-    <GameControllerContext.Provider value={controller}>
-      <div
-        ref={containerRef}
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '100vh',
-          overflow: 'hidden',
-          background: '#1a1a2e',
-        }}
-      >
-        {controller && children}
-      </div>
-    </GameControllerContext.Provider>
+    <GameStoreContext.Provider value={store}>
+      <GameControllerContext.Provider value={controller}>
+        <div
+          ref={containerRef}
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '100vh',
+            overflow: 'hidden',
+            background: '#1a1a2e',
+          }}
+        >
+          {controller && children}
+        </div>
+      </GameControllerContext.Provider>
+    </GameStoreContext.Provider>
   )
 }

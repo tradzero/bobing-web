@@ -12,6 +12,28 @@ export interface DicePair {
 /** 骰子数量 */
 export const DICE_COUNT = 6
 
+/** 纹理来源策略接口（支持后续替换为静态贴图加载） */
+export interface DiceTextureSource {
+  /** 返回 6 个面的纹理，索引 0~5 对应点数 1~6 */
+  createTextures(): THREE.CanvasTexture[] | THREE.Texture[]
+}
+
+/**
+ * 默认纹理来源：Canvas 2D 绘制
+ * 四点面为红色，其余面为黑色
+ */
+export const canvasTextureSource: DiceTextureSource = {
+  createTextures: createDiceTextures,
+}
+
+/** 当前使用的纹理来源（可通过 setTextureSource 替换） */
+let activeTextureSource: DiceTextureSource = canvasTextureSource
+
+/** 替换纹理来源（用于后续静态贴图加载） */
+export function setTextureSource(source: DiceTextureSource): void {
+  activeTextureSource = source
+}
+
 /**
  * 骰子面纹理生成器（Canvas 2D 绘制）
  * 返回 6 个面的 CanvasTexture，四点面为红色
@@ -126,8 +148,8 @@ export const FACE_NORMALS: { normal: CANNON.Vec3; value: number }[] = [
 export function createDice(): DicePair {
   const hs = PHYSICS.diceHalfSize
 
-  // 从 FACE_MAP 生成 6 面材质
-  const textures = createDiceTextures()
+  // 从纹理来源获取 6 面纹理
+  const textures = activeTextureSource.createTextures()
   const materials = FACE_MAP.materialOrder.map(
     (faceValue) =>
       new THREE.MeshStandardMaterial({

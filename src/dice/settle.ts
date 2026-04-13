@@ -1,4 +1,4 @@
-import type * as CANNON from 'cannon-es'
+import * as CANNON from 'cannon-es'
 import { SETTLE } from '@/config/settle'
 
 /**
@@ -17,7 +17,7 @@ export function createSettleState(startTime: number): SettleState {
 }
 
 /**
- * 停稳检测纯函数
+ * 停稳检测函数（会修改传入的 state 对象记录计时状态）
  * 接受骰子 body 数组和当前时间，返回是否停稳
  * 不自持轮询，由 engine 每帧调用
  *
@@ -32,7 +32,7 @@ export function checkSettled(
   state: SettleState,
 ): boolean {
   // 路径 1：全部 body 进入 sleep
-  if (bodies.every((b) => b.sleepState === 2 /* SLEEPING */)) {
+  if (bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)) {
     return true
   }
 

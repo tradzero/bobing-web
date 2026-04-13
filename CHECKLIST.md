@@ -2,15 +2,15 @@
 
 ## 阶段〇：项目初始化
 
-- [ ] 0.1 [实现] pnpm create vite（React + TypeScript 模板），生成项目骨架和 package.json
-- [ ] 0.2 [实现] 安装核心依赖：three、cannon-es、zustand
-- [ ] 0.3 [实现] 安装开发依赖：@types/three、vitest、jsdom、@testing-library/react
-- [ ] 0.4 [实现] 配置 ESLint + Prettier（含 React/TS 规则集）
-- [ ] 0.5 [实现] 配置 Vitest（vitest.config.ts，默认 environment: 'jsdom'；纯函数测试文件可用注释覆盖为 node 环境）
-- [ ] 0.6 [实现] 配置 tsconfig.json 路径别名（如 `@/` → `src/`）
-- [ ] 0.7 [实现] 创建目录结构骨架（config/、game/、scene/、physics/、dice/、rules/、ui/components/、ui/styles/、audio/、utils/、__tests__/）
-- [ ] 0.8 [验收] 验证 `pnpm dev` 能正常启动空白页面
-- [ ] 0.9 [验收] `pnpm build` 通过，无编译错误
+- [x] 0.1 [实现] pnpm create vite（React + TypeScript 模板），生成项目骨架和 package.json
+- [x] 0.2 [实现] 安装核心依赖：three、cannon-es、zustand
+- [x] 0.3 [实现] 安装开发依赖：@types/three、vitest、jsdom、@testing-library/react
+- [x] 0.4 [实现] 配置 ESLint + Prettier（含 React/TS 规则集）
+- [x] 0.5 [实现] 配置 Vitest（vitest.config.ts，默认 environment: 'jsdom'；纯函数测试文件可用注释覆盖为 node 环境）
+- [x] 0.6 [实现] 配置 tsconfig.json 路径别名（如 `@/` → `src/`）
+- [x] 0.7 [实现] 创建目录结构骨架（config/、game/、scene/、physics/、dice/、rules/、ui/components/、ui/styles/、audio/、utils/、__tests__/）
+- [x] 0.8 [验收] 验证 `pnpm dev` 能正常启动空白页面
+- [x] 0.9 [验收] `pnpm build` 通过，无编译错误
 
 ---
 
@@ -18,120 +18,120 @@
 
 ### 1A 奖级规则层
 
-- [ ] 1A.1 [实现] 定义奖级枚举 `Prize`（状元插金花、满堂红、遍地锦、六子、五红、五子登科、状元、对堂、三红、四进、二举、一秀、未中奖）
-- [ ] 1A.2 [实现] 定义 `JudgeResult` 完整结果对象类型（prize、priority、carryScore、matchedDice、remainDice、description）
-- [ ] 1A.3 [实现] 定义规则数据结构类型 `PrizeRule`（name、priority、match 函数、描述）
-- [ ] 1A.4 [实现] 实现规则表 `prizes.ts`，按 priority 升序排列（数值越小优先级越高，排在前面），每条规则为独立数据项
-- [ ] 1A.5 [实现] 实现判定函数 `judge(diceValues: number[]): JudgeResult`，返回完整结果对象
-- [ ] 1A.6 [实现] 实现"带数"计算逻辑：所有存在剩余骰子的奖级均计算带数（五红、五子登科、状元、三红、四进、二举、一秀），完全满足 6 颗的奖级带数为 0
-- [ ] 1A.7 [实现] 实现六子内部排序逻辑（6 最大，2 最小，排除 6 个 1 和 6 个 4）
-- [ ] 1A.8 [测试] 编写奖级判定示例单测：覆盖全部 13 种奖级的典型用例
-- [ ] 1A.9 [测试] 编写边界用例单测：同时满足多条规则时只返回最高优先级
-- [ ] 1A.10 [测试] 编写"带数"单测：相同奖级下不同带数的排序正确性
-- [ ] 1A.11 [测试] 编写穷举校验：遍历 46656 种有序结果，验证每组只命中一个最高优先级且输出一致
-- [ ] 1A.12 [验收] 验证全部测试通过
+- [x] 1A.1 [实现] 定义奖级枚举 `Prize`（状元插金花、满堂红、遍地锦、六子、五红、五子登科、状元、对堂、三红、四进、二举、一秀、未中奖）
+- [x] 1A.2 [实现] 定义 `JudgeResult` 完整结果对象类型（prize、priority、carryScore、matchedDice、remainDice、description）
+- [x] 1A.3 [实现] 定义规则数据结构类型 `PrizeRule`（name、priority、match 函数、描述）
+- [x] 1A.4 [实现] 实现规则表 `prizes.ts`，按 priority 升序排列（数值越小优先级越高，排在前面），每条规则为独立数据项
+- [x] 1A.5 [实现] 实现判定函数 `judge(diceValues: number[]): JudgeResult`，返回完整结果对象
+- [x] 1A.6 [实现] 实现"带数"计算逻辑：所有存在剩余骰子的奖级均计算带数（五红、五子登科、状元、三红、四进、二举、一秀），完全满足 6 颗的奖级带数为 0
+- [x] 1A.7 [实现] 实现六子内部排序逻辑（6 最大，2 最小，排除 6 个 1 和 6 个 4）
+- [x] 1A.8 [测试] 编写奖级判定示例单测：覆盖全部 13 种奖级的典型用例
+- [x] 1A.9 [测试] 编写边界用例单测：同时满足多条规则时只返回最高优先级
+- [x] 1A.10 [测试] 编写"带数"单测：相同奖级下不同带数的排序正确性
+- [x] 1A.11 [测试] 编写穷举校验：遍历 46656 种有序结果，验证每组只命中一个最高优先级且输出一致
+- [x] 1A.12 [验收] 验证全部测试通过
 
 ### 1B Three.js 场景搭建
 
-- [ ] 1B.1 [实现] 实现 `scene/setup.ts`：创建 Scene、WebGLRenderer、PerspectiveCamera
-- [ ] 1B.2 [实现] 设置摄像机为固定俯视 + 轻微倾斜视角，不可交互调节
-- [ ] 1B.3 [实现] 添加主光源（暖色调 DirectionalLight）+ 环境光（AmbientLight）
-- [ ] 1B.4 [实现] 实现 canvas resize 监听：同步 renderer 尺寸、pixel ratio、camera aspect
-- [ ] 1B.5 [实现] 实现 `scene/table.ts`：圆桌桌面 mesh（圆柱几何体 + 木纹色基础材质）
-- [ ] 1B.6 [实现] 实现 `scene/bowl.ts`：海碗可视模型（Lathe 几何体或组合几何体，白瓷材质）
+- [x] 1B.1 [实现] 实现 `scene/setup.ts`：创建 Scene、WebGLRenderer、PerspectiveCamera
+- [x] 1B.2 [实现] 设置摄像机为固定俯视 + 轻微倾斜视角，不可交互调节
+- [x] 1B.3 [实现] 添加主光源（暖色调 DirectionalLight）+ 环境光（AmbientLight）
+- [x] 1B.4 [实现] 实现 canvas resize 监听：同步 renderer 尺寸、pixel ratio、camera aspect
+- [x] 1B.5 [实现] 实现 `scene/table.ts`：圆桌桌面 mesh（圆柱几何体 + 木纹色基础材质）
+- [x] 1B.6 [实现] 实现 `scene/bowl.ts`：海碗可视模型（Lathe 几何体或组合几何体，白瓷材质）
 - [ ] 1B.7 [验收] 验证页面能稳定渲染桌面 + 海碗静态场景
 
 ### 1C cannon-es 物理世界
 
-- [ ] 1C.1 [实现] 实现 `config/physics.ts`：集中定义物理参数（重力、步长、子步进数、骰子 sleep 参数）
-- [ ] 1C.2 [实现] 实现 `physics/world.ts`：创建 cannon-es World，配置重力、broadphase、solver
-- [ ] 1C.3 [实现] 开启 World.allowSleep（世界级开关）
-- [ ] 1C.4 [实现] 实现固定时间步长更新函数，与渲染帧率解耦
-- [ ] 1C.5 [实现] 实现 `physics/materials.ts`：定义骰子材质、碗材质、桌面材质，配置 ContactMaterial 参数（摩擦、弹性）
-- [ ] 1C.6 [实现] 实现 `physics/bowl-body.ts`：碗底静态碰撞体（扁平 Cylinder 或 Plane）
-- [ ] 1C.7 [实现] 实现碗壁碰撞体：8～12 个倾斜薄 Box 环形排列
-- [ ] 1C.8 [实现] 添加桌面平面碰撞体作为兜底
+- [x] 1C.1 [实现] 实现 `config/physics.ts`：集中定义物理参数（重力、步长、子步进数、骰子 sleep 参数）
+- [x] 1C.2 [实现] 实现 `physics/world.ts`：创建 cannon-es World，配置重力、broadphase、solver
+- [x] 1C.3 [实现] 开启 World.allowSleep（世界级开关）
+- [x] 1C.4 [实现] 实现固定时间步长更新函数，与渲染帧率解耦
+- [x] 1C.5 [实现] 实现 `physics/materials.ts`：定义骰子材质、碗材质、桌面材质，配置 ContactMaterial 参数（摩擦、弹性）
+- [x] 1C.6 [实现] 实现 `physics/bowl-body.ts`：碗底静态碰撞体（扁平 Cylinder 或 Plane）
+- [x] 1C.7 [实现] 实现碗壁碰撞体：8～12 个倾斜薄 Box 环形排列
+- [x] 1C.8 [实现] 添加桌面平面碰撞体作为兜底
 - [ ] 1C.9 [验收] 验证碗碰撞体组合：投入 6 颗 Box 骰子，连续多次投掷不穿模、不卡在壁面片段拼接缝中、不出现贴壁持续抖动
 
 ### 1D 骰子创建
 
-- [ ] 1D.1 [实现] 实现 `utils/random.ts`：可注入随机数源接口（默认 Math.random，测试可替换为固定种子）
-- [ ] 1D.2 [实现] 实现 `config/throw.ts`：集中定义投掷参数（速度范围、角速度范围、初始高度范围）
-- [ ] 1D.3 [实现] 实现 `config/settle.ts`：集中定义停稳参数（速度阈值、角速度阈值、持续时间、超时上限）
-- [ ] 1D.4 [实现] 实现骰子面纹理生成器（Canvas 2D 绘制）：6 个面分别绘制 1～6 点
-- [ ] 1D.5 [实现] 四点面使用红色绘制，其余面使用黑色
-- [ ] 1D.6 [实现] 纹理生成模块预留接口：支持后续替换为静态贴图加载（参数化纹理来源）
-- [ ] 1D.7 [实现] 实现 `dice/create.ts`：创建单颗骰子 mesh（BoxGeometry + 6 面独立材质）
-- [ ] 1D.8 [实现] 创建骰子 cannon-es Body（Box shape），关联质量、阻尼参数
-- [ ] 1D.9 [实现] 为每颗骰子 body 设置 allowSleep=true、sleepSpeedLimit、sleepTimeLimit（参数来自 config/physics.ts）
-- [ ] 1D.10 [实现] 实现批量创建 6 颗骰子的工厂函数
-- [ ] 1D.11 [实现] 建立 mesh ↔ body 映射关系，用于渲染同步
+- [x] 1D.1 [实现] 实现 `utils/random.ts`：可注入随机数源接口（默认 Math.random，测试可替换为固定种子）
+- [x] 1D.2 [实现] 实现 `config/throw.ts`：集中定义投掷参数（速度范围、角速度范围、初始高度范围）
+- [x] 1D.3 [实现] 实现 `config/settle.ts`：集中定义停稳参数（速度阈值、角速度阈值、持续时间、超时上限）
+- [x] 1D.4 [实现] 实现骰子面纹理生成器（Canvas 2D 绘制）：6 个面分别绘制 1～6 点
+- [x] 1D.5 [实现] 四点面使用红色绘制，其余面使用黑色
+- [x] 1D.6 [实现] 纹理生成模块预留接口：支持后续替换为静态贴图加载（参数化纹理来源）
+- [x] 1D.7 [实现] 实现 `dice/create.ts`：创建单颗骰子 mesh（BoxGeometry + 6 面独立材质）
+- [x] 1D.8 [实现] 创建骰子 cannon-es Body（Box shape），关联质量、阻尼参数
+- [x] 1D.9 [实现] 为每颗骰子 body 设置 allowSleep=true、sleepSpeedLimit、sleepTimeLimit（参数来自 config/physics.ts）
+- [x] 1D.10 [实现] 实现批量创建 6 颗骰子的工厂函数
+- [x] 1D.11 [实现] 建立 mesh ↔ body 映射关系，用于渲染同步
 - [ ] 1D.12 [验收] 验证 6 颗骰子能在场景中正确渲染，材质和点数清晰可辨
 
 ### 1E 投掷逻辑
 
-- [ ] 1E.1 [实现] 实现 `dice/throw.ts`：为每颗骰子设置随机初始位置（碗上方散布），随机数源使用 `utils/random.ts`
-- [ ] 1E.2 [实现] 设置随机初始旋转（四元数随机化）
-- [ ] 1E.3 [实现] 设置受控随机线速度（向碗中心偏移 + 向下分量）
-- [ ] 1E.4 [实现] 设置受控随机角速度
-- [ ] 1E.5 [实现] 唤醒所有骰子 body（清除 sleep 状态）
+- [x] 1E.1 [实现] 实现 `dice/throw.ts`：为每颗骰子设置随机初始位置（碗上方散布），随机数源使用 `utils/random.ts`
+- [x] 1E.2 [实现] 设置随机初始旋转（四元数随机化）
+- [x] 1E.3 [实现] 设置受控随机线速度（向碗中心偏移 + 向下分量）
+- [x] 1E.4 [实现] 设置受控随机角速度
+- [x] 1E.5 [实现] 唤醒所有骰子 body（清除 sleep 状态）
 - [ ] 1E.6 [验收] 验证投掷后骰子能自然落入碗中，不飞出画面，不高速穿透
 
 ### 1F 停稳检测
 
-- [ ] 1F.1 [实现] 实现 `dice/settle.ts`：停稳检测纯函数 `checkSettled()`，接受骰子状态，返回 boolean（不自持轮询）
-- [ ] 1F.2 [实现] 实现 sleep 状态检测路径：全部 6 颗骰子 body 进入 sleep 则判定停稳
-- [ ] 1F.3 [实现] 实现速度阈值检测路径：连续满足 config/settle.ts 中定义的持续时间，所有骰子线速度和角速度均低于配置阈值
-- [ ] 1F.4 [实现] 实现超时兜底：超过 config/settle.ts 中定义的超时上限后，进入超时兜底结算路径（具体策略在实现时确定，不预设为"强制置零速度"）
-- [ ] 1F.5 [测试] 编写停稳检测单测：全部 sleep 直接结算
-- [ ] 1F.6 [测试] 单测：低速窗口被中断后重新计时
-- [ ] 1F.7 [测试] 单测：只有一颗骰子一直未停，不应提前结算
-- [ ] 1F.8 [测试] 单测：超时兜底触发
-- [ ] 1F.9 [测试] 单测：接近阈值反复抖动但不应提前结算
-- [ ] 1F.10 [验收] 验证全部测试通过
+- [x] 1F.1 [实现] 实现 `dice/settle.ts`：停稳检测纯函数 `checkSettled()`，接受骰子状态，返回 boolean（不自持轮询）
+- [x] 1F.2 [实现] 实现 sleep 状态检测路径：全部 6 颗骰子 body 进入 sleep 则判定停稳
+- [x] 1F.3 [实现] 实现速度阈值检测路径：连续满足 config/settle.ts 中定义的持续时间，所有骰子线速度和角速度均低于配置阈值
+- [x] 1F.4 [实现] 实现超时兜底：超过 config/settle.ts 中定义的超时上限后，进入超时兜底结算路径（具体策略在实现时确定，不预设为"强制置零速度"）
+- [x] 1F.5 [测试] 编写停稳检测单测：全部 sleep 直接结算
+- [x] 1F.6 [测试] 单测：低速窗口被中断后重新计时
+- [x] 1F.7 [测试] 单测：只有一颗骰子一直未停，不应提前结算
+- [x] 1F.8 [测试] 单测：超时兜底触发
+- [x] 1F.9 [测试] 单测：接近阈值反复抖动但不应提前结算
+- [x] 1F.10 [验收] 验证全部测试通过
 
 ### 1G 点数读取
 
-- [ ] 1G.1 [实现] 定义骰子六个面的本地法线向量常量（±x, ±y, ±z 与点数 1-6 的映射）
-- [ ] 1G.2 [实现] 实现 `dice/read-face.ts`：将每个面法线通过骰子四元数旋转到世界坐标
-- [ ] 1G.3 [实现] 计算每个世界法线与 (0, 1, 0) 的点积，取最大值对应面为朝上面
-- [ ] 1G.4 [实现] 返回 6 颗骰子的朝上点数数组
-- [ ] 1G.5 [测试] 编写点数读取单测：覆盖 24 个立方体合法朝向（正对正轴的旋转）
-- [ ] 1G.6 [测试] 编写近边界扰动单测：在合法朝向基础上加微小随机扰动，验证仍能稳定判面
-- [ ] 1G.7 [验收] 验证全部测试通过
+- [x] 1G.1 [实现] 定义骰子六个面的本地法线向量常量（±x, ±y, ±z 与点数 1-6 的映射）
+- [x] 1G.2 [实现] 实现 `dice/read-face.ts`：将每个面法线通过骰子四元数旋转到世界坐标
+- [x] 1G.3 [实现] 计算每个世界法线与 (0, 1, 0) 的点积，取最大值对应面为朝上面
+- [x] 1G.4 [实现] 返回 6 颗骰子的朝上点数数组
+- [x] 1G.5 [测试] 编写点数读取单测：覆盖 24 个立方体合法朝向（正对正轴的旋转）
+- [x] 1G.6 [测试] 编写近边界扰动单测：在合法朝向基础上加微小随机扰动，验证仍能稳定判面
+- [x] 1G.7 [验收] 验证全部测试通过
 
 ### 1H 运行时与游戏编排层
 
-- [ ] 1H.1 [实现] 实现 `game/store.ts`：Zustand store 定义（phase、round、diceValues、currentResult: JudgeResult | null、history、prizeRecord、soundEnabled、playerId）
-- [ ] 1H.2 [实现] store 预留 playerId 字段（默认 null，多人阶段启用）
-- [ ] 1H.3 [实现] store actions 为纯状态设置器：setPhase、setResult、resetState、toggleSound（无业务逻辑）
-- [ ] 1H.4 [实现] 实现 `game/engine.ts`：唯一 rAF 循环，每帧顺序执行 world.step → body→mesh 同步 → settle 检测 → render
-- [ ] 1H.5 [实现] engine 暴露 start()、stop()、dispose() 方法
-- [ ] 1H.6 [实现] engine 停稳检测回调：当 settle 返回 true 时通知 controller
-- [ ] 1H.7 [实现] 实现 `game/controller.ts`：GameController 类（唯一业务入口）
-- [ ] 1H.8 [实现] 实现三态状态机：idle → rolling → result，result 可直接 throw() 进入 rolling（不需回 idle）
-- [ ] 1H.9 [实现] controller.throw()：拒绝 rolling 阶段调用，允许 idle 和 result 阶段调用
-- [ ] 1H.10 [实现] controller.onSettled()：调用 read-face → judge → store.setResult()
-- [ ] 1H.11 [实现] controller.reset()：拒绝 rolling 阶段调用；非 rolling 时清空历史、记录、轮次，骰子回到初始位置
-- [ ] 1H.12 [实现] controller.toggleSound()：统一的音效开关入口
-- [ ] 1H.13 [测试] 编写编排层集成测试：phase 变化是否正确
-- [ ] 1H.14 [测试] 集成测试：rolling 中二次点击 throw() 被拒绝
-- [ ] 1H.15 [测试] 集成测试：result 阶段直接再次 throw() 能正常进入 rolling
-- [ ] 1H.16 [测试] 集成测试：结算后 history 只保留最近 HISTORY_MAX_LENGTH 轮（来自 config/ui.ts）
-- [ ] 1H.17 [测试] 集成测试：reset 清理当轮 + 累计记录
-- [ ] 1H.18 [测试] 集成测试：rolling 中调用 reset() 被拒绝
-- [ ] 1H.19 [测试] 集成测试：sound toggle 不影响主流程
-- [ ] 1H.20 [验收] 验证全部测试通过
+- [x] 1H.1 [实现] 实现 `game/store.ts`：Zustand store 定义（phase、round、diceValues、currentResult: JudgeResult | null、history、prizeRecord、soundEnabled、playerId）
+- [x] 1H.2 [实现] store 预留 playerId 字段（默认 null，多人阶段启用）
+- [x] 1H.3 [实现] store actions 为纯状态设置器：setPhase、setResult、resetState、toggleSound（无业务逻辑）
+- [x] 1H.4 [实现] 实现 `game/engine.ts`：唯一 rAF 循环，每帧顺序执行 world.step → body→mesh 同步 → settle 检测 → render
+- [x] 1H.5 [实现] engine 暴露 start()、stop()、dispose() 方法
+- [x] 1H.6 [实现] engine 停稳检测回调：当 settle 返回 true 时通知 controller
+- [x] 1H.7 [实现] 实现 `game/controller.ts`：GameController 类（唯一业务入口）
+- [x] 1H.8 [实现] 实现三态状态机：idle → rolling → result，result 可直接 throw() 进入 rolling（不需回 idle）
+- [x] 1H.9 [实现] controller.throw()：拒绝 rolling 阶段调用，允许 idle 和 result 阶段调用
+- [x] 1H.10 [实现] controller.onSettled()：调用 read-face → judge → store.setResult()
+- [x] 1H.11 [实现] controller.reset()：拒绝 rolling 阶段调用；非 rolling 时清空历史、记录、轮次，骰子回到初始位置
+- [x] 1H.12 [实现] controller.toggleSound()：统一的音效开关入口
+- [x] 1H.13 [测试] 编写编排层集成测试：phase 变化是否正确
+- [x] 1H.14 [测试] 集成测试：rolling 中二次点击 throw() 被拒绝
+- [x] 1H.15 [测试] 集成测试：result 阶段直接再次 throw() 能正常进入 rolling
+- [x] 1H.16 [测试] 集成测试：结算后 history 只保留最近 HISTORY_MAX_LENGTH 轮（来自 config/ui.ts）
+- [x] 1H.17 [测试] 集成测试：reset 清理当轮 + 累计记录
+- [x] 1H.18 [测试] 集成测试：rolling 中调用 reset() 被拒绝
+- [x] 1H.19 [测试] 集成测试：sound toggle 不影响主流程
+- [x] 1H.20 [验收] 验证全部测试通过
 
 ### 1I 阶段一集成验证
 
 - [ ] 1I.1 [验收] 完整流程跑通：点击按钮 → 骰子投掷 → 翻滚 → 停稳 → 读数 → 判定 → 控制台输出完整 JudgeResult
 - [ ] 1I.2 [验收] 连续 20 轮投掷无穿模、无卡死、无骰子飞出
 - [ ] 1I.3 [验收] 点数读取准确（人工目视对照至少 10 轮）
-- [ ] 1I.4 [测试] 物理烟雾测试：真实 cannon-es 世界 + 碗 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能结算或超时
+- [x] 1I.4 [测试] 物理烟雾测试：真实 cannon-es 世界 + 碗 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能结算或超时
 - [ ] 1I.5 [验收] 奖级判定与点数组合匹配（人工核对）
-- [ ] 1I.6 [验收] 全部单测通过：`pnpm test`
-- [ ] 1I.7 [验收] `pnpm build` 通过，无编译错误
+- [x] 1I.6 [验收] 全部单测通过：`pnpm test`
+- [x] 1I.7 [验收] `pnpm build` 通过，无编译错误
 
 ---
 
@@ -139,12 +139,12 @@
 
 ### 2A React 基础接入
 
-- [ ] 2A.1 [实现] 实现 `ui/components/GameViewport.tsx`：持有 canvas 容器 ref，useEffect 中创建引擎实例和 controller 实例，cleanup 中 dispose（幂等，兼容 StrictMode 双调用）。GameViewport 接受 children，内部通过 GameControllerContext.Provider 包裹 canvas + children，确保 overlay 组件能获取 controller
-- [ ] 2A.2 [实现] 实现 GameControllerContext + `useGameController()` hook：controller 实例未就绪时 hook 抛出明确错误
-- [ ] 2A.3 [实现] 创建 `config/ui.ts`：集中定义 UI 常量（HISTORY_MAX_LENGTH = 5、INITIAL_ROUND = 1、MOBILE_TOUCH_TARGET_MIN 等）
-- [ ] 2A.4 [实现] 实现 `App.tsx`：GameViewport 作为容器，overlay 组件（ThrowButton、ResultPanel 等）作为 GameViewport 的 children 渲染
-- [ ] 2A.5 [实现] 在 GameViewport 挂载时初始化 scene/setup、physics/world、dice/create、game/engine、game/controller
-- [ ] 2A.6 [实现] 在 GameViewport 卸载时完整销毁：engine.dispose()、renderer.dispose()、物理世界清理、事件监听移除
+- [x] 2A.1 [实现] 实现 `ui/components/GameViewport.tsx`：持有 canvas 容器 ref，useEffect 中创建引擎实例和 controller 实例，cleanup 中 dispose（幂等，兼容 StrictMode 双调用）。GameViewport 接受 children，内部通过 GameControllerContext.Provider 包裹 canvas + children，确保 overlay 组件能获取 controller
+- [x] 2A.2 [实现] 实现 GameControllerContext + `useGameController()` hook：controller 实例未就绪时 hook 抛出明确错误
+- [x] 2A.3 [实现] 创建 `config/ui.ts`：集中定义 UI 常量（HISTORY_MAX_LENGTH = 5、INITIAL_ROUND = 1、MOBILE_TOUCH_TARGET_MIN 等）
+- [x] 2A.4 [实现] 实现 `App.tsx`：GameViewport 作为容器，overlay 组件（ThrowButton、ResultPanel 等）作为 GameViewport 的 children 渲染
+- [x] 2A.5 [实现] 在 GameViewport 挂载时初始化 scene/setup、physics/world、dice/create、game/engine、game/controller
+- [x] 2A.6 [实现] 在 GameViewport 卸载时完整销毁：engine.dispose()、renderer.dispose()、物理世界清理、事件监听移除
 - [ ] 2A.7 [测试] StrictMode/HMR 自动化冒烟测试：挂载一次、卸载一次、再次挂载不产生双实例、不残留 rAF 和事件监听
 - [ ] 2A.8 [验收] 验证 Vite HMR 后 3D 场景正常重建
 

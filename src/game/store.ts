@@ -1,5 +1,4 @@
 import { createStore } from 'zustand/vanilla'
-import { useStore } from 'zustand'
 import { Prize, type JudgeResult } from '@/rules/types'
 import { UI } from '@/config/ui'
 
@@ -92,7 +91,4 @@ export function createGameStore() {
   }))
 }
 
-/** React hook 绑定 */
-export function createUseGameStore(store: ReturnType<typeof createGameStore>) {
-  return <T>(selector: (state: GameStore) => T): T => useStore(store, selector)
-}
+

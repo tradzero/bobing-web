@@ -7,7 +7,6 @@ import type { Engine } from './engine'
 
 export interface GameControllerDeps {
   store: ReturnType<typeof createGameStore>
-  engine: Engine
   dicePairs: DicePair[]
 }
 
@@ -17,19 +16,23 @@ export interface GameControllerDeps {
  */
 export class GameController {
   private store: ReturnType<typeof createGameStore>
-  private engine: Engine
+  private engine: Engine | null = null
   private dicePairs: DicePair[]
 
   constructor(deps: GameControllerDeps) {
     this.store = deps.store
-    this.engine = deps.engine
     this.dicePairs = deps.dicePairs
+  }
+
+  /** 注入 engine 引用（解决 controller ↔ engine 循环依赖） */
+  setEngine(engine: Engine): void {
+    this.engine = engine
   }
 
   /** 掷骰：拒绝 rolling 阶段调用 */
   throw(): void {
     const { phase } = this.store.getState()
-    if (phase === 'rolling') return
+    if (phase === 'rolling' || !this.engine) return
 
     this.store.getState().setPhase('rolling')
     throwDice(this.dicePairs)
@@ -41,6 +44,8 @@ export class GameController {
     const bodies = this.dicePairs.map((p) => p.body)
     const diceValues = readAllFaces(bodies)
     const result = judge(diceValues)
+    // 控制台输出完整结算结果，便于验收核对
+    console.log('[博饼结算]', { diceValues, ...result })
     this.store.getState().setResult({ diceValues, result })
   }
 

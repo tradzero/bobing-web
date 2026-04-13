@@ -5,7 +5,8 @@ import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'
 import { PHYSICS } from '@/config/physics'
-import { setRandom, resetRandom } from '@/utils/random'
+import { setRandom, resetRandom, random } from '@/utils/random'
+import { diceMaterial } from '@/physics/materials'
 
 /**
  * 物理烟雾测试
@@ -35,6 +36,7 @@ describe('物理烟雾测试', () => {
     for (let i = 0; i < 6; i++) {
       const body = new CANNON.Body({
         mass: PHYSICS.diceMass,
+        material: diceMaterial,
         allowSleep: true,
         sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
         sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
@@ -46,9 +48,9 @@ describe('物理烟雾测试', () => {
       body.position.set(Math.cos(angle) * 0.2, 2 + i * 0.1, Math.sin(angle) * 0.2)
       body.velocity.set(0, -2, 0)
       body.angularVelocity.set(
-        (Math.random() - 0.5) * 10,
-        (Math.random() - 0.5) * 10,
-        (Math.random() - 0.5) * 10,
+        (random() - 0.5) * 10,
+        (random() - 0.5) * 10,
+        (random() - 0.5) * 10,
       )
       world.addBody(body)
       bodies.push(body)
@@ -103,7 +105,7 @@ describe('物理烟雾测试', () => {
       const hs = PHYSICS.diceHalfSize
       const bodies: CANNON.Body[] = []
       for (let i = 0; i < 6; i++) {
-        const body = new CANNON.Body({ mass: PHYSICS.diceMass })
+        const body = new CANNON.Body({ mass: PHYSICS.diceMass, material: diceMaterial })
         body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
         const angle = (i / 6) * Math.PI * 2
         body.position.set(Math.cos(angle) * 0.25, 2.2 + i * 0.08, Math.sin(angle) * 0.25)

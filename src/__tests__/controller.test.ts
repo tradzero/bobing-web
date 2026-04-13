@@ -37,7 +37,8 @@ describe('GameController 编排层集成测试', () => {
     store = createGameStore()
     engine = mockEngine()
     dicePairs = mockDicePairs()
-    controller = new GameController({ store, engine, dicePairs })
+    controller = new GameController({ store, dicePairs })
+    controller.setEngine(engine)
   })
 
   it('phase 变化正确：idle → rolling → result', () => {
