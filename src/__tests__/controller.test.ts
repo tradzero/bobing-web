@@ -123,4 +123,58 @@ describe('GameController 编排层集成测试', () => {
     expect(state.currentResult!.prize).toBeDefined()
     expect(state.currentResult!.priority).toBeGreaterThanOrEqual(1)
   })
+
+  // ── 物理副作用测试 ──
+
+  it('onSettled 冻结骰子：速度/角速度清零 + sleep', () => {
+    controller.throw()
+    // 模拟骰子有残余运动
+    for (const { body } of dicePairs) {
+      body.velocity.set(1, 2, 3)
+      body.angularVelocity.set(4, 5, 6)
+      body.wakeUp()
+    }
+
+    controller.onSettled()
+
+    for (const { body } of dicePairs) {
+      expect(body.velocity.length(), '线速度应为 0').toBe(0)
+      expect(body.angularVelocity.length(), '角速度应为 0').toBe(0)
+      expect(body.sleepState, '应进入 sleep').toBe(CANNON.Body.SLEEPING)
+    }
+  })
+
+  it('reset 恢复骰子物理状态', () => {
+    controller.throw()
+    controller.onSettled()
+
+    // 乱设一些状态
+    for (const { body } of dicePairs) {
+      body.position.set(5, 5, 5)
+      body.previousPosition.set(-1, -1, -1)
+      body.quaternion.set(0.5, 0.5, 0.5, 0.5)
+      body.aabbNeedsUpdate = false
+    }
+
+    controller.reset()
+
+    for (const { body } of dicePairs) {
+      // 位置恢复到碗上方
+      expect(body.position.y).toBeCloseTo(1.5)
+      // previousPosition 同步
+      expect(body.previousPosition.x).toBe(body.position.x)
+      expect(body.previousPosition.y).toBe(body.position.y)
+      expect(body.previousPosition.z).toBe(body.position.z)
+      // 四元数恢复为单位四元数
+      expect(body.quaternion.w).toBe(1)
+      expect(body.quaternion.x).toBe(0)
+      // 速度清零
+      expect(body.velocity.length()).toBe(0)
+      expect(body.angularVelocity.length()).toBe(0)
+      // AABB 标记更新
+      expect(body.aabbNeedsUpdate).toBe(true)
+      // 骰子已唤醒
+      expect(body.sleepState).not.toBe(CANNON.Body.SLEEPING)
+    }
+  })
 })
