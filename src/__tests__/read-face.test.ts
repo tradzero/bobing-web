@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { readFace } from '@/dice/read-face'
+import { readFace, readFaceDetailed } from '@/dice/read-face'
 
 /**
  * 创建一个带有指定四元数的 body
@@ -121,5 +121,60 @@ describe('点数读取 - 近边界扰动', () => {
         expect(readFace(body)).toBe(value)
       }
     }
+  })
+})
+
+// ── readFaceDetailed 可信度测试 ──
+describe('readFaceDetailed - 可信度', () => {
+  it('正常朝向 confidence ≈ 1.0', () => {
+    // 1 面朝上（默认姿态）
+    const body = bodyWithQuaternion(new CANNON.Quaternion(0, 0, 0, 1))
+    const result = readFaceDetailed(body)
+    expect(result.value).toBe(1)
+    expect(result.confidence).toBeCloseTo(1.0, 3)
+  })
+
+  it('翻转 180° 朝向 confidence ≈ 1.0', () => {
+    const q = new CANNON.Quaternion()
+    q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI)
+    const body = bodyWithQuaternion(q)
+    const result = readFaceDetailed(body)
+    expect(result.value).toBe(6)
+    expect(result.confidence).toBeCloseTo(1.0, 3)
+  })
+
+  it('30° 倾斜时 confidence ≈ cos(30°) 且 value 稳定', () => {
+    // 将面 1（+y）绕 x 轴倾斜 30°，仍应读出 value=1
+    const tilt = Math.PI / 6 // 30°
+    const q = new CANNON.Quaternion()
+    q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), tilt)
+    const body = bodyWithQuaternion(q)
+    const result = readFaceDetailed(body)
+    expect(result.value).toBe(1)
+    expect(result.confidence).toBeCloseTo(Math.cos(tilt), 2)
+  })
+
+  it('45° 倾斜时 confidence ≈ cos(45°)，不断言 value（边界姿态）', () => {
+    // 45° 是两个面点积可能并列的边界，只断言 confidence
+    const tilt = Math.PI / 4 // 45°
+    const q = new CANNON.Quaternion()
+    q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), tilt)
+    const body = bodyWithQuaternion(q)
+    const result = readFaceDetailed(body)
+    expect(result.confidence).toBeCloseTo(Math.cos(tilt), 2)
+  })
+
+  it('50° 倾斜时 value 切换到相邻面', () => {
+    // 绕 x 轴旋转 50°
+    // 旋转矩阵 Rx(θ): +y面(0,1,0) → dot=cos(50°)≈0.643
+    //                    -z面(0,0,-1) → dot=sin(50°)≈0.766（最大）
+    // -z 面对应 value=4
+    const tilt = (50 * Math.PI) / 180
+    const q = new CANNON.Quaternion()
+    q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), tilt)
+    const body = bodyWithQuaternion(q)
+    const result = readFaceDetailed(body)
+    expect(result.value).toBe(4)
+    expect(result.confidence).toBeCloseTo(Math.sin(tilt), 2) // sin(50°) ≈ 0.766
   })
 })

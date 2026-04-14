@@ -8,6 +8,7 @@ export function ResultPanel() {
   const diceValues = useGameStore((s) => s.diceValues)
   const currentResult = useGameStore((s) => s.currentResult)
 
+  // result 态显示正式结果；tilt-confirm 态不显示（由 TiltWarning 接管）
   if (phase !== 'result' || !currentResult) return null
 
   const isNone = currentResult.prize === Prize.None

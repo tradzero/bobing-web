@@ -8,6 +8,7 @@ import { History } from '@/ui/components/History'
 import { SoundToggle } from '@/ui/components/SoundToggle'
 import { ResetButton } from '@/ui/components/ResetButton'
 import { RoundDisplay } from '@/ui/components/RoundDisplay'
+import { TiltWarning } from '@/ui/components/TiltWarning'
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
 
         {/* 底部操作区 */}
         <div className="bottom-area">
+          <TiltWarning />
           <ResultPanel />
           <ThrowButton />
         </div>

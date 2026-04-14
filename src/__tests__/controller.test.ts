@@ -41,6 +41,14 @@ describe('GameController 编排层集成测试', () => {
     controller.setEngine(engine)
   })
 
+  /** throwDice 随机化四元数，重置为正面朝上以避免触发倾斜确认 */
+  function settleFlat() {
+    for (const { body } of dicePairs) {
+      body.quaternion.set(0, 0, 0, 1)
+    }
+    controller.onSettled()
+  }
+
   it('phase 变化正确：idle → rolling → result', () => {
     expect(store.getState().phase).toBe('idle')
 
@@ -48,7 +56,7 @@ describe('GameController 编排层集成测试', () => {
     expect(store.getState().phase).toBe('rolling')
     expect(engine.beginSettle).toHaveBeenCalled()
 
-    controller.onSettled()
+    settleFlat()
     expect(store.getState().phase).toBe('result')
   })
 
@@ -62,7 +70,7 @@ describe('GameController 编排层集成测试', () => {
 
   it('result 阶段直接再次 throw() 能正常进入 rolling', () => {
     controller.throw()
-    controller.onSettled()
+    settleFlat()
     expect(store.getState().phase).toBe('result')
 
     controller.throw()
@@ -73,14 +81,14 @@ describe('GameController 编排层集成测试', () => {
   it(`结算后 history 只保留最近 ${UI.HISTORY_MAX_LENGTH} 轮`, () => {
     for (let i = 0; i < UI.HISTORY_MAX_LENGTH + 3; i++) {
       controller.throw()
-      controller.onSettled()
+      settleFlat()
     }
     expect(store.getState().history.length).toBe(UI.HISTORY_MAX_LENGTH)
   })
 
   it('reset 清理当轮 + 累计记录', () => {
     controller.throw()
-    controller.onSettled()
+    settleFlat()
     expect(store.getState().currentResult).not.toBeNull()
 
     controller.reset()
@@ -105,7 +113,7 @@ describe('GameController 编排层集成测试', () => {
 
     // 正常走流程
     controller.throw()
-    controller.onSettled()
+    settleFlat()
     expect(store.getState().phase).toBe('result')
     expect(store.getState().soundEnabled).toBe(false)
 
@@ -115,7 +123,7 @@ describe('GameController 编排层集成测试', () => {
 
   it('onSettled 正确读取点数和判定奖级', () => {
     controller.throw()
-    controller.onSettled()
+    settleFlat()
 
     const state = store.getState()
     expect(state.diceValues.length).toBe(6)
@@ -135,7 +143,7 @@ describe('GameController 编排层集成测试', () => {
       body.wakeUp()
     }
 
-    controller.onSettled()
+    settleFlat()
 
     for (const { body } of dicePairs) {
       expect(body.velocity.length(), '线速度应为 0').toBe(0)
@@ -146,7 +154,7 @@ describe('GameController 编排层集成测试', () => {
 
   it('reset 恢复骰子物理状态', () => {
     controller.throw()
-    controller.onSettled()
+    settleFlat()
 
     // 乱设一些状态
     for (const { body } of dicePairs) {

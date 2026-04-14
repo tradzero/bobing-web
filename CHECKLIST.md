@@ -146,7 +146,7 @@
 - [x] 2A.5 [实现] 在 GameViewport 挂载时初始化 scene/setup、physics/world、dice/create、game/engine、game/controller
 - [x] 2A.6 [实现] 在 GameViewport 卸载时完整销毁：engine.dispose()、renderer.dispose()、物理世界清理、事件监听移除
 - [x] 2A.7 [测试] StrictMode/HMR 自动化冒烟测试：挂载一次、卸载一次、再次挂载不产生双实例、不残留 rAF 和事件监听
-- [ ] 2A.8 [验收] 验证 Vite HMR 后 3D 场景正常重建
+- [x] 2A.8 [验收] 验证 Vite HMR 后 3D 场景正常重建
 
 ### 2B 核心 UI 组件
 

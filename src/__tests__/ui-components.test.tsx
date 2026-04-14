@@ -12,6 +12,7 @@ import { History } from '@/ui/components/History'
 import { PrizeRecord } from '@/ui/components/PrizeRecord'
 import { RoundDisplay } from '@/ui/components/RoundDisplay'
 import { SoundToggle } from '@/ui/components/SoundToggle'
+import { TiltWarning } from '@/ui/components/TiltWarning'
 import { Prize } from '@/rules/types'
 import type { ReactNode } from 'react'
 
@@ -28,6 +29,8 @@ let mockCtrl: {
   toggleSound: ReturnType<typeof vi.fn>
   onSettled: ReturnType<typeof vi.fn>
   setEngine: ReturnType<typeof vi.fn>
+  acceptTilted: ReturnType<typeof vi.fn>
+  rethrow: ReturnType<typeof vi.fn>
 }
 
 function Wrapper({ children }: { children: ReactNode }) {
@@ -48,6 +51,8 @@ beforeEach(() => {
     toggleSound: vi.fn(),
     onSettled: vi.fn(),
     setEngine: vi.fn(),
+    acceptTilted: vi.fn(),
+    rethrow: vi.fn(),
   }
 })
 
@@ -258,5 +263,77 @@ describe('PrizeRecord', () => {
     expect(screen.getByText('奖级统计')).toBeInTheDocument()
     expect(screen.getByText('状元')).toBeInTheDocument()
     expect(screen.getByText('×1')).toBeInTheDocument()
+  })
+})
+
+// ── TiltWarning ──
+const tiltPendingPayload = {
+  diceValues: [1, 3, 1, 1, 1, 1],
+  result: {
+    prize: Prize.YiXiu,
+    priority: 12,
+    carryScore: 7,
+    matchedDice: [1],
+    remainDice: [3, 1, 1, 1, 1],
+    description: '一秀 带7',
+  },
+  tiltedIndices: [1, 4],
+}
+
+describe('TiltWarning', () => {
+  it('idle 态不渲染', () => {
+    const { container } = render(<TiltWarning />, { wrapper: Wrapper })
+    expect(container.querySelector('.tilt-warning')).toBeNull()
+  })
+
+  it('rolling 态不渲染', () => {
+    act(() => store.getState().setPhase('rolling'))
+    const { container } = render(<TiltWarning />, { wrapper: Wrapper })
+    expect(container.querySelector('.tilt-warning')).toBeNull()
+  })
+
+  it('tilt-confirm 态渲染倾斜提示文本', () => {
+    act(() => store.getState().setPending(tiltPendingPayload))
+    render(<TiltWarning />, { wrapper: Wrapper })
+    expect(screen.getByText(/第2颗.*第5颗.*倾斜/)).toBeInTheDocument()
+  })
+
+  it('"接受结果" 按钮调用 controller.acceptTilted', async () => {
+    act(() => store.getState().setPending(tiltPendingPayload))
+    render(<TiltWarning />, { wrapper: Wrapper })
+    await userEvent.click(screen.getByRole('button', { name: '接受结果' }))
+    expect(mockCtrl.acceptTilted).toHaveBeenCalledOnce()
+  })
+
+  it('"重掷" 按钮调用 controller.rethrow', async () => {
+    act(() => store.getState().setPending(tiltPendingPayload))
+    render(<TiltWarning />, { wrapper: Wrapper })
+    await userEvent.click(screen.getByRole('button', { name: '重掷' }))
+    expect(mockCtrl.rethrow).toHaveBeenCalledOnce()
+  })
+})
+
+// ── tilt-confirm 态下其他组件行为 ──
+describe('tilt-confirm 态组件联动', () => {
+  beforeEach(() => {
+    act(() => store.getState().setPending(tiltPendingPayload))
+  })
+
+  it('ThrowButton 禁用', () => {
+    render(<ThrowButton />, { wrapper: Wrapper })
+    expect(screen.getByRole('button', { name: '掷骰' })).toBeDisabled()
+  })
+
+  it('ResultPanel 不渲染', () => {
+    const { container } = render(<ResultPanel />, { wrapper: Wrapper })
+    expect(container.querySelector('.result-panel')).toBeNull()
+  })
+
+  it('ResetButton 可点击', async () => {
+    render(<ResetButton />, { wrapper: Wrapper })
+    const btn = screen.getByTitle('重置游戏')
+    expect(btn).not.toBeDisabled()
+    await userEvent.click(btn)
+    expect(mockCtrl.reset).toHaveBeenCalledOnce()
   })
 })

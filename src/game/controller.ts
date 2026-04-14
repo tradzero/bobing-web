@@ -1,7 +1,8 @@
 import type { DicePair } from '@/dice/create'
 import { throwDice } from '@/dice/throw'
-import { readAllFaces } from '@/dice/read-face'
+import { readAllFacesDetailed } from '@/dice/read-face'
 import { judge } from '@/rules/judge'
+import { SETTLE } from '@/config/settle'
 import type { createGameStore } from './store'
 import type { Engine } from './engine'
 
@@ -29,35 +30,69 @@ export class GameController {
     this.engine = engine
   }
 
-  /** 掷骰：拒绝 rolling 阶段调用 */
+  /** 掷骰：拒绝 rolling 和 tilt-confirm 阶段调用 */
   throw(): void {
     const { phase } = this.store.getState()
-    if (phase === 'rolling' || !this.engine) return
+    if (phase === 'rolling' || phase === 'tilt-confirm' || !this.engine) return
 
     this.store.getState().setPhase('rolling')
     throwDice(this.dicePairs)
     this.engine.beginSettle()
   }
 
-  /** 停稳回调：读取点数 → 判定奖级 → 冻结骰子 → 更新 store */
+  /**
+   * 停稳回调：读取详细点数 → 冻结骰子 → 判定倾斜 → 分流
+   * 冻结在判定之前，确保 tilt-confirm 期间骰子姿态不漂移
+   */
   onSettled(): void {
     const bodies = this.dicePairs.map((p) => p.body)
-    const diceValues = readAllFaces(bodies)
-    const result = judge(diceValues)
-    // 控制台输出完整结算结果，便于验收核对
-    console.log('[博饼结算]', { diceValues, ...result })
 
-    // 冻结骰子：停止物理运动，消除 Heightfield 表面微弹跳抖动
+    // 1. 读取详细结果（点数 + 可信度）
+    const detailedResults = readAllFacesDetailed(bodies)
+    const diceValues = detailedResults.map((r) => r.value)
+    const result = judge(diceValues)
+
+    // 2. 立即冻结全部骰子，消除 Heightfield 表面微弹跳抖动
     for (const body of bodies) {
       body.velocity.set(0, 0, 0)
       body.angularVelocity.set(0, 0, 0)
       body.sleep()
     }
 
-    this.store.getState().setResult({ diceValues, result })
+    // 控制台输出完整结算结果，便于验收核对
+    console.log('[博饼结算]', { diceValues, ...result, confidences: detailedResults.map((r) => r.confidence.toFixed(3)) })
+
+    // 3. 检测倾斜骰子
+    const tiltedIndices = detailedResults
+      .map((r, i) => (r.confidence < SETTLE.tiltThreshold ? i : -1))
+      .filter((i) => i >= 0)
+
+    // 4. 分流：有倾斜 → tilt-confirm，否则 → result
+    if (tiltedIndices.length > 0) {
+      this.store.getState().setPending({ diceValues, result, tiltedIndices })
+    } else {
+      this.store.getState().setResult({ diceValues, result })
+    }
   }
 
-  /** 重置：拒绝 rolling 阶段调用 */
+  /** 接受倾斜结果：确认待提交数据 → result */
+  acceptTilted(): void {
+    const { phase } = this.store.getState()
+    if (phase !== 'tilt-confirm') return
+    this.store.getState().commitPending()
+  }
+
+  /** 重掷：清除待提交数据 → 全部 6 颗重新投掷 */
+  rethrow(): void {
+    const { phase } = this.store.getState()
+    if (phase !== 'tilt-confirm') return
+
+    this.store.getState().clearPending()
+    throwDice(this.dicePairs)
+    this.engine?.beginSettle()
+  }
+
+  /** 重置：rolling 阶段拒绝，tilt-confirm 阶段清空 pending */
   reset(): void {
     const { phase } = this.store.getState()
     if (phase === 'rolling') return

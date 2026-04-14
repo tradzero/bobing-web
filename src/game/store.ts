@@ -9,9 +9,17 @@ export interface HistoryEntry {
   result: JudgeResult
 }
 
+/** 待确认结算数据（倾斜确认流程） */
+export interface PendingSettlement {
+  diceValues: number[]
+  result: JudgeResult
+  /** 倾斜骰子的索引（0-based） */
+  tiltedIndices: number[]
+}
+
 /** 游戏状态 */
 export interface GameState {
-  phase: 'idle' | 'rolling' | 'result'
+  phase: 'idle' | 'rolling' | 'tilt-confirm' | 'result'
   round: number
   diceValues: number[]
   currentResult: JudgeResult | null
@@ -19,12 +27,20 @@ export interface GameState {
   prizeRecord: Record<Prize, number>
   soundEnabled: boolean
   playerId: string | null
+  /** 倾斜确认态下的待提交数据 */
+  pendingSettlement: PendingSettlement | null
 }
 
 /** Store actions（纯状态设置器） */
 export interface GameActions {
   setPhase: (phase: GameState['phase']) => void
   setResult: (payload: { diceValues: number[]; result: JudgeResult }) => void
+  /** 写入待确认结算数据，进入 tilt-confirm 态 */
+  setPending: (payload: PendingSettlement) => void
+  /** 确认待提交结果，提交到历史/奖级/轮次，进入 result 态 */
+  commitPending: () => void
+  /** 清空待提交数据，回到 rolling 态（重掷用） */
+  clearPending: () => void
   resetState: () => void
   toggleSound: () => void
 }
@@ -40,6 +56,35 @@ function initPrizeRecord(): Record<Prize, number> {
   return record
 }
 
+/**
+ * 共用结果提交逻辑（setResult 和 commitPending 都走这条路）
+ * 将 diceValues + JudgeResult 写入 history、prizeRecord、round，设 phase='result'
+ */
+function applyResult(
+  state: GameState,
+  diceValues: number[],
+  result: JudgeResult,
+): Partial<GameStore> {
+  const entry: HistoryEntry = {
+    round: state.round,
+    diceValues,
+    result,
+  }
+  const history = [entry, ...state.history].slice(0, UI.HISTORY_MAX_LENGTH)
+  const prizeRecord = { ...state.prizeRecord }
+  prizeRecord[result.prize] = (prizeRecord[result.prize] ?? 0) + 1
+
+  return {
+    phase: 'result' as const,
+    diceValues,
+    currentResult: result,
+    round: state.round + 1,
+    history,
+    prizeRecord,
+    pendingSettlement: null,
+  }
+}
+
 const initialState: GameState = {
   phase: 'idle',
   round: UI.INITIAL_ROUND,
@@ -49,6 +94,7 @@ const initialState: GameState = {
   prizeRecord: initPrizeRecord(),
   soundEnabled: true,
   playerId: null,
+  pendingSettlement: null,
 }
 
 /**
@@ -62,27 +108,30 @@ export function createGameStore() {
     setPhase: (phase) => set({ phase }),
 
     setResult: ({ diceValues, result }) =>
-      set((state) => {
-        const entry: HistoryEntry = {
-          round: state.round,
-          diceValues,
-          result,
-        }
-        const history = [entry, ...state.history].slice(
-          0,
-          UI.HISTORY_MAX_LENGTH,
-        )
-        const prizeRecord = { ...state.prizeRecord }
-        prizeRecord[result.prize] = (prizeRecord[result.prize] ?? 0) + 1
+      set((state) => applyResult(state, diceValues, result)),
 
-        return {
-          phase: 'result' as const,
-          diceValues,
-          currentResult: result,
-          round: state.round + 1,
-          history,
-          prizeRecord,
-        }
+    setPending: (payload) =>
+      set({
+        phase: 'tilt-confirm' as const,
+        pendingSettlement: payload,
+        // 暂存 diceValues 供 UI 预览（但不写入 history/prizeRecord）
+        diceValues: payload.diceValues,
+        currentResult: payload.result,
+      }),
+
+    commitPending: () =>
+      set((state) => {
+        const pending = state.pendingSettlement
+        if (!pending) return {}
+        return applyResult(state, pending.diceValues, pending.result)
+      }),
+
+    clearPending: () =>
+      set({
+        phase: 'rolling' as const,
+        pendingSettlement: null,
+        diceValues: [],
+        currentResult: null,
       }),
 
     resetState: () => set({ ...initialState, prizeRecord: initPrizeRecord() }),
