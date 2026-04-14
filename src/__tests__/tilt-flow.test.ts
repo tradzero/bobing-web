@@ -24,15 +24,15 @@ function mockEngine(): Engine {
 
 /**
  * 创建 dice pairs，可选让部分骰子倾斜
- * @param tiltIndices 需要倾斜的骰子索引，将绕 x 轴旋转 40°（超过 31.8° 阈值）
+ * @param tiltIndices 需要倾斜的骰子索引，将绕 x 轴旋转 44°
+ *   此时 max dot = cos(44°) ≈ 0.719 < 0.75 阈值，触发 tilt-confirm
  */
 function mockDicePairs(tiltIndices: number[] = []): DicePair[] {
   return Array.from({ length: 6 }, (_, i) => {
     const body = new CANNON.Body({ mass: 1 })
     if (tiltIndices.includes(i)) {
-      // 绕 x 轴倾斜 40°，cos(40°) ≈ 0.766 < 0.85 阈值
       const q = new CANNON.Quaternion()
-      q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), (40 * Math.PI) / 180)
+      q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), (44 * Math.PI) / 180)
       body.quaternion.copy(q)
     } else {
       // 默认四元数 → +y 朝上 → value=1, confidence≈1.0
@@ -241,7 +241,7 @@ describe('倾斜确认流程', () => {
 
   // ── 阈值边界 ──
 
-  it('tiltThreshold 配置值为 0.85', () => {
-    expect(SETTLE.tiltThreshold).toBe(0.85)
+  it('tiltThreshold 配置值为 0.75', () => {
+    expect(SETTLE.tiltThreshold).toBe(0.75)
   })
 })

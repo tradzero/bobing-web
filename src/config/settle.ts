@@ -10,6 +10,6 @@ export const SETTLE = {
   stableDuration: 0.5,
   /** 超时上限 (s)，超过后进入兜底结算 */
   timeout: 10.0,
-  /** 倾斜可信度阈值 (cos θ)，低于此值进入确认态；0.85 ≈ 31.8° */
-  tiltThreshold: 0.85,
+  /** 倾斜可信度阈值 (cos θ)，低于此值进入确认态；0.75 ≈ 41.4° */
+  tiltThreshold: 0.75,
 } as const
