@@ -16,7 +16,7 @@ export interface GameState {
   diceValues: number[]
   currentResult: JudgeResult | null
   history: HistoryEntry[]
-  prizeRecord: Record<string, number>
+  prizeRecord: Record<Prize, number>
   soundEnabled: boolean
   playerId: string | null
 }
@@ -32,7 +32,7 @@ export interface GameActions {
 export type GameStore = GameState & GameActions
 
 /** 初始化奖级记录（全部归零） */
-function initPrizeRecord(): Record<string, number> {
+function initPrizeRecord(): Record<Prize, number> {
   const record: Record<string, number> = {}
   for (const key of Object.values(Prize)) {
     record[key] = 0
