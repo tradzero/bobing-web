@@ -64,10 +64,10 @@ export class GameController {
 
     this.store.getState().resetState()
 
-    // 骰子回到碗上方初始位置
+    // 骰子回到碗底附近初始位置
     this.dicePairs.forEach(({ body }, i) => {
       const angle = (i / this.dicePairs.length) * Math.PI * 2
-      body.position.set(Math.cos(angle) * 0.3, 1.5, Math.sin(angle) * 0.3)
+      body.position.set(Math.cos(angle) * 0.3, 0.3, Math.sin(angle) * 0.3)
       body.previousPosition.copy(body.position)
       body.velocity.set(0, 0, 0)
       body.angularVelocity.set(0, 0, 0)

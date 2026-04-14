@@ -159,8 +159,8 @@ describe('GameController 编排层集成测试', () => {
     controller.reset()
 
     for (const { body } of dicePairs) {
-      // 位置恢复到碗上方
-      expect(body.position.y).toBeCloseTo(1.5)
+      // 位置恢复到碗底附近
+      expect(body.position.y).toBeCloseTo(0.3)
       // previousPosition 同步
       expect(body.previousPosition.x).toBe(body.position.x)
       expect(body.previousPosition.y).toBe(body.position.y)

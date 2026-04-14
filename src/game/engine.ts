@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type * as CANNON from 'cannon-es'
 import type { DicePair } from '@/dice/create'
 import { checkSettled, createSettleState, type SettleState } from '@/dice/settle'
+import { ESCAPE_Y } from '@/physics/bowl-body'
 import type { SceneContext } from '@/scene/setup'
 
 export interface EngineOptions {
@@ -56,7 +57,14 @@ export function createEngine(opts: EngineOptions): Engine {
     // 1. 物理步进
     worldStep(dt)
 
-    // 2. body → mesh 同步
+    // 2. 逃逸防护：骰子超过碗口高度且向上运动时反射速度，防止弹出
+    for (const { body } of dicePairs) {
+      if (body.position.y > ESCAPE_Y && body.velocity.y > 0) {
+        body.velocity.y = -body.velocity.y * 0.3
+      }
+    }
+
+    // 3. body → mesh 同步
     for (const { mesh, body } of dicePairs) {
       mesh.position.set(body.position.x, body.position.y, body.position.z)
       mesh.quaternion.set(
@@ -67,7 +75,7 @@ export function createEngine(opts: EngineOptions): Engine {
       )
     }
 
-    // 3. 停稳检测
+    // 4. 停稳检测
     if (settleState && !settled) {
       if (checkSettled(bodies, elapsedTime, settleState)) {
         settled = true
@@ -75,7 +83,7 @@ export function createEngine(opts: EngineOptions): Engine {
       }
     }
 
-    // 4. 渲染
+    // 5. 渲染
     renderer.render(scene, camera)
   }
 
