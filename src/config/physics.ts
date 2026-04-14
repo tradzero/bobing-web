@@ -8,7 +8,7 @@ export const PHYSICS = {
   /** 固定时间步长 (s) */
   fixedTimeStep: 1 / 60,
   /** 最大子步进数 */
-  maxSubSteps: 3,
+  maxSubSteps: 8,
 
   /** 骰子质量 (kg) */
   diceMass: 0.03,
@@ -19,14 +19,14 @@ export const PHYSICS = {
   /** 骰子角阻尼 */
   diceAngularDamping: 0.3,
 
-  /** 骰子 sleep 相关 */
-  diceSleepSpeedLimit: 0.1,
-  diceSleepTimeLimit: 1.0,
+  /** 骰子 sleep 相关（更激进：高 speedLimit + 短 timeLimit，快速截断残余微抖） */
+  diceSleepSpeedLimit: 0.35,
+  diceSleepTimeLimit: 0.15,
 
   /** 接触材质参数 */
   contact: {
-    /** 骰子-碗 */
-    diceBowl: { friction: 0.4, restitution: 0.3 },
+    /** 骰子-碗（bowlMaterial 同时用于碗底与墙壁，降低 restitution 减少微弹跳） */
+    diceBowl: { friction: 0.4, restitution: 0.15 },
     /** 骰子-骰子 */
     diceDice: { friction: 0.3, restitution: 0.25 },
     /** 骰子-桌面 */
