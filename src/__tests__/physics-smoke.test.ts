@@ -9,6 +9,7 @@ import { setRandom, resetRandom } from '@/utils/random'
 import { diceMaterial } from '@/physics/materials'
 import { initThrowBody } from '@/dice/throw'
 import { checkSettled, createSettleState } from '@/dice/settle'
+import { SETTLE } from '@/config/settle'
 
 /**
  * 物理烟雾测试
@@ -80,7 +81,7 @@ describe('物理烟雾测试', () => {
         settleFrame = f + 1
         // 检查是否超时路径
         const elapsed = currentTime - settleState.startTime
-        if (elapsed >= 10.0) timedOut = true
+        if (elapsed >= SETTLE.timeout) timedOut = true
         break
       }
     }

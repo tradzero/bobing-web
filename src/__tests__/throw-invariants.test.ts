@@ -72,8 +72,8 @@ describe('投掷初始化不变量', () => {
 
       it('向下速度在 THROW 包络内', () => {
         const body = setup()
-        // vy 应为负值（向下），在 downSpeedMin..downSpeedMax 之间
-        expect(body.velocity.y).toBeGreaterThanOrEqual(THROW.downSpeedMin - 0.5) // 含 -x*0.5 偏移余量
+        // vy 纯由 randomRange(downSpeedMin, downSpeedMax) 生成，无额外偏移
+        expect(body.velocity.y).toBeGreaterThanOrEqual(THROW.downSpeedMin - 0.001)
         expect(body.velocity.y).toBeLessThanOrEqual(THROW.downSpeedMax + 0.001)
       })
 
