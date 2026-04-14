@@ -11,27 +11,13 @@ import {
 const SEGMENTS = 20
 
 /**
- * 生成视觉碗内壁最终轮廓点（与 createBowl 塞进 LatheGeometry 的一致）
- * 返回纯数据 {r, y}[]，从碗口到碗底，供 T7 静态对齐测试校验
+ * 生成碗截面完整轮廓点列（外壁 → 碗口翻边 → 内壁）
+ * createBowl 直接消费此数组构建 LatheGeometry，T7 也引用同一函数校验
+ * 单一来源，不可能分叉
  */
-export function generateInnerWallPoints(): { r: number; y: number }[] {
-  const profile = sampleBowlInnerProfile(SEGMENTS)
-  // 与 createBowl 内壁生成逻辑完全一致：从碗口到碗底逆序
-  const points: { r: number; y: number }[] = []
-  for (let i = profile.length - 1; i >= 0; i--) {
-    points.push({ r: profile[i].r, y: profile[i].y })
-  }
-  return points
-}
-
-/**
- * 创建海碗可视模型
- * 使用 LatheGeometry 旋转体生成碗形，白瓷材质
- * 内壁基于共享 bowlInnerHeight 曲线，外壁 = 内壁半径方向偏移
- */
-export function createBowl(): THREE.Mesh {
-  const points: THREE.Vector2[] = []
+export function generateBowlProfile(): THREE.Vector2[] {
   const innerProfile = sampleBowlInnerProfile(SEGMENTS)
+  const points: THREE.Vector2[] = []
 
   // 外壁轮廓：从碗底弯曲到碗口（内壁半径 + 厚度偏移）
   for (const { r, y } of innerProfile) {
@@ -43,11 +29,22 @@ export function createBowl(): THREE.Mesh {
   const topInner = innerProfile[innerProfile.length - 1]
   points.push(new THREE.Vector2(topInner.r + BOWL_THICKNESS * 0.5, BOWL_HEIGHT))
 
-  // 内壁轮廓：从碗口回到碗底（与 generateInnerWallPoints 一致，无额外偏移）
+  // 内壁轮廓：从碗口回到碗底
   for (let i = innerProfile.length - 1; i >= 0; i--) {
     const { r, y } = innerProfile[i]
     points.push(new THREE.Vector2(r, y))
   }
+
+  return points
+}
+
+/**
+ * 创建海碗可视模型
+ * 使用 LatheGeometry 旋转体生成碗形，白瓷材质
+ * 内壁基于共享 bowlInnerHeight 曲线，外壁 = 内壁半径方向偏移
+ */
+export function createBowl(): THREE.Mesh {
+  const points = generateBowlProfile()
 
   const geometry = new THREE.LatheGeometry(points, 32)
   const material = new THREE.MeshStandardMaterial({

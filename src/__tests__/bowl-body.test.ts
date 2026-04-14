@@ -19,6 +19,7 @@ import { diceMaterial } from '@/physics/materials'
 import { setRandom, resetRandom } from '@/utils/random'
 import { initThrowBody } from '@/dice/throw'
 import { checkSettled, createSettleState } from '@/dice/settle'
+import { SETTLE } from '@/config/settle'
 
 /**
  * 碗碰撞体回归测试（Heightfield + 挡墙方案）
@@ -407,7 +408,7 @@ describe('T6: 真实结算路径回归测试', () => {
         const allSleeping = bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)
         if (allSleeping) {
           path = 'sleep'
-        } else if (currentTime - settleState.startTime >= 10.0) {
+        } else if (currentTime - settleState.startTime >= SETTLE.timeout) {
           path = 'timeout'
         } else {
           path = 'threshold'
@@ -453,21 +454,25 @@ describe('T6: 真实结算路径回归测试', () => {
 
 // ── T7: 视觉碗与物理碗静态几何对齐测试 ──
 describe('T7: 视觉碗内壁与物理碗对齐', () => {
-  // 直接测试 bowl.ts 生成的实际轮廓点 vs 共享曲线
-  // 不是函数自证：generateInnerWallPoints 内部调用 sampleBowlInnerProfile，
-  // 但这里验证的是生成后的实际数据数组与 bowlInnerHeight 逐点比较，
-  // 能捕获采样错误、坐标轴颠倒、偏移遗漏等 bug
+  // 直接校验 createBowl 实际消费的 generateBowlProfile()，
+  // 从完整轮廓中提取内壁段（外壁点数 = SEGMENTS+1，翻边 1 点，之后全是内壁），
+  // 与物理层 bowlInnerHeight 逐点比较
 
   it('视觉内壁各采样点与 bowlInnerHeight 最大偏差 < 5mm', async () => {
-    const { generateInnerWallPoints } = await import('@/scene/bowl')
+    const { generateBowlProfile } = await import('@/scene/bowl')
     const { bowlInnerHeight } = await import('@/config/bowl')
 
-    const innerPoints = generateInnerWallPoints()
-    let maxDiff = 0
+    const profile = generateBowlProfile()
+    // 轮廓结构：外壁 (SEGMENTS+1 点) + 翻边 (1 点) + 内壁 (SEGMENTS+1 点)
+    const SEGMENTS = 20
+    const innerStart = SEGMENTS + 1 + 1 // 跳过外壁 + 翻边
+    const innerPoints = profile.slice(innerStart)
 
-    // generateInnerWallPoints 返回 {r, y}[]
+    expect(innerPoints.length).toBe(SEGMENTS + 1)
+
+    let maxDiff = 0
     for (const pt of innerPoints) {
-      const physicsY = bowlInnerHeight(pt.r)
+      const physicsY = bowlInnerHeight(pt.x) // Vector2: x=r, y=y
       const diff = Math.abs(pt.y - physicsY)
       if (diff > maxDiff) maxDiff = diff
     }
@@ -479,11 +484,15 @@ describe('T7: 视觉碗内壁与物理碗对齐', () => {
   })
 
   it('视觉内壁覆盖从 r≈0 到 r≈BOWL_INNER_RADIUS 的完整范围', async () => {
-    const { generateInnerWallPoints } = await import('@/scene/bowl')
+    const { generateBowlProfile } = await import('@/scene/bowl')
     const { BOWL_INNER_RADIUS } = await import('@/config/bowl')
 
-    const innerPoints = generateInnerWallPoints()
-    const radii = innerPoints.map((pt: { r: number }) => pt.r)
+    const profile = generateBowlProfile()
+    const SEGMENTS = 20
+    const innerStart = SEGMENTS + 1 + 1
+    const innerPoints = profile.slice(innerStart)
+
+    const radii = innerPoints.map((pt: { x: number }) => pt.x)
     const minR = Math.min(...radii)
     const maxR = Math.max(...radii)
 
