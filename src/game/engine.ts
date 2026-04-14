@@ -28,6 +28,7 @@ export function createEngine(opts: EngineOptions): Engine {
   const { sceneCtx, worldStep, dicePairs, onSettled } = opts
   const { scene, camera, renderer } = sceneCtx
   const timer = new THREE.Timer()
+  let timerInitialized = false
 
   let rafId: number | null = null
   let settleState: SettleState | null = null
@@ -39,8 +40,17 @@ export function createEngine(opts: EngineOptions): Engine {
   function tick(timestamp: number) {
     rafId = requestAnimationFrame(tick)
 
+    // 首帧初始化：先调用一次 update 设置基准时间，跳过本帧物理
+    // 避免 Timer 从 0 开始导致首帧 delta 为页面加载以来的全部时间
+    if (!timerInitialized) {
+      timer.update(timestamp)
+      timerInitialized = true
+      renderer.render(scene, camera)
+      return
+    }
+
     timer.update(timestamp)
-    const dt = timer.getDelta()
+    const dt = Math.min(timer.getDelta(), 0.1) // 限制最大 delta，防止切 tab 回来物理爆炸
     elapsedTime += dt
 
     // 1. 物理步进

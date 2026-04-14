@@ -39,13 +39,21 @@ export class GameController {
     this.engine.beginSettle()
   }
 
-  /** 停稳回调：读取点数 → 判定奖级 → 更新 store */
+  /** 停稳回调：读取点数 → 判定奖级 → 冻结骰子 → 更新 store */
   onSettled(): void {
     const bodies = this.dicePairs.map((p) => p.body)
     const diceValues = readAllFaces(bodies)
     const result = judge(diceValues)
     // 控制台输出完整结算结果，便于验收核对
     console.log('[博饼结算]', { diceValues, ...result })
+
+    // 冻结骰子：停止物理运动，消除 Heightfield 表面微弹跳抖动
+    for (const body of bodies) {
+      body.velocity.set(0, 0, 0)
+      body.angularVelocity.set(0, 0, 0)
+      body.sleep()
+    }
+
     this.store.getState().setResult({ diceValues, result })
   }
 
@@ -60,9 +68,11 @@ export class GameController {
     this.dicePairs.forEach(({ body }, i) => {
       const angle = (i / this.dicePairs.length) * Math.PI * 2
       body.position.set(Math.cos(angle) * 0.3, 1.5, Math.sin(angle) * 0.3)
+      body.previousPosition.copy(body.position)
       body.velocity.set(0, 0, 0)
       body.angularVelocity.set(0, 0, 0)
       body.quaternion.set(0, 0, 0, 1)
+      body.aabbNeedsUpdate = true
       body.wakeUp()
     })
   }

@@ -76,10 +76,12 @@ export function GameViewport({ children }: GameViewportProps) {
       physics.world.addBody(body)
     }
 
-    // 骰子初始位置（碗上方）
+    // 骰子初始位置（碗上方），同步 previousPosition 避免首帧 broadphase 异常
     dicePairs.forEach(({ body }, i) => {
       const angle = (i / dicePairs.length) * Math.PI * 2
       body.position.set(Math.cos(angle) * 0.3, 1.5, Math.sin(angle) * 0.3)
+      body.previousPosition.copy(body.position)
+      body.aabbNeedsUpdate = true
     })
 
     // 创建 store、controller、engine
