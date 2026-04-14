@@ -39,7 +39,7 @@
 - [x] 1B.4 [实现] 实现 canvas resize 监听：同步 renderer 尺寸、pixel ratio、camera aspect
 - [x] 1B.5 [实现] 实现 `scene/table.ts`：圆桌桌面 mesh（圆柱几何体 + 木纹色基础材质）
 - [x] 1B.6 [实现] 实现 `scene/bowl.ts`：海碗可视模型（Lathe 几何体或组合几何体，白瓷材质）
-- [ ] 1B.7 [验收] 验证页面能稳定渲染桌面 + 海碗静态场景
+- [x] 1B.7 [验收] 验证页面能稳定渲染桌面 + 海碗静态场景
 
 ### 1C cannon-es 物理世界
 
