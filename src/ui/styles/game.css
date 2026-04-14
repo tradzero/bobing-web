@@ -1,4 +1,19 @@
 /* ---- 布局 ---- */
+
+/* GameViewport 外层容器 */
+.game-viewport {
+  position: relative;
+  width: 100%;
+  background: #1a1a2e;
+}
+
+/* Canvas 宿主：桌面端占满视口 */
+.canvas-host {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
 .game-overlay {
   position: absolute;
   inset: 0;
@@ -246,6 +261,15 @@
 
 /* ---- 移动端响应式 ---- */
 @media (max-width: 768px) {
+  .canvas-host {
+    height: clamp(40vh, 50dvh, 60vh);
+  }
+
+  .game-overlay {
+    position: relative;
+    height: auto;
+  }
+
   .side-panel {
     position: static;
     width: 100%;
@@ -260,12 +284,6 @@
   .side-panel .panel-card {
     flex: 1 1 45%;
     min-width: 140px;
-  }
-
-  .game-overlay {
-    position: relative;
-    height: auto;
-    min-height: 100vh;
   }
 
   .bottom-area {

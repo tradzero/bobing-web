@@ -35,7 +35,7 @@ src/
 │   ├── physics.ts              # 物理参数：质量、阻尼、摩擦、弹性、步长、子步进
 │   ├── throw.ts                # 投掷参数：速度范围、角速度范围、初始高度
 │   ├── settle.ts               # 停稳参数：速度阈值、持续时间、超时上限
-│   └── ui.ts                   # UI 常量：HISTORY_MAX_LENGTH、INITIAL_ROUND、MOBILE_TOUCH_TARGET_MIN 等
+│   └── ui.ts                   # UI 常量：HISTORY_MAX_LENGTH、INITIAL_ROUND；触摸目标尺寸单一来源 CSS --touch-min
 │
 ├── game/
 │   ├── engine.ts               # 运行时：唯一 rAF 循环、物理步进、mesh 同步、停稳检测、渲染、dispose

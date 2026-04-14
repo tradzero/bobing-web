@@ -50,12 +50,14 @@ export function GameViewport({ children }: GameViewportProps) {
     const container = containerRef.current
     if (!container) return
 
-    // 创建 canvas
+    // 创建 canvas 并插入 canvas host
+    const canvasHost = container.querySelector('.canvas-host') as HTMLDivElement
+    if (!canvasHost) return
     const canvas = document.createElement('canvas')
     canvas.style.width = '100%'
     canvas.style.height = '100%'
     canvas.style.display = 'block'
-    container.appendChild(canvas)
+    canvasHost.appendChild(canvas)
 
     // 初始化场景
     const sceneCtx = createScene(canvas)
@@ -111,7 +113,7 @@ export function GameViewport({ children }: GameViewportProps) {
       disposeSceneResources(sceneCtx.scene)
       sceneCtx.dispose()
       physics.dispose()
-      container.removeChild(canvas)
+      canvasHost.removeChild(canvas)
       setController(null)
       setStore(null)
     }
@@ -122,14 +124,9 @@ export function GameViewport({ children }: GameViewportProps) {
       <GameControllerContext.Provider value={controller}>
         <div
           ref={containerRef}
-          style={{
-            position: 'relative',
-            width: '100%',
-            height: '100vh',
-            overflow: 'hidden',
-            background: '#1a1a2e',
-          }}
+          className="game-viewport"
         >
+          <div className="canvas-host" />
           {controller && children}
         </div>
       </GameControllerContext.Provider>

@@ -141,11 +141,11 @@
 
 - [x] 2A.1 [实现] 实现 `ui/components/GameViewport.tsx`：持有 canvas 容器 ref，useEffect 中创建引擎实例和 controller 实例，cleanup 中 dispose（幂等，兼容 StrictMode 双调用）。GameViewport 接受 children，内部通过 GameControllerContext.Provider 包裹 canvas + children，确保 overlay 组件能获取 controller
 - [x] 2A.2 [实现] 实现 GameControllerContext + `useGameController()` hook：controller 实例未就绪时 hook 抛出明确错误
-- [x] 2A.3 [实现] 创建 `config/ui.ts`：集中定义 UI 常量（HISTORY_MAX_LENGTH = 5、INITIAL_ROUND = 1、MOBILE_TOUCH_TARGET_MIN 等）
+- [x] 2A.3 [实现] 创建 `config/ui.ts`：集中定义 UI 常量（HISTORY_MAX_LENGTH = 5、INITIAL_ROUND = 1）；触摸目标尺寸单一来源于 CSS variables.css --touch-min
 - [x] 2A.4 [实现] 实现 `App.tsx`：GameViewport 作为容器，overlay 组件（ThrowButton、ResultPanel 等）作为 GameViewport 的 children 渲染
 - [x] 2A.5 [实现] 在 GameViewport 挂载时初始化 scene/setup、physics/world、dice/create、game/engine、game/controller
 - [x] 2A.6 [实现] 在 GameViewport 卸载时完整销毁：engine.dispose()、renderer.dispose()、物理世界清理、事件监听移除
-- [ ] 2A.7 [测试] StrictMode/HMR 自动化冒烟测试：挂载一次、卸载一次、再次挂载不产生双实例、不残留 rAF 和事件监听
+- [x] 2A.7 [测试] StrictMode/HMR 自动化冒烟测试：挂载一次、卸载一次、再次挂载不产生双实例、不残留 rAF 和事件监听
 - [ ] 2A.8 [验收] 验证 Vite HMR 后 3D 场景正常重建
 
 ### 2B 核心 UI 组件
