@@ -1,35 +1,52 @@
 import * as THREE from 'three'
+import {
+  BOWL_RADIUS,
+  BOWL_HEIGHT,
+  BOWL_THICKNESS,
+  BOWL_INNER_RADIUS,
+  sampleBowlInnerProfile,
+} from '@/config/bowl'
+
+/** 视觉碗内壁采样段数 */
+const SEGMENTS = 20
+
+/**
+ * 生成视觉碗内壁最终轮廓点（与 createBowl 塞进 LatheGeometry 的一致）
+ * 返回纯数据 {r, y}[]，从碗口到碗底，供 T7 静态对齐测试校验
+ */
+export function generateInnerWallPoints(): { r: number; y: number }[] {
+  const profile = sampleBowlInnerProfile(SEGMENTS)
+  // 与 createBowl 内壁生成逻辑完全一致：从碗口到碗底逆序
+  const points: { r: number; y: number }[] = []
+  for (let i = profile.length - 1; i >= 0; i--) {
+    points.push({ r: profile[i].r, y: profile[i].y })
+  }
+  return points
+}
 
 /**
  * 创建海碗可视模型
  * 使用 LatheGeometry 旋转体生成碗形，白瓷材质
+ * 内壁基于共享 bowlInnerHeight 曲线，外壁 = 内壁半径方向偏移
  */
 export function createBowl(): THREE.Mesh {
-  // 碗截面轮廓点（从碗底中心到碗口边缘）
   const points: THREE.Vector2[] = []
-  const segments = 20
-  const bowlRadius = 1.2
-  const bowlHeight = 0.7
-  const bowlThickness = 0.06
+  const innerProfile = sampleBowlInnerProfile(SEGMENTS)
 
-  // 外壁轮廓：从碗底弯曲到碗口
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments
-    // 半抛物线曲线
-    const x = bowlRadius * Math.pow(t, 0.6)
-    const y = bowlHeight * t
-    points.push(new THREE.Vector2(x, y))
+  // 外壁轮廓：从碗底弯曲到碗口（内壁半径 + 厚度偏移）
+  for (const { r, y } of innerProfile) {
+    const outerR = r + BOWL_THICKNESS
+    points.push(new THREE.Vector2(outerR, y))
   }
 
-  // 碗口翻边（微小厚度）
-  points.push(new THREE.Vector2(bowlRadius - bowlThickness * 0.5, bowlHeight))
+  // 碗口翻边
+  const topInner = innerProfile[innerProfile.length - 1]
+  points.push(new THREE.Vector2(topInner.r + BOWL_THICKNESS * 0.5, BOWL_HEIGHT))
 
-  // 内壁轮廓：从碗口回到碗底
-  for (let i = segments; i >= 0; i--) {
-    const t = i / segments
-    const x = Math.max(0, bowlRadius * Math.pow(t, 0.6) - bowlThickness)
-    const y = bowlHeight * t + bowlThickness * 0.3
-    points.push(new THREE.Vector2(x, y))
+  // 内壁轮廓：从碗口回到碗底（与 generateInnerWallPoints 一致，无额外偏移）
+  for (let i = innerProfile.length - 1; i >= 0; i--) {
+    const { r, y } = innerProfile[i]
+    points.push(new THREE.Vector2(r, y))
   }
 
   const geometry = new THREE.LatheGeometry(points, 32)
