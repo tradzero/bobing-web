@@ -22,12 +22,18 @@ export const WALL_HEIGHT = 0.65
 export const WALL_THICKNESS = 0.06
 /** 挡墙底部埋入 Heightfield 的深度 (m) */
 export const WALL_BURY = 0.05
+/** 不可见盖高度 (m)，低于骰子最低投入高度(1.2m)，防止反弹逃出 */
+export const LID_HEIGHT = 1.0
+/** 不可见盖半径 (m)，覆盖整个碗口 */
+export const LID_RADIUS = BOWL_RADIUS
 
 export interface BowlBodies {
   /** 碗底 Heightfield body */
   bottom: CANNON.Body
   /** 挡墙 bodies */
   walls: CANNON.Body[]
+  /** 不可见盖（防反弹逃出） */
+  lid: CANNON.Body
   /** 桌面兜底 body */
   table: CANNON.Body
 }
@@ -136,7 +142,17 @@ export function createBowlBodies(world: CANNON.World): BowlBodies {
     walls.push(wall)
   }
 
-  // ─── 3. 桌面兜底平面 ───
+  // ─── 3. 不可见盖（防止骰子反弹飞出碗口） ───
+  const lid = new CANNON.Body({
+    mass: 0,
+    material: bowlMaterial,
+    position: new CANNON.Vec3(0, LID_HEIGHT, 0),
+  })
+  // 扁平圆柱体，朝下挡住碗口
+  lid.addShape(new CANNON.Cylinder(LID_RADIUS, LID_RADIUS, 0.02, 16))
+  world.addBody(lid)
+
+  // ─── 4. 桌面兜底平面 ───
   const table = new CANNON.Body({
     mass: 0,
     material: tableMaterial,
@@ -146,5 +162,5 @@ export function createBowlBodies(world: CANNON.World): BowlBodies {
   table.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2)
   world.addBody(table)
 
-  return { bottom, walls, table }
+  return { bottom, walls, lid, table }
 }
