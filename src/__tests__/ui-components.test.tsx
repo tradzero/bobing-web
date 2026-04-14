@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createGameStore } from '@/game/store'
+import { GameController } from '@/game/controller'
 import { GameStoreContext } from '@/ui/components/GameStoreContext'
 import { GameControllerContext } from '@/ui/components/GameControllerContext'
-import type { GameController } from '@/game/controller'
 import { ThrowButton } from '@/ui/components/ThrowButton'
 import { ResetButton } from '@/ui/components/ResetButton'
 import { ResultPanel } from '@/ui/components/ResultPanel'
@@ -335,5 +335,81 @@ describe('tilt-confirm 态组件联动', () => {
     expect(btn).not.toBeDisabled()
     await userEvent.click(btn)
     expect(mockCtrl.reset).toHaveBeenCalledOnce()
+  })
+})
+
+// ── TiltWarning 真实 controller + 真实 store 集成测试 ──
+describe('TiltWarning 真实接线', () => {
+  it('"接受结果" 点击后 store.phase 变为 result', async () => {
+    const realStore = createGameStore()
+    // 通过 store 直接设置 tilt-confirm 态（不需要物理层）
+    act(() =>
+      realStore.getState().setPending({
+        diceValues: [4, 1, 2, 3, 5, 6],
+        result: {
+          prize: Prize.YiXiu,
+          priority: 12,
+          carryScore: 17,
+          matchedDice: [4],
+          remainDice: [1, 2, 3, 5, 6],
+          description: '一秀 带17',
+        },
+        tiltedIndices: [0],
+      }),
+    )
+    // 真实 controller，acceptTilted 调用 store.commitPending
+    const realCtrl = new GameController({ store: realStore, dicePairs: [] })
+
+    render(
+      <GameStoreContext.Provider value={realStore}>
+        <GameControllerContext.Provider value={realCtrl}>
+          <TiltWarning />
+        </GameControllerContext.Provider>
+      </GameStoreContext.Provider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: '接受结果' }))
+    expect(realStore.getState().phase).toBe('result')
+    expect(realStore.getState().history.length).toBe(1)
+    expect(realStore.getState().pendingSettlement).toBeNull()
+  })
+
+  it('"重掷" 点击后 store.phase 变为 rolling', async () => {
+    const realStore = createGameStore()
+    act(() =>
+      realStore.getState().setPending({
+        diceValues: [4, 1, 2, 3, 5, 6],
+        result: {
+          prize: Prize.YiXiu,
+          priority: 12,
+          carryScore: 17,
+          matchedDice: [4],
+          remainDice: [1, 2, 3, 5, 6],
+          description: '一秀 带17',
+        },
+        tiltedIndices: [0],
+      }),
+    )
+    const mockEngine = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      dispose: vi.fn(),
+      beginSettle: vi.fn(),
+    }
+    const realCtrl = new GameController({ store: realStore, dicePairs: [] })
+    realCtrl.setEngine(mockEngine)
+
+    render(
+      <GameStoreContext.Provider value={realStore}>
+        <GameControllerContext.Provider value={realCtrl}>
+          <TiltWarning />
+        </GameControllerContext.Provider>
+      </GameStoreContext.Provider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: '重掷' }))
+    expect(realStore.getState().phase).toBe('rolling')
+    expect(realStore.getState().pendingSettlement).toBeNull()
+    expect(mockEngine.beginSettle).toHaveBeenCalledOnce()
   })
 })

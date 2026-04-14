@@ -26,13 +26,14 @@ function mockEngine(): Engine {
  * 创建 dice pairs，可选让部分骰子倾斜
  * @param tiltIndices 需要倾斜的骰子索引，将绕 x 轴旋转 44°
  *   此时 max dot = cos(44°) ≈ 0.719 < 0.75 阈值，触发 tilt-confirm
+ * @param tiltDeg 自定义倾斜角度（度），默认 44
  */
-function mockDicePairs(tiltIndices: number[] = []): DicePair[] {
+function mockDicePairs(tiltIndices: number[] = [], tiltDeg = 44): DicePair[] {
   return Array.from({ length: 6 }, (_, i) => {
     const body = new CANNON.Body({ mass: 1 })
     if (tiltIndices.includes(i)) {
       const q = new CANNON.Quaternion()
-      q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), (44 * Math.PI) / 180)
+      q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), (tiltDeg * Math.PI) / 180)
       body.quaternion.copy(q)
     } else {
       // 默认四元数 → +y 朝上 → value=1, confidence≈1.0
@@ -77,6 +78,18 @@ describe('倾斜确认流程', () => {
 
   it('无倾斜骰子时 onSettled 直接进入 result', () => {
     const dicePairs = mockDicePairs([]) // 全部正常
+    const ctrl = new GameController({ store, dicePairs })
+    ctrl.setEngine(engine)
+
+    settleWithoutThrow(ctrl)
+
+    expect(store.getState().phase).toBe('result')
+    expect(store.getState().pendingSettlement).toBeNull()
+  })
+
+  it('35° 靠壁姿态不进入 tilt-confirm（cos35° ≈ 0.819 > 0.75）', () => {
+    // 碗壁正常倾斜 35° 不应触发倾斜确认
+    const dicePairs = mockDicePairs([0, 2, 5], 35)
     const ctrl = new GameController({ store, dicePairs })
     ctrl.setEngine(engine)
 
@@ -132,13 +145,26 @@ describe('倾斜确认流程', () => {
     settleWithoutThrow(ctrl)
     expect(store.getState().phase).toBe('tilt-confirm')
 
+    // 记下 pending 数据以验证提交内容
+    const pending = store.getState().pendingSettlement!
+    const expectedValues = [...pending.diceValues]
+    const expectedResult = { ...pending.result }
+
     ctrl.acceptTilted()
 
     const state = store.getState()
     expect(state.phase).toBe('result')
     expect(state.round).toBe(roundBefore + 1)
-    expect(state.history.length).toBe(1)
     expect(state.pendingSettlement).toBeNull()
+    // 验证提交内容与 pending 数据一致
+    expect(state.diceValues).toEqual(expectedValues)
+    expect(state.currentResult).toEqual(expectedResult)
+    expect(state.history.length).toBe(1)
+    expect(state.history[0].diceValues).toEqual(expectedValues)
+    expect(state.history[0].result).toEqual(expectedResult)
+    expect(state.history[0].round).toBe(roundBefore)
+    // prizeRecord 中对应奖级 +1
+    expect(state.prizeRecord[expectedResult.prize]).toBe(1)
   })
 
   it('acceptTilted 在非 tilt-confirm 态无效', () => {

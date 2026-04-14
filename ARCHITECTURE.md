@@ -34,7 +34,7 @@ src/
 ├── config/
 │   ├── physics.ts              # 物理参数：质量、阻尼、摩擦、弹性、步长、子步进
 │   ├── throw.ts                # 投掷参数：速度范围、角速度范围、初始高度
-│   ├── settle.ts               # 停稳参数：速度阈值、持续时间、超时上限
+│   ├── settle.ts               # 停稳参数：速度阈值、持续时间、超时上限、倾斜阈值 tiltThreshold（0.75 ≈ 41°）
 │   └── ui.ts                   # UI 常量：HISTORY_MAX_LENGTH、INITIAL_ROUND；触摸目标尺寸单一来源 CSS --touch-min
 │
 ├── game/
@@ -66,9 +66,10 @@ src/
 ├── ui/
 │   ├── components/
 │   │   ├── GameViewport.tsx    # 3D 容器：持有 canvas ref、创建/销毁引擎实例（幂等）；接受 children，通过 Provider 包裹
-│   │   ├── ThrowButton.tsx     # 掷骰按钮（掷骰中禁用 + 状态文案）
+│   │   ├── ThrowButton.tsx     # 掷骰按钮（rolling/tilt-confirm 禁用 + 状态文案）
 │   │   ├── ResetButton.tsx     # 重置按钮
-│   │   ├── ResultPanel.tsx     # 当轮结果面板：点数组合 + 奖级 + 带数
+│   │   ├── TiltWarning.tsx     # 倾斜确认面板：显示倾斜骰子编号，提供「接受结果」「重掷」按钮
+│   │   ├── ResultPanel.tsx     # 当轮结果面板：点数组合 + 奖级 + 带数（tilt-confirm 期间隐藏）
 │   │   ├── PrizeRecord.tsx     # 本局累计奖级记录（奖池/榜单面板）
 │   │   ├── History.tsx         # 最近 5 轮历史记录
 │   │   └── SoundToggle.tsx     # 音效开关
@@ -85,6 +86,7 @@ src/
     ├── read-face.test.ts       # 点数读取：24 个合法朝向 + 近边界扰动样本
     ├── settle.test.ts          # 停稳检测：假时钟 + 快照序列、多种边界场景
     ├── controller.test.ts      # 编排层集成：phase 变化、重复点击、history 上限、reset、sound
+    ├── tilt-flow.test.ts       # 倾斜确认流程：tilt-confirm 进入/pending 隔离/接受/重掷/throw 拒绝/reset/冻结/35° 不触发
     └── physics-smoke.test.ts   # 物理烟雾：真实世界 + 碗 + 骰子，固定种子跑 N 帧，无 NaN/不穿模
 ```
 
@@ -115,16 +117,30 @@ settle 返回 true（全部 sleep 或速度持续低于阈值 或 超时兜底�
     │
     ▼
 Engine 回调 → GameController.onSettled():
-    4. dice/read-face.ts → 读取 6 颗骰子朝上点数
-    5. rules/judge.ts → 判定奖级 → 返回 JudgeResult 完整对象
-    6. store.setResult({ phase: 'result', diceValues, result, round++, history, record })
+    4. dice/read-face.ts → readAllFacesDetailed() → 读取 6 颗骰子朝上点数 + 置信度
+    5. 冻结所有骰子物理体（mass=0，速度清零，sleep），确保后续姿态不漂移
+    6. rules/judge.ts → 判定奖级 → 返回 JudgeResult 完整对象
+    7. 检测倾斜骰子：confidence < tiltThreshold（0.75，≈41°）
     │
-    ▼
-React UI 响应 store 变化：
-    - ResultPanel 显示点数 + 奖级 + 带数
-    - PrizeRecord 更新累计
-    - History 追加记录
-    - ThrowButton 恢复可用
+    ├── 无倾斜 → store.setResult()（applyResult：写入 diceValues、result、round++、history、prizeRecord）
+    │                │
+    │                ▼
+    │          React UI 响应 → ResultPanel + PrizeRecord + History + ThrowButton 恢复
+    │
+    └── 有倾斜 → store.setPending({ diceValues, result, tiltedIndices })
+                     │  写入 diceValues + currentResult 供 UI 预览
+                     │  不写入 history / prizeRecord / round（隔离）
+                     │
+                     ▼
+               TiltWarning 组件显示倾斜提示
+                     │
+                     ├── 用户点击「接受结果」→ controller.acceptTilted()
+                     │     → store.commitPending()（调用 applyResult 提交）
+                     │     → phase = 'result'
+                     │
+                     └── 用户点击「重掷」→ controller.rethrow()
+                           → store.clearPending()（phase = 'rolling'）
+                           → throwDice() + engine.beginSettle()
 ```
 
 ## 游戏状态机
@@ -132,18 +148,27 @@ React UI 响应 store 变化：
 ```
         throw()                        onSettled()
 IDLE ──────────▶ ROLLING ──────────────────────────▶ RESULT
-  ▲                                                    │
-  │              reset() 或 下一轮 throw()              │
-  └────────────────────────────────────────────────────┘
+  ▲                                       │            │
+  │                                       │ 有倾斜     │
+  │              reset() 或               ▼            │
+  │              下一轮 throw()     TILT-CONFIRM       │
+  │                                   │       │        │
+  │                              accept()  rethrow()   │
+  │                                   │       │        │
+  │                                   ▼       ▼        │
+  │                                RESULT   ROLLING    │
+  │                                   │                │
+  └───────────────────────────────────┴────────────────┘
 ```
 
 | Phase | UI 状态 | 引擎行为 |
 |-------|---------|----------|
 | `idle` | 掷骰按钮可用，等待操作 | 骰子静止在碗中或初始位置 |
 | `rolling` | 按钮禁用，显示"骰子翻滚中" | 施加初速度 → 物理步进 → 停稳检测，全过程统一阶段 |
+| `tilt-confirm` | 按钮禁用，TiltWarning 显示（接受/重掷）| 骰子已冻结，等待用户决策 |
 | `result` | 显示结果面板，按钮恢复为"再掷一次" | 骰子静止，等待下一轮或重置 |
 
-说明：不再区分 throwing 和 settling。对 UI 来说两者表现完全一致（按钮禁用），合并为 rolling 减少边界管理复杂度。
+说明：不再区分 throwing 和 settling。对 UI 来说两者表现完全一致（按钮禁用），合并为 rolling 减少边界管理复杂度。tilt-confirm 为倾斜确认态，骰子物理体已冻结，结果数据预写入 store 供 UI 预览但不提交至历史记录，等待用户选择接受或重掷。
 
 ## Zustand Store 结构（概要）
 
@@ -158,14 +183,22 @@ interface JudgeResult {
   description: string       // 人类可读描述，如"状元 带7"
 }
 
+// 倾斜骰子待提交数据
+interface PendingSettlement {
+  diceValues: number[]
+  result: JudgeResult
+  tiltedIndices: number[]           // 倾斜骰子下标（0-based）
+}
+
 interface GameState {
   // 状态
-  phase: 'idle' | 'rolling' | 'result'
+  phase: 'idle' | 'rolling' | 'tilt-confirm' | 'result'
   round: number
   diceValues: number[]              // 当轮 6 颗骰子点数
   currentResult: JudgeResult | null // 当轮完整判定结果
   history: HistoryEntry[]           // 最近 HISTORY_MAX_LENGTH 轮历史（默认 5，来自 config/ui.ts）
   prizeRecord: Record<Prize, number>  // 累计各奖级次数
+  pendingSettlement: PendingSettlement | null  // 倾斜确认期间暂存
   soundEnabled: boolean
   playerId: string | null           // 预留多人，当前默认 null
 
@@ -174,10 +207,16 @@ interface GameState {
   setResult: (payload: {
     diceValues: number[]
     result: JudgeResult
-  }) => void
+  }) => void                         // 无倾斜时直接结算（内部调用 applyResult）
+  setPending: (p: PendingSettlement) => void  // 有倾斜：预写 diceValues/currentResult，不提交历史
+  commitPending: () => void           // 用户接受倾斜结果：调用 applyResult 提交
+  clearPending: () => void            // 用户选择重掷：清空 pending，phase → rolling
   resetState: () => void
   toggleSound: () => void
 }
+
+// applyResult 为 setResult 和 commitPending 共用的内部辅助函数，
+// 负责 round++、追加 history（限 HISTORY_MAX_LENGTH）、更新 prizeRecord、设置 phase='result'。
 ```
 
 注意：UI 组件只通过 selector 读取 store，所有业务操作（掷骰、重置）通过 GameController 实例方法调用，不直接调用 store 的 set 方法。
@@ -222,6 +261,7 @@ interface GameState {
 | 点数读取 | `dice/read-face.ts` | 24 个立方体合法朝向 + 近边界轻微扰动样本 | 构造已知四元数 |
 | 停稳检测 | `dice/settle.ts` | 全 sleep 直接结算、低速窗口被中断重计时、单骰未停、超时兜底、阈值抖动不提前结算 | 假时钟 + 快照序列 |
 | 编排集成 | `game/controller.ts` | phase 变化正确、rolling 中二次点击被拒、rolling 中 reset 被拒、history 只保留最近 HISTORY_MAX_LENGTH 轮、reset 清理当轮+累计、sound toggle 不影响主流程 | mock dice/judge/engine |
+| 倾斜确认流程 | `game/controller.ts` + `store.ts` | onSettled 倾斜检测→tilt-confirm、35° 靠壁正常姿态不触发、pending 隔离（不写 history/prizeRecord/round）、acceptTilted 提交完整内容、rethrow 重新投掷、throw 在 tilt-confirm 被拒、reset 清空 pending、冻结一致性 | 构造已知四元数 mock DicePair，settleWithoutThrow 跳过随机投掷 |
 | 物理烟雾 | 物理层整体 | 真实 cannon-es 世界 + 碗碰撞体 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能在预期时间内结算或触发超时 | 固定种子 + 帧循环 |
 
 **随机数可注入**：`utils/random.ts` 提供可替换的随机数源接口，生产环境使用 `Math.random`，测试时注入确定性种子生成器，确保投掷、物理烟雾和编排测试的稳定性。
