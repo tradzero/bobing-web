@@ -1,9 +1,7 @@
 import * as THREE from 'three'
 import {
-  BOWL_RADIUS,
   BOWL_HEIGHT,
   BOWL_THICKNESS,
-  BOWL_INNER_RADIUS,
   sampleBowlInnerProfile,
 } from '@/config/bowl'
 

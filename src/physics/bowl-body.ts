@@ -2,8 +2,6 @@ import * as CANNON from 'cannon-es'
 import { bowlMaterial, tableMaterial } from './materials'
 import {
   BOWL_RADIUS,
-  BOWL_HEIGHT,
-  BOWL_THICKNESS,
   bowlInnerHeight,
 } from '@/config/bowl'
 
