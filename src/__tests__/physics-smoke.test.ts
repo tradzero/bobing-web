@@ -5,127 +5,104 @@ import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'
 import { PHYSICS } from '@/config/physics'
-import { setRandom, resetRandom, random } from '@/utils/random'
+import { setRandom, resetRandom } from '@/utils/random'
 import { diceMaterial } from '@/physics/materials'
+import { initThrowBody } from '@/dice/throw'
+import { checkSettled, createSettleState } from '@/dice/settle'
 
 /**
  * 物理烟雾测试
  * 真实 cannon-es 世界 + 碗碰撞体 + 6 骰子
- * 固定种子跑若干帧，验证无 NaN、不掉出桌面、能在预期时间内结算或触发超时
+ * 使用运行时 initThrowBody 投掷包络初始化
+ * 断言无 NaN、不飞出、结算路径不超时、结算帧数有上限
  */
 describe('物理烟雾测试', () => {
   afterEach(() => {
     resetRandom()
   })
 
-  it('固定种子 - 骰子不产生 NaN、不掉出桌面', () => {
-    // 固定种子
-    let seed = 12345
-    setRandom(() => {
+  function makeLCG(initialSeed: number) {
+    let seed = initialSeed
+    return () => {
       seed = (seed * 16807) % 2147483647
       return (seed - 1) / 2147483646
-    })
+    }
+  }
+
+  /** 通用模拟：用 initThrowBody 初始化，跑 checkSettled，返回结果 */
+  function runSmoke(initialSeed: number, maxFrames: number) {
+    setRandom(makeLCG(initialSeed))
 
     const { world, step, dispose } = createPhysicsWorld()
     setupContactMaterials(world)
     createBowlBodies(world)
 
-    // 创建 6 颗骰子 body
     const hs = PHYSICS.diceHalfSize
     const bodies: CANNON.Body[] = []
     for (let i = 0; i < 6; i++) {
       const body = new CANNON.Body({
         mass: PHYSICS.diceMass,
         material: diceMaterial,
+        linearDamping: PHYSICS.diceLinearDamping,
+        angularDamping: PHYSICS.diceAngularDamping,
         allowSleep: true,
         sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
         sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
       })
       body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
-
-      // 碗上方散布
-      const angle = (i / 6) * Math.PI * 2
-      body.position.set(Math.cos(angle) * 0.2, 2 + i * 0.1, Math.sin(angle) * 0.2)
-      body.velocity.set(0, -2, 0)
-      body.angularVelocity.set(
-        (random() - 0.5) * 10,
-        (random() - 0.5) * 10,
-        (random() - 0.5) * 10,
-      )
+      // 运行时投掷包络
+      initThrowBody(body)
       world.addBody(body)
       bodies.push(body)
     }
 
-    // 跑 600 帧（约 10 秒 @ 60fps）
-    const frames = 600
     const dt = 1 / 60
+    const settleState = createSettleState(0)
+    let nanDetected = false
+    let escaped = false
+    let settleFrame = -1
+    let timedOut = false
 
-    for (let f = 0; f < frames; f++) {
+    for (let f = 0; f < maxFrames; f++) {
       step(dt)
+      const currentTime = (f + 1) * dt
 
       for (const body of bodies) {
-        // 无 NaN
-        expect(Number.isNaN(body.position.x)).toBe(false)
-        expect(Number.isNaN(body.position.y)).toBe(false)
-        expect(Number.isNaN(body.position.z)).toBe(false)
-
-        // 不掉出桌面（y 不低于 -1）
-        expect(body.position.y).toBeGreaterThan(-1)
-
-        // 不飞太远（x, z 在合理范围内）
-        expect(Math.abs(body.position.x)).toBeLessThan(5)
-        expect(Math.abs(body.position.z)).toBeLessThan(5)
-      }
-    }
-
-    // 跑完后至少有一些骰子进入 sleep 或低速
-    const someSleeping = bodies.some((b) => b.sleepState === 2)
-    const someSlow = bodies.some(
-      (b) => b.velocity.length() < 0.5 && b.angularVelocity.length() < 0.5,
-    )
-    expect(someSleeping || someSlow).toBe(true)
-
-    dispose()
-  })
-
-  it('多组种子稳定性验证', () => {
-    const seeds = [42, 7777, 99999, 314159]
-
-    for (const initialSeed of seeds) {
-      let seed = initialSeed
-      setRandom(() => {
-        seed = (seed * 16807) % 2147483647
-        return (seed - 1) / 2147483646
-      })
-
-      const { world, step, dispose } = createPhysicsWorld()
-      setupContactMaterials(world)
-      createBowlBodies(world)
-
-      const hs = PHYSICS.diceHalfSize
-      const bodies: CANNON.Body[] = []
-      for (let i = 0; i < 6; i++) {
-        const body = new CANNON.Body({ mass: PHYSICS.diceMass, material: diceMaterial })
-        body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
-        const angle = (i / 6) * Math.PI * 2
-        body.position.set(Math.cos(angle) * 0.25, 2.2 + i * 0.08, Math.sin(angle) * 0.25)
-        body.velocity.set((seed % 3 - 1) * 0.3, -2.5, (seed % 5 - 2) * 0.2)
-        world.addBody(body)
-        bodies.push(body)
-      }
-
-      // 跑 300 帧
-      for (let f = 0; f < 300; f++) {
-        step(1 / 60)
-        for (const body of bodies) {
-          expect(Number.isNaN(body.position.x)).toBe(false)
-          expect(Number.isNaN(body.position.y)).toBe(false)
-          expect(Number.isNaN(body.position.z)).toBe(false)
-          expect(body.position.y).toBeGreaterThan(-1)
+        if (Number.isNaN(body.position.x) || Number.isNaN(body.position.y) || Number.isNaN(body.position.z)) {
+          nanDetected = true
+        }
+        if (body.position.y < -1 || Math.abs(body.position.x) > 5 || Math.abs(body.position.z) > 5) {
+          escaped = true
         }
       }
 
-      dispose()
+      if (settleFrame < 0 && checkSettled(bodies, currentTime, settleState)) {
+        settleFrame = f + 1
+        // 检查是否超时路径
+        const elapsed = currentTime - settleState.startTime
+        if (elapsed >= 10.0) timedOut = true
+        break
+      }
     }
-  })
+
+    dispose()
+    return { nanDetected, escaped, settleFrame, timedOut }
+  }
+
+  // 包含常规种子 + 曾经有问题的坏种子
+  const seeds = [42, 12345, 7777, 99999, 314159, 1, 65535, 123456789, 2718281, 5555]
+
+  for (const seed of seeds) {
+    it(`种子 ${seed}: 无 NaN、不飞出、不超时、帧数 ≤ 480`, () => {
+      const result = runSmoke(seed, 600)
+      expect(result.nanDetected, `种子${seed}: 检测到 NaN`).toBe(false)
+      expect(result.escaped, `种子${seed}: 骰子飞出合理范围`).toBe(false)
+      expect(result.timedOut, `种子${seed}: 结算走了超时路径`).toBe(false)
+      expect(result.settleFrame, `种子${seed}: 未在限定帧内结算`).toBeGreaterThan(0)
+      expect(
+        result.settleFrame,
+        `种子${seed}: 结算帧数=${result.settleFrame}（上限480）`,
+      ).toBeLessThanOrEqual(480)
+    })
+  }
 })
