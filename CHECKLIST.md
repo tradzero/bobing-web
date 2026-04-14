@@ -48,8 +48,8 @@
 - [x] 1C.3 [实现] 开启 World.allowSleep（世界级开关）
 - [x] 1C.4 [实现] 实现固定时间步长更新函数，与渲染帧率解耦
 - [x] 1C.5 [实现] 实现 `physics/materials.ts`：定义骰子材质、碗材质、桌面材质，配置 ContactMaterial 参数（摩擦、弹性）
-- [x] 1C.6 [实现] 实现 `physics/bowl-body.ts`：碗底静态碰撞体（扁平 Cylinder 或 Plane）
-- [x] 1C.7 [实现] 实现碗壁碰撞体：8～12 个倾斜薄 Box 环形排列
+- [x] 1C.6 [实现] 实现 `physics/bowl-body.ts`：碗底 Heightfield 连续曲面碰撞体（51×51 网格，基于 config/bowl.ts 共享曲线）
+- [x] 1C.7 [实现] 实现碗壁碰撞体：16 个竖直薄 Box 挡墙环形排列，底部埋入 Heightfield
 - [x] 1C.8 [实现] 添加桌面平面碰撞体作为兜底
 - [ ] 1C.9 [验收] 验证碗碰撞体组合：投入 6 颗 Box 骰子，连续多次投掷不穿模、不卡在壁面片段拼接缝中、不出现贴壁持续抖动
 

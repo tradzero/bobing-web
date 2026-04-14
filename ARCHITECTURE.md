@@ -49,7 +49,7 @@ src/
 │
 ├── physics/
 │   ├── world.ts                # cannon-es 世界初始化、暴露 world 实例和 step 函数（不自持循环）
-│   ├── bowl-body.ts            # 碗复合碰撞体（碗底 + 倾斜墙面片段）
+│   ├── bowl-body.ts            # 碗碰撞体（Heightfield 连续碗底 + 竖直挡墙）
 │   └── materials.ts            # 物理材质定义与接触材质配对
 │
 ├── dice/
@@ -204,13 +204,13 @@ interface GameState {
 
 ## 碗碰撞体方案
 
-采用静态复合碰撞体近似，不使用 Trimesh：
+采用 Heightfield 连续曲面 + 竖直挡墙，不使用 Trimesh：
 
-- **碗底**：1 个水平圆盘（Plane 或扁平 Cylinder）
-- **碗壁**：8～12 个倾斜的薄 Box 片段，环形排列，向外倾斜模拟碗壁弧度
+- **碗底**：1 个 Heightfield（51×51 网格），高度由共享曲线 `bowlInnerHeight` 生成，碗底中心零高度、边缘陡峭
+- **挡墙**：16 个竖直薄 Box 环形排列于碗口内侧，底部埋入 Heightfield 保证过渡无缝隙，仅防逃出、不拟合曲面
 - **桌面**：1 个大平面作为兜底碰撞面，防止极端情况骰子穿出场景
 
-碗壁片段数量和倾斜角度在调试阶段根据骰子碰撞表现确定。
+碗内壁曲线（纯幂函数零偏移）定义在 `config/bowl.ts`，物理层和渲染层共用同一函数，消除几何分叉。
 
 ## 测试策略
 
