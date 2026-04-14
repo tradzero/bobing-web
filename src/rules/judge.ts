@@ -2,7 +2,7 @@ import { Prize, type JudgeResult } from './types'
 import { PRIZE_RULES } from './prizes'
 
 /** 奖级中文名映射 */
-const PRIZE_NAMES: Record<Prize, string> = {
+export const PRIZE_NAMES: Record<Prize, string> = {
   [Prize.ZhuangYuanChaJinHua]: '状元插金花',
   [Prize.ManTangHong]: '满堂红',
   [Prize.BianDiJin]: '遍地锦',

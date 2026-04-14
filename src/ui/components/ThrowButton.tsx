@@ -1,30 +1,19 @@
+import { useGameStore } from './GameStoreContext'
 import { useGameController } from './GameControllerContext'
 
+/** 掷骰按钮：rolling 阶段禁用并显示"骰子翻滚中" */
 export function ThrowButton() {
+  const phase = useGameStore((s) => s.phase)
   const ctrl = useGameController()
+  const isRolling = phase === 'rolling'
 
   return (
     <button
+      className="btn btn-throw"
+      disabled={isRolling}
       onClick={() => ctrl.throw()}
-      style={{
-        position: 'absolute',
-        bottom: 40,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        padding: '12px 32px',
-        fontSize: '1.2rem',
-        fontWeight: 'bold',
-        borderRadius: 8,
-        border: 'none',
-        cursor: 'pointer',
-        background: '#e74c3c',
-        color: '#fff',
-        zIndex: 10,
-        minWidth: 44,
-        minHeight: 44,
-      }}
     >
-      掷骰
+      {isRolling ? '骰子翻滚中' : '掷骰'}
     </button>
   )
 }

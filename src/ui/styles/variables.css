@@ -1,0 +1,25 @@
+:root {
+  /* 主色 - 节庆红 */
+  --color-primary: #c0392b;
+  --color-primary-hover: #a93226;
+  --color-primary-disabled: #b07070;
+
+  /* 辅色 - 金色 */
+  --color-gold: #d4a017;
+  --color-gold-light: #f0d060;
+
+  /* 底色 */
+  --color-bg: #1a1a2e;
+  --color-panel: rgba(30, 20, 15, 0.85);
+  --color-panel-border: rgba(212, 160, 23, 0.35);
+
+  /* 文字 */
+  --color-text: #f5f0e8;
+  --color-text-muted: #b0a89a;
+  --color-text-highlight: #f0d060;
+
+  /* 尺寸 */
+  --radius: 8px;
+  --radius-lg: 12px;
+  --touch-min: 44px;
+}
