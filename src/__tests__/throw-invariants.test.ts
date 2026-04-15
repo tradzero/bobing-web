@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { initThrowBody } from '@/dice/throw'
+import { initThrowBody, throwDice } from '@/dice/throw'
 import { THROW } from '@/config/throw'
+import { PHYSICS } from '@/config/physics'
 import { setRandom, resetRandom } from '@/utils/random'
 
 /**
@@ -85,6 +86,59 @@ describe('投掷初始化不变量', () => {
           expect(c).toBeLessThanOrEqual(THROW.angularSpeedMax + 0.001)
         }
       })
+    })
+  }
+})
+
+/**
+ * 批量投掷 pairwise 最小间距测试
+ * 锁住 throwDice 的去重保证：任意两颗骰子初始水平距离 >= THROW.minSeparation
+ */
+describe('批量投掷初始间距', () => {
+  afterEach(() => {
+    resetRandom()
+  })
+
+  function makeLCG(initialSeed: number) {
+    let seed = initialSeed
+    return () => {
+      seed = (seed * 16807) % 2147483647
+      return (seed - 1) / 2147483646
+    }
+  }
+
+  function makeDicePairs() {
+    const hs = PHYSICS.diceHalfSize
+    return Array.from({ length: 6 }, () => {
+      const body = new CANNON.Body({ mass: PHYSICS.diceMass })
+      body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+      const mesh = {} as any // 仅需 body
+      return { mesh, body }
+    })
+  }
+
+  // 多种子覆盖，包含曾触发重叠的 seed
+  const testSeeds = [42, 12345, 7777, 99999, 314159, 1, 65535, 123456789]
+
+  for (const seed of testSeeds) {
+    it(`种子 ${seed}: 任意两颗骰子水平间距 >= minSeparation (${THROW.minSeparation.toFixed(3)}m)`, () => {
+      setRandom(makeLCG(seed))
+      const pairs = makeDicePairs()
+      throwDice(pairs)
+
+      for (let i = 0; i < pairs.length; i++) {
+        for (let j = i + 1; j < pairs.length; j++) {
+          const pi = pairs[i].body.position
+          const pj = pairs[j].body.position
+          const dx = pi.x - pj.x
+          const dz = pi.z - pj.z
+          const dist = Math.sqrt(dx * dx + dz * dz)
+          expect(
+            dist,
+            `骰子${i + 1}与骰子${j + 1}水平距离=${dist.toFixed(4)} < ${THROW.minSeparation}`,
+          ).toBeGreaterThanOrEqual(THROW.minSeparation - 0.001)
+        }
+      }
     })
   }
 })
