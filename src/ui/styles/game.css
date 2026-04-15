@@ -346,6 +346,11 @@
     padding-bottom: 16px;
   }
 
+  /* 移动端投掷按钮提到结果面板上方，确保主操作不被滚动影响 */
+  .bottom-area .btn-throw {
+    order: -1;
+  }
+
   .result-panel {
     max-width: 100%;
   }
