@@ -18,7 +18,7 @@ export function ResultPanel() {
       <div className={`result-prize ${isNone ? 'no-prize' : ''}`}>
         {PRIZE_NAMES[currentResult.prize]}
       </div>
-      {currentResult.carryScore > 0 && (
+      {currentResult.prize === Prize.ZhuangYuan && currentResult.carryScore > 0 && (
         <div className="result-carry">带{currentResult.carryScore}</div>
       )}
       <div className="result-dice">
