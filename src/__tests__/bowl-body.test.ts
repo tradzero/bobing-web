@@ -454,21 +454,38 @@ describe('T6: 真实结算路径回归测试', () => {
 
 // ── T7: 视觉碗与物理碗静态几何对齐测试 ──
 describe('T7: 视觉碗内壁与物理碗对齐', () => {
-  // 直接校验 createBowl 实际消费的 generateBowlProfile()，
-  // 从完整轮廓中提取内壁段（外壁点数 = SEGMENTS+1，翻边 1 点，之后全是内壁），
-  // 与物理层 bowlInnerHeight 逐点比较
+  // 校验 generateBowlProfile() 中内壁段与物理层 bowlInnerHeight 逐点一致
+  // 内壁段 = 翻边圆弧之后、底盘封口之前的连续点
+
+  /** 从轮廓中提取内壁段（跳过外壁、翻边、底盘封口点） */
+  async function extractInnerWall() {
+    const { generateBowlProfile } = await import('@/scene/bowl')
+    const { BOWL_HEIGHT } = await import('@/config/bowl')
+    const profile = generateBowlProfile()
+
+    // 翻边圆弧的最高点 y > BOWL_HEIGHT，找到翻边结束位置
+    let rimEnd = 0
+    for (let i = 0; i < profile.length; i++) {
+      if (profile[i].y > BOWL_HEIGHT * 0.99) rimEnd = i
+    }
+    // 翻边之后的第一个点即为内壁起始
+    const afterRim = rimEnd + 1
+
+    // 底盘封口点特征：y === 0，从末尾反向跳过
+    let bottomStart = profile.length
+    for (let i = profile.length - 1; i >= afterRim; i--) {
+      if (profile[i].y === 0) bottomStart = i
+      else break
+    }
+
+    return profile.slice(afterRim, bottomStart)
+  }
 
   it('视觉内壁各采样点与 bowlInnerHeight 最大偏差 < 5mm', async () => {
-    const { generateBowlProfile } = await import('@/scene/bowl')
     const { bowlInnerHeight } = await import('@/config/bowl')
+    const innerPoints = await extractInnerWall()
 
-    const profile = generateBowlProfile()
-    // 轮廓结构：外壁 (SEGMENTS+1 点) + 翻边 (1 点) + 内壁 (SEGMENTS+1 点)
-    const SEGMENTS = 20
-    const innerStart = SEGMENTS + 1 + 1 // 跳过外壁 + 翻边
-    const innerPoints = profile.slice(innerStart)
-
-    expect(innerPoints.length).toBe(SEGMENTS + 1)
+    expect(innerPoints.length).toBeGreaterThan(10)
 
     let maxDiff = 0
     for (const pt of innerPoints) {
@@ -483,20 +500,74 @@ describe('T7: 视觉碗内壁与物理碗对齐', () => {
     ).toBeLessThan(0.005)
   })
 
-  it('视觉内壁覆盖从 r≈0 到 r≈BOWL_INNER_RADIUS 的完整范围', async () => {
-    const { generateBowlProfile } = await import('@/scene/bowl')
-    const { BOWL_INNER_RADIUS } = await import('@/config/bowl')
-
-    const profile = generateBowlProfile()
-    const SEGMENTS = 20
-    const innerStart = SEGMENTS + 1 + 1
-    const innerPoints = profile.slice(innerStart)
+  it('视觉内壁覆盖从 r≈rFlat 到 r≈BOWL_INNER_RADIUS 的完整范围', async () => {
+    const { BOWL_INNER_RADIUS, BOWL_THICKNESS } = await import('@/config/bowl')
+    const innerPoints = await extractInnerWall()
 
     const radii = innerPoints.map((pt: { x: number }) => pt.x)
     const minR = Math.min(...radii)
     const maxR = Math.max(...radii)
 
-    expect(minR, `最小半径=${minR.toFixed(4)} 应接近 0`).toBeLessThan(0.01)
-    expect(maxR, `最大半径=${maxR.toFixed(4)} 应接近 BOWL_INNER_RADIUS=${BOWL_INNER_RADIUS}`).toBeCloseTo(BOWL_INNER_RADIUS, 2)
+    // 内壁截止到 rFlat = BOWL_THICKNESS，不再到轴心，碗底由平底盘覆盖
+    expect(minR, `最小半径=${minR.toFixed(4)} 应接近 BOWL_THICKNESS`).toBeLessThan(BOWL_THICKNESS + 0.03)
+    expect(maxR, `最大半径=${maxR.toFixed(4)} 应接近 BOWL_INNER_RADIUS=${BOWL_INNER_RADIUS}`).toBeCloseTo(BOWL_INNER_RADIUS, 1)
+  })
+})
+
+describe('T7b: 碗底盘几何无重合面', () => {
+  it('底盘区域三角面法线方向一致，不存在朝上+朝下重合面', async () => {
+    const THREE = await import('three')
+    const { generateBowlProfile } = await import('@/scene/bowl')
+    const { BOWL_THICKNESS } = await import('@/config/bowl')
+
+    const points = generateBowlProfile()
+    const geo = new THREE.LatheGeometry(points, 128)
+    const pos = geo.getAttribute('position')
+    const idx = geo.index!
+
+    // 收集底盘区域三角面（所有顶点 r < BOWL_THICKNESS + 0.02 的面）
+    const rThreshold = BOWL_THICKNESS + 0.02
+    const normals: number[] = [] // 收集每个面的 Y 法线分量
+
+    for (let i = 0; i < idx.count; i += 3) {
+      const i0 = idx.getX(i), i1 = idx.getX(i + 1), i2 = idx.getX(i + 2)
+      const verts = [i0, i1, i2].map((vi) => ({
+        x: pos.getX(vi), y: pos.getY(vi), z: pos.getZ(vi),
+      }))
+      // 检查所有顶点的水平距离
+      const allInBottom = verts.every((v) => Math.sqrt(v.x * v.x + v.z * v.z) < rThreshold)
+      if (!allInBottom) continue
+
+      // 计算面法线
+      const e1 = { x: verts[1].x - verts[0].x, y: verts[1].y - verts[0].y, z: verts[1].z - verts[0].z }
+      const e2 = { x: verts[2].x - verts[0].x, y: verts[2].y - verts[0].y, z: verts[2].z - verts[0].z }
+      const ny = e1.z * e2.x - e1.x * e2.z // 叉积 Y 分量
+      if (Math.abs(ny) > 1e-10) normals.push(ny)
+    }
+
+    expect(normals.length, '底盘区域应有三角面').toBeGreaterThan(0)
+
+    // 所有底盘面法线 Y 分量应同号（全朝上或全朝下），不应有正负混合
+    const positives = normals.filter((n) => n > 0).length
+    const negatives = normals.filter((n) => n < 0).length
+    const consistent = positives === 0 || negatives === 0
+    expect(
+      consistent,
+      `底盘面法线应方向一致: ${positives} 朝上 + ${negatives} 朝下 = 混合重合面`,
+    ).toBe(true)
+  })
+
+  it('轮廓中 (BOWL_THICKNESS, 0) 坐标最多出现一次', async () => {
+    const { generateBowlProfile } = await import('@/scene/bowl')
+    const { BOWL_THICKNESS } = await import('@/config/bowl')
+
+    const profile = generateBowlProfile()
+    const matches = profile.filter(
+      (pt: { x: number; y: number }) => Math.abs(pt.x - BOWL_THICKNESS) < 1e-6 && Math.abs(pt.y) < 1e-6,
+    )
+    expect(
+      matches.length,
+      `(${BOWL_THICKNESS}, 0) 出现 ${matches.length} 次，应 ≤ 1`,
+    ).toBeLessThanOrEqual(1)
   })
 })

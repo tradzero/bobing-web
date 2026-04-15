@@ -3,6 +3,7 @@ import type * as CANNON from 'cannon-es'
 import type { DicePair } from '@/dice/create'
 import { checkSettled, createSettleState, type SettleState } from '@/dice/settle'
 import { ESCAPE_Y } from '@/physics/bowl-body'
+import { soundManager } from '@/audio/sound'
 import type { SceneContext } from '@/scene/setup'
 
 export interface EngineOptions {
@@ -37,6 +38,11 @@ export function createEngine(opts: EngineOptions): Engine {
   let elapsedTime = 0
 
   const bodies = dicePairs.map((p) => p.body)
+
+  // 绑定碰撞音效事件
+  for (const body of bodies) {
+    body.addEventListener('collide', soundManager.handleCollision)
+  }
 
   function tick(timestamp: number) {
     rafId = requestAnimationFrame(tick)
@@ -106,6 +112,11 @@ export function createEngine(opts: EngineOptions): Engine {
 
   function dispose() {
     stop()
+    // 移除碰撞事件监听
+    for (const body of bodies) {
+      body.removeEventListener('collide', soundManager.handleCollision)
+    }
+    soundManager.dispose()
   }
 
   return { start, stop, dispose, beginSettle }

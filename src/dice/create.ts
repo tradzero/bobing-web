@@ -162,7 +162,7 @@ export function createDice(): DicePair {
   const geometry = new THREE.BoxGeometry(hs * 2, hs * 2, hs * 2)
   const mesh = new THREE.Mesh(geometry, materials)
   mesh.castShadow = true
-  mesh.receiveShadow = true
+  mesh.receiveShadow = false
 
   // 物理 body
   const body = new CANNON.Body({

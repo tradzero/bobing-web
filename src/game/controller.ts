@@ -4,6 +4,7 @@ import { readAllFacesDetailed } from '@/dice/read-face'
 import { judge } from '@/rules/judge'
 import { SETTLE } from '@/config/settle'
 import { reseed, getCurrentSeed } from '@/utils/random'
+import { soundManager } from '@/audio/sound'
 import type { createGameStore } from './store'
 import type { Engine } from './engine'
 
@@ -80,6 +81,11 @@ export class GameController {
     } else {
       this.store.getState().setResult({ diceValues, result })
     }
+
+    // 5. 中奖音效反馈
+    if (result.prize !== 'none') {
+      soundManager.playWinSound()
+    }
   }
 
   /** 接受倾斜结果：确认待提交数据 → result */
@@ -123,5 +129,7 @@ export class GameController {
   /** 音效开关 */
   toggleSound(): void {
     this.store.getState().toggleSound()
+    const { soundEnabled } = this.store.getState()
+    soundManager.setMuted(!soundEnabled)
   }
 }

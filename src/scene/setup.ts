@@ -10,9 +10,9 @@ export interface SceneContext {
 }
 
 /** 桌面端默认机位 */
-const DESKTOP_PRESET = { position: [0, 8, 4] as [number, number, number], fov: 45 }
+const DESKTOP_PRESET = { position: [0, 6, 5] as [number, number, number], fov: 45 }
 /** 移动竖屏默认机位：拉近碗区域 */
-const MOBILE_PORTRAIT_PRESET = { position: [0, 5.0, 2.5] as [number, number, number], fov: 45 }
+const MOBILE_PORTRAIT_PRESET = { position: [0, 4.0, 3.2] as [number, number, number], fov: 45 }
 
 /**
  * 根据视口尺寸返回默认摄像机预设
@@ -29,7 +29,8 @@ function getDefaultCameraPreset(w: number, h: number) {
  */
 export function createScene(canvas: HTMLCanvasElement): SceneContext {
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x1a1a2e)
+  // 中秋暖色调背景：深暖棕色，营造夜晚灯光氛围
+  scene.background = new THREE.Color(0x1c1410)
 
   // 渲染器
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
@@ -47,12 +48,13 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
   dirLight.position.set(3, 8, 4)
   dirLight.castShadow = true
   dirLight.shadow.mapSize.set(1024, 1024)
+  dirLight.shadow.normalBias = 0.02
   dirLight.shadow.camera.near = 0.5
   dirLight.shadow.camera.far = 20
-  dirLight.shadow.camera.left = -5
-  dirLight.shadow.camera.right = 5
-  dirLight.shadow.camera.top = 5
-  dirLight.shadow.camera.bottom = -5
+  dirLight.shadow.camera.left = -2.5
+  dirLight.shadow.camera.right = 2.5
+  dirLight.shadow.camera.top = 2.5
+  dirLight.shadow.camera.bottom = -2.5
   scene.add(dirLight)
 
   // 环境光：柔和补光
@@ -62,6 +64,12 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
   // 半球光：增加底部环境反射
   const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x8d6e4c, 0.3)
   scene.add(hemiLight)
+
+  // 环境贴图：用于白瓷碗等材质的反射，基于场景灯光自动生成
+  const pmremGenerator = new THREE.PMREMGenerator(renderer)
+  pmremGenerator.compileEquirectangularShader()
+  scene.environment = pmremGenerator.fromScene(scene, 0, 0.1, 100).texture
+  pmremGenerator.dispose()
 
   const handleResize = () => {
     const parent = canvas.parentElement
