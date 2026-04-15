@@ -344,9 +344,11 @@
 
   .bottom-area {
     padding-bottom: 16px;
+    /* 移动端：投掷按钮区提到 side-panel（历史/奖级）上方 */
+    order: -1;
   }
 
-  /* 移动端投掷按钮提到结果面板上方，确保主操作不被滚动影响 */
+  /* 移动端投掷按钮提到结果面板/TiltWarning 上方，确保主操作不被滚动影响 */
   .bottom-area .btn-throw {
     order: -1;
   }
