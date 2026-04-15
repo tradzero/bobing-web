@@ -318,7 +318,7 @@
 /* ---- 移动端响应式 ---- */
 @media (max-width: 768px) {
   .canvas-host {
-    height: clamp(40vh, 50dvh, 60vh);
+    height: clamp(55vh, 62dvh, 70vh);
   }
 
   .game-overlay {

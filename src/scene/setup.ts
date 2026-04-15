@@ -9,6 +9,20 @@ export interface SceneContext {
   dispose: () => void
 }
 
+/** 桌面端默认机位 */
+const DESKTOP_PRESET = { position: [0, 8, 4] as [number, number, number], fov: 45 }
+/** 移动竖屏默认机位：拉近碗区域 */
+const MOBILE_PORTRAIT_PRESET = { position: [0, 5.0, 2.5] as [number, number, number], fov: 45 }
+
+/**
+ * 根据视口尺寸返回默认摄像机预设
+ * 竖屏判定对齐 CSS 断点 768px：w <= 768 且 h > w
+ * 未来加交互视角时，可通过跳过 preset 应用来避免冲掉用户状态
+ */
+function getDefaultCameraPreset(w: number, h: number) {
+  return (w <= 768 && h > w) ? MOBILE_PORTRAIT_PRESET : DESKTOP_PRESET
+}
+
 /**
  * 创建 Three.js 场景、摄像机、渲染器、灯光
  * 摄像机固定俯视 + 轻微倾斜，不可交互调节
@@ -57,6 +71,13 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
     renderer.setSize(w, h, false)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     camera.aspect = w / h
+
+    // 默认视角模式：根据视口尺寸应用摄像机预设
+    // 未来加交互视角时，此处改为条件跳过即可
+    const preset = getDefaultCameraPreset(w, h)
+    camera.position.set(...preset.position)
+    camera.fov = preset.fov
+    camera.lookAt(0, 0, 0)
     camera.updateProjectionMatrix()
   }
 
