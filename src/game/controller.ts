@@ -3,6 +3,7 @@ import { throwDice } from '@/dice/throw'
 import { readAllFacesDetailed } from '@/dice/read-face'
 import { judge } from '@/rules/judge'
 import { SETTLE } from '@/config/settle'
+import { reseed, getCurrentSeed } from '@/utils/random'
 import type { createGameStore } from './store'
 import type { Engine } from './engine'
 
@@ -36,6 +37,7 @@ export class GameController {
     if (phase === 'rolling' || phase === 'tilt-confirm' || !this.engine) return
 
     this.store.getState().setPhase('rolling')
+    reseed()  // 每次投掷重新播种，便于复现
     throwDice(this.dicePairs)
     this.engine.beginSettle()
   }
@@ -59,8 +61,13 @@ export class GameController {
       body.sleep()
     }
 
-    // 控制台输出完整结算结果，便于验收核对
-    console.log('[博饼结算]', { diceValues, ...result, confidences: detailedResults.map((r) => r.confidence.toFixed(3)) })
+    // 控制台输出完整结算结果，含种子便于复现
+    console.log('[博饼结算]', {
+      seed: getCurrentSeed(),
+      diceValues,
+      ...result,
+      confidences: detailedResults.map((r) => r.confidence.toFixed(3)),
+    })
 
     // 3. 检测倾斜骰子
     const tiltedIndices = detailedResults
@@ -88,6 +95,7 @@ export class GameController {
     if (phase !== 'tilt-confirm') return
 
     this.store.getState().clearPending()
+    reseed()
     throwDice(this.dicePairs)
     this.engine?.beginSettle()
   }
