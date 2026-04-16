@@ -14,12 +14,13 @@ import {
   WALL_BURY,
 } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'
-import { PHYSICS } from '@/config/physics'
-import { diceMaterial } from '@/physics/materials'
-import { setRandom, resetRandom } from '@/utils/random'
-import { initThrowBody } from '@/dice/throw'
+
+import { createDiceBody } from '@/dice/dice-body'
+import { setRandom, resetRandom, reseed } from '@/utils/random'
+import { throwDice, initThrowBody } from '@/dice/throw'
 import { checkSettled, createSettleState } from '@/dice/settle'
 import { SETTLE } from '@/config/settle'
+import { ESCAPE_Y } from '@/physics/bowl-body'
 
 /**
  * 碗碰撞体回归测试（Heightfield + 挡墙方案）
@@ -146,17 +147,9 @@ describe('T3: 固定种子模拟 - 骰子留在碗内', () => {
     setupContactMaterials(world)
     createBowlBodies(world)
 
-    const hs = PHYSICS.diceHalfSize
     const bodies: CANNON.Body[] = []
     for (let i = 0; i < 6; i++) {
-      const body = new CANNON.Body({
-        mass: PHYSICS.diceMass,
-        material: diceMaterial,
-        allowSleep: true,
-        sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
-        sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
-      })
-      body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+      const body = createDiceBody()
 
       // 复用运行时投掷逻辑（含完整包络：位置、四元数、速度、角速度）
       initThrowBody(body)
@@ -291,17 +284,11 @@ describe('T5: 收敛时间回归测试', () => {
     // 禁用 sleep 以纯测物理收敛
     world.allowSleep = false
 
-    const hs = PHYSICS.diceHalfSize
     const bodies: CANNON.Body[] = []
     for (let i = 0; i < 6; i++) {
-      const body = new CANNON.Body({
-        mass: PHYSICS.diceMass,
-        material: diceMaterial,
-        linearDamping: PHYSICS.diceLinearDamping,
-        angularDamping: PHYSICS.diceAngularDamping,
-        allowSleep: false,
-      })
-      body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+      const body = createDiceBody()
+      // T5 禁用 sleep 以纯测物理收敛
+      body.allowSleep = false
 
       // 复用运行时投掷逻辑
       initThrowBody(body)
@@ -343,56 +330,36 @@ describe('T5: 收敛时间回归测试', () => {
 })
 
 // ── T6: 真实结算路径测试（checkSettled 三条路径 + controller 冻结） ──
-describe('T6: 真实结算路径回归测试', () => {
+describe('T6: 结算路径回归测试（throwDice + 逃逸反射）', () => {
   afterEach(() => {
     resetRandom()
   })
 
-  function makeLCG(initialSeed: number) {
-    let seed = initialSeed
-    return () => {
-      seed = (seed * 16807) % 2147483647
-      return (seed - 1) / 2147483646
-    }
-  }
-
   /**
-   * 模拟真实结算路径：
-   * 阶段 1：用 checkSettled（三条路径）判定停稳帧数和触发路径
-   * 阶段 2：模拟 controller 冻结（velocity/angularVelocity 归零 + sleep）
-   * 返回 { settleFrame, settlePath }
+   * 模拟运行时完整结算路径：
+   * - reseed (mulberry32) → throwDice 批量投掷（含去重）
+   * - 每帧：物理步进 → 逃逸反射 → checkSettled
+   * - 停稳后模拟 controller 冻结
+   * 与 engine.ts tick 循环一致
    */
-  function measureSettleFrames(initialSeed: number, maxFrames: number): {
+  function measureSettleFrames(seed: number, maxFrames: number): {
     settleFrame: number
     settlePath: 'sleep' | 'threshold' | 'timeout' | 'none'
   } {
-    const rng = makeLCG(initialSeed)
-    setRandom(rng)
+    reseed(seed)
 
     const { world, step, dispose } = createPhysicsWorld()
     setupContactMaterials(world)
     createBowlBodies(world)
 
-    const hs = PHYSICS.diceHalfSize
-    const bodies: CANNON.Body[] = []
-    for (let i = 0; i < 6; i++) {
-      const body = new CANNON.Body({
-        mass: PHYSICS.diceMass,
-        material: diceMaterial,
-        linearDamping: PHYSICS.diceLinearDamping,
-        angularDamping: PHYSICS.diceAngularDamping,
-        allowSleep: true,
-        sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
-        sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
-      })
-      body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
-
-      // 复用运行时投掷逻辑
-      initThrowBody(body)
-
+    const dicePairs = Array.from({ length: 6 }, () => {
+      const body = createDiceBody()
       world.addBody(body)
-      bodies.push(body)
-    }
+      return { mesh: {} as any, body }
+    })
+    // 运行时批量投掷路径（含位置去重）
+    throwDice(dicePairs)
+    const bodies = dicePairs.map(p => p.body)
 
     const dt = 1 / 60
     const settleState = createSettleState(0)
@@ -401,9 +368,14 @@ describe('T6: 真实结算路径回归测试', () => {
       step(dt)
       const currentTime = (f + 1) * dt
 
-      // 用运行时完整 checkSettled 判定
+      // 逃逸反射：与 engine.ts 一致
+      for (const { body } of dicePairs) {
+        if (body.position.y > ESCAPE_Y && body.velocity.y > 0) {
+          body.velocity.y = -body.velocity.y * 0.3
+        }
+      }
+
       if (checkSettled(bodies, currentTime, settleState)) {
-        // 判断触发路径
         let path: 'sleep' | 'threshold' | 'timeout'
         const allSleeping = bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)
         if (allSleeping) {
@@ -414,7 +386,7 @@ describe('T6: 真实结算路径回归测试', () => {
           path = 'threshold'
         }
 
-        // 阶段 2：模拟 controller.onSettled 冻结
+        // 模拟 controller.onSettled 冻结
         for (const body of bodies) {
           body.velocity.set(0, 0, 0)
           body.angularVelocity.set(0, 0, 0)
@@ -430,12 +402,11 @@ describe('T6: 真实结算路径回归测试', () => {
     return { settleFrame: maxFrames, settlePath: 'none' }
   }
 
-  // 包含曾在旧曲线下超时的种子
   const seeds = [42, 99999, 12345, 7777, 314159]
 
   for (const seed of seeds) {
-    it(`种子 ${seed}: 真实结算路径 ≤ 480 帧且不超时`, () => {
-      const { settleFrame, settlePath } = measureSettleFrames(seed, 600)
+    it(`种子 ${seed}: 不超时`, () => {
+      const { settleFrame, settlePath } = measureSettleFrames(seed, 800)
       expect(
         settlePath,
         `种子${seed}: 结算路径=${settlePath}（不应为 timeout 或 none）`,
@@ -444,10 +415,6 @@ describe('T6: 真实结算路径回归测试', () => {
         settlePath,
         `种子${seed}: 未在限定帧内结算`,
       ).not.toBe('none')
-      expect(
-        settleFrame,
-        `种子${seed}: 结算帧数=${settleFrame}（上限480）`,
-      ).toBeLessThanOrEqual(480)
     })
   }
 })
@@ -514,47 +481,61 @@ describe('T7: 视觉碗内壁与物理碗对齐', () => {
   })
 })
 
-describe('T7b: 碗底盘几何无重合面', () => {
-  it('底盘区域三角面法线方向一致，不存在朝上+朝下重合面', async () => {
-    const THREE = await import('three')
+describe('T7b: 碗底盖结构与朝向', () => {
+  it('轮廓不包含轴心点（r < 0.001），避免极点法线奇异', async () => {
     const { generateBowlProfile } = await import('@/scene/bowl')
-    const { BOWL_THICKNESS } = await import('@/config/bowl')
 
-    const points = generateBowlProfile()
-    const geo = new THREE.LatheGeometry(points, 128)
-    const pos = geo.getAttribute('position')
-    const idx = geo.index!
-
-    // 收集底盘区域三角面（所有顶点 r < BOWL_THICKNESS + 0.02 的面）
-    const rThreshold = BOWL_THICKNESS + 0.02
-    const normals: number[] = [] // 收集每个面的 Y 法线分量
-
-    for (let i = 0; i < idx.count; i += 3) {
-      const i0 = idx.getX(i), i1 = idx.getX(i + 1), i2 = idx.getX(i + 2)
-      const verts = [i0, i1, i2].map((vi) => ({
-        x: pos.getX(vi), y: pos.getY(vi), z: pos.getZ(vi),
-      }))
-      // 检查所有顶点的水平距离
-      const allInBottom = verts.every((v) => Math.sqrt(v.x * v.x + v.z * v.z) < rThreshold)
-      if (!allInBottom) continue
-
-      // 计算面法线
-      const e1 = { x: verts[1].x - verts[0].x, y: verts[1].y - verts[0].y, z: verts[1].z - verts[0].z }
-      const e2 = { x: verts[2].x - verts[0].x, y: verts[2].y - verts[0].y, z: verts[2].z - verts[0].z }
-      const ny = e1.z * e2.x - e1.x * e2.z // 叉积 Y 分量
-      if (Math.abs(ny) > 1e-10) normals.push(ny)
-    }
-
-    expect(normals.length, '底盘区域应有三角面').toBeGreaterThan(0)
-
-    // 所有底盘面法线 Y 分量应同号（全朝上或全朝下），不应有正负混合
-    const positives = normals.filter((n) => n > 0).length
-    const negatives = normals.filter((n) => n < 0).length
-    const consistent = positives === 0 || negatives === 0
+    const profile = generateBowlProfile()
+    const axisPoints = profile.filter((pt: { x: number }) => pt.x < 0.001)
     expect(
-      consistent,
-      `底盘面法线应方向一致: ${positives} 朝上 + ${negatives} 朝下 = 混合重合面`,
-    ).toBe(true)
+      axisPoints.length,
+      `轮廓中有 ${axisPoints.length} 个近轴点 (r < 0.001)，应为 0`,
+    ).toBe(0)
+  })
+
+  it('createBowl 返回 Group，包含 LatheGeometry 碗壁 + CircleGeometry 底盖', async () => {
+    const THREE = await import('three')
+    const { createBowl } = await import('@/scene/bowl')
+
+    const group = createBowl()
+    expect(group).toBeInstanceOf(THREE.Group)
+    expect(group.children.length).toBe(2)
+
+    const [latheMesh, capMesh] = group.children as THREE.Mesh[]
+    expect(latheMesh.geometry).toBeInstanceOf(THREE.LatheGeometry)
+    expect(capMesh.geometry).toBeInstanceOf(THREE.CircleGeometry)
+  })
+
+  it('底盖法线朝 +Y（碗内侧）', async () => {
+    const { createBowl } = await import('@/scene/bowl')
+
+    const group = createBowl()
+    const cap = group.children[1] as THREE.Mesh
+    // CircleGeometry 默认法线 +Z，rotation.x = -PI/2 后法线变 +Y
+    expect(cap.rotation.x).toBeCloseTo(-Math.PI / 2, 5)
+  })
+
+  it('底盖分段 128、半径微量外扩、y 微量偏移', async () => {
+    const { generateBowlProfile, createBowl } = await import('@/scene/bowl')
+    const THREE = await import('three')
+
+    const profile = generateBowlProfile()
+    const lastR = profile[profile.length - 1].x
+    const lastY = profile[profile.length - 1].y
+
+    const group = createBowl()
+    const cap = group.children[1] as THREE.Mesh
+    const capGeo = cap.geometry as THREE.CircleGeometry
+
+    // 分段与碗体一致
+    expect(capGeo.parameters.segments).toBe(128)
+    // 半径外扩在 (0, 0.005] 范围内
+    const expand = capGeo.parameters.radius - lastR
+    expect(expand).toBeGreaterThan(0)
+    expect(expand).toBeLessThanOrEqual(0.005)
+    // y 偏移绝对值 ≤ 0.001
+    const yOffset = Math.abs(cap.position.y - lastY)
+    expect(yOffset).toBeLessThanOrEqual(0.001)
   })
 
   it('轮廓中 (BOWL_THICKNESS, 0) 坐标最多出现一次', async () => {

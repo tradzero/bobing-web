@@ -3,16 +3,106 @@ import type { DicePair } from './create'
 import { THROW } from '@/config/throw'
 import { random, randomRange } from '@/utils/random'
 
+// ─── Slot 类型：位置 + 可选高度带 ───────────────────────────
+/** fallback 布局槽位，带高度带标记用于碰撞时序分层 */
+export interface Slot {
+  x: number
+  z: number
+  /** high = 高带（晚落），low = 低带（先落）；rejection 路径为 null */
+  heightBand: 'high' | 'low' | null
+}
+
+// ─── 三种纯几何 helper（不消费随机流，可确定性测试） ────────
+
 /**
- * 生成一组不重叠的初始水平位置 (x, z)
- * 使用 rejection sampling + 确定性 fallback（扇区均分），保证任意两颗骰子间距 >= minSeparation
+ * 单环 6：r = rBase, 60° 等分
+ * 索引 0,2,4 → high（交替高带），1,3,5 → low
  */
-function samplePositions(count: number): Array<{ x: number; z: number }> {
+export function ring6Slots(rBase: number, rotation: number): Slot[] {
+  const slots: Slot[] = []
+  for (let i = 0; i < 6; i++) {
+    const angle = rotation + (i / 6) * Math.PI * 2
+    slots.push({
+      x: Math.cos(angle) * rBase,
+      z: Math.sin(angle) * rBase,
+      heightBand: i % 2 === 0 ? 'high' : 'low',
+    })
+  }
+  return slots
+}
+
+/**
+ * 3+3 双环：内环 rI = rBase/√3, 外环 rO = 2·rI, 交错 60°
+ * 内环 → high，外环 → low
+ */
+export function dual33Slots(rBase: number, rotation: number): Slot[] {
+  const rI = rBase / Math.sqrt(3)
+  const rO = 2 * rI
+  const slots: Slot[] = []
+  // 内环 3 颗
+  for (let i = 0; i < 3; i++) {
+    const angle = rotation + (i / 3) * Math.PI * 2
+    slots.push({ x: Math.cos(angle) * rI, z: Math.sin(angle) * rI, heightBand: 'high' })
+  }
+  // 外环 3 颗，偏移 60°
+  for (let i = 0; i < 3; i++) {
+    const angle = rotation + Math.PI / 3 + (i / 3) * Math.PI * 2
+    slots.push({ x: Math.cos(angle) * rO, z: Math.sin(angle) * rO, heightBand: 'low' })
+  }
+  return slots
+}
+
+/**
+ * 1+5：中心 1 颗 + 外环 rBase, 72° 等分
+ * 中心 → high，外环 → low
+ */
+export function center15Slots(count: number, rBase: number, rotation: number): Slot[] {
+  const slots: Slot[] = [{ x: 0, z: 0, heightBand: 'high' }]
+  for (let i = 0; i < count - 1; i++) {
+    const angle = rotation + (i / (count - 1)) * Math.PI * 2
+    slots.push({ x: Math.cos(angle) * rBase, z: Math.sin(angle) * rBase, heightBand: 'low' })
+  }
+  return slots
+}
+
+// ─── fallback 布局选择与组装 ─────────────────────────────
+
+/** 布局权重 [ring6, dual33, center15] = [2, 2, 1] */
+const LAYOUT_WEIGHTS = [2, 2, 1] as const
+const WEIGHT_SUM = LAYOUT_WEIGHTS.reduce((a, b) => a + b, 0)
+
+function pickLayout(): 'ring6' | 'dual33' | 'center15' {
+  const roll = random() * WEIGHT_SUM
+  if (roll < LAYOUT_WEIGHTS[0]) return 'ring6'
+  if (roll < LAYOUT_WEIGHTS[0] + LAYOUT_WEIGHTS[1]) return 'dual33'
+  return 'center15'
+}
+
+/**
+ * 构造式 fallback：随机选拓扑 + 全局旋转，返回带高度带的 Slot[]
+ * rBase = minSeparation * 1.02，所有布局经几何证明满足 minSeparation 约束
+ */
+function fallbackSlots(count: number, minSeparation: number): Slot[] {
+  const rBase = minSeparation * 1.02
+  const globalRotation = random() * Math.PI * 2
+  const layout = pickLayout()
+
+  if (layout === 'ring6') return ring6Slots(rBase, globalRotation)
+  if (layout === 'dual33') return dual33Slots(rBase, globalRotation)
+  return center15Slots(count, rBase, globalRotation)
+}
+
+/**
+ * 生成一组不重叠的初始位置 Slot[]
+ * rejection sampling 成功 → heightBand = null（全区间随机高度）
+ * fallback → heightBand = 'high'/'low'（分层高度）
+ */
+function sampleSlots(count: number): Slot[] {
   const { spreadRadius, minSeparation, maxPlacementAttempts } = THROW
   const minSepSq = minSeparation * minSeparation
 
   // Phase 1: rejection sampling
-  const placed: Array<{ x: number; z: number }> = []
+  const placed: Slot[] = []
   let useFallback = false
 
   for (let i = 0; i < count; i++) {
@@ -23,7 +113,6 @@ function samplePositions(count: number): Array<{ x: number; z: number }> {
       const cx = Math.cos(angle) * r
       const cz = Math.sin(angle) * r
 
-      // 检查与已放置骰子的最小距离
       let tooClose = false
       for (const p of placed) {
         const dx = cx - p.x
@@ -34,7 +123,7 @@ function samplePositions(count: number): Array<{ x: number; z: number }> {
         }
       }
       if (!tooClose) {
-        placed.push({ x: cx, z: cz })
+        placed.push({ x: cx, z: cz, heightBand: null })
         accepted = true
         break
       }
@@ -45,15 +134,9 @@ function samplePositions(count: number): Array<{ x: number; z: number }> {
     }
   }
 
-  // Phase 2: 确定性 fallback — 扇区均分
-  // 6 扇区相邻距离 = 2r*sin(π/6) = r，取 r = max(minSep, spreadRadius*0.6) 保证间距
+  // Phase 2: 构造式多拓扑 fallback（随机选布局 + 全局旋转 + 高度分层）
   if (useFallback) {
-    placed.length = 0
-    const r = Math.max(minSeparation * 1.02, spreadRadius * 0.6)
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2
-      placed.push({ x: Math.cos(angle) * r, z: Math.sin(angle) * r })
-    }
+    return fallbackSlots(count, minSeparation)
   }
 
   return placed
@@ -116,11 +199,25 @@ export function initThrowBody(body: CANNON.Body, pos?: { x: number; z: number })
 
 /**
  * 投掷逻辑：批量采样不重叠的初始位置，再逐颗应用投掷状态
- * 骰子从碗上方散布投入，保证任意两颗间距 >= THROW.minSeparation
+ * fallback 路径的骰子按高度带分层，制造碰撞时序差异
+ * rejection 路径沿用全区间随机高度
  */
 export function throwDice(dicePairs: DicePair[]): void {
-  const positions = samplePositions(dicePairs.length)
+  const slots = sampleSlots(dicePairs.length)
   for (let i = 0; i < dicePairs.length; i++) {
-    initThrowBody(dicePairs[i].body, positions[i])
+    const slot = slots[i]
+    initThrowBody(dicePairs[i].body, slot)
+
+    // 高度分层：仅 fallback 路径生效，覆写 initThrowBody 设置的 y
+    if (slot.heightBand === 'high') {
+      const y = randomRange(THROW.heightMax - 0.15, THROW.heightMax) // 1.45 ~ 1.60
+      dicePairs[i].body.position.y = y
+      dicePairs[i].body.previousPosition.y = y
+    } else if (slot.heightBand === 'low') {
+      const y = randomRange(THROW.heightMin, THROW.heightMin + 0.15) // 1.20 ~ 1.35
+      dicePairs[i].body.position.y = y
+      dicePairs[i].body.previousPosition.y = y
+    }
+    // heightBand === null (rejection 路径): initThrowBody 已用全区间，不覆写
   }
 }

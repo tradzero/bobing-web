@@ -1,7 +1,10 @@
 import * as THREE from 'three'
 import * as CANNON from 'cannon-es'
 import { PHYSICS } from '@/config/physics'
-import { diceMaterial } from '@/physics/materials'
+import { createDiceBody } from './dice-body'
+
+// 从 dice-body.ts 重新导出，保持现有外部导入路径兼容
+export { FACE_NORMALS } from './dice-body'
 
 /** 骰子 mesh 与 body 的配对 */
 export interface DicePair {
@@ -130,19 +133,6 @@ const FACE_MAP = {
 }
 
 /**
- * 面法线常量（本地坐标）
- * 与 FACE_MAP.materialOrder 一一对应
- */
-export const FACE_NORMALS: { normal: CANNON.Vec3; value: number }[] = [
-  { normal: new CANNON.Vec3(1, 0, 0), value: 2 }, // +x
-  { normal: new CANNON.Vec3(-1, 0, 0), value: 5 }, // -x
-  { normal: new CANNON.Vec3(0, 1, 0), value: 1 }, // +y
-  { normal: new CANNON.Vec3(0, -1, 0), value: 6 }, // -y
-  { normal: new CANNON.Vec3(0, 0, 1), value: 3 }, // +z
-  { normal: new CANNON.Vec3(0, 0, -1), value: 4 }, // -z
-]
-
-/**
  * 创建单颗骰子 mesh + body
  */
 export function createDice(): DicePair {
@@ -164,17 +154,8 @@ export function createDice(): DicePair {
   mesh.castShadow = true
   mesh.receiveShadow = false
 
-  // 物理 body
-  const body = new CANNON.Body({
-    mass: PHYSICS.diceMass,
-    material: diceMaterial,
-    linearDamping: PHYSICS.diceLinearDamping,
-    angularDamping: PHYSICS.diceAngularDamping,
-    allowSleep: true,
-    sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
-    sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
-  })
-  body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+  // 物理 body：委托给 physics-only 工厂
+  const body = createDiceBody()
 
   return { mesh, body }
 }

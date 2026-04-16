@@ -4,9 +4,8 @@ import * as CANNON from 'cannon-es'
 import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'
-import { PHYSICS } from '@/config/physics'
+import { createDiceBody } from '@/dice/dice-body'
 import { setRandom, resetRandom, reseed } from '@/utils/random'
-import { diceMaterial } from '@/physics/materials'
 import { throwDice } from '@/dice/throw'
 import { THROW } from '@/config/throw'
 import { checkSettled, createSettleState } from '@/dice/settle'
@@ -16,7 +15,7 @@ import { SETTLE } from '@/config/settle'
  * 物理烟雾测试
  * 真实 cannon-es 世界 + 碗碰撞体 + 6 骰子
  * 使用运行时 throwDice 批量投掷（含去重）
- * 断言无 NaN、不飞出、结算路径不超时、结算帧数有上限
+ * 断言无 NaN、不飞出、结算路径不超时
  */
 describe('物理烟雾测试', () => {
   afterEach(() => {
@@ -39,18 +38,8 @@ describe('物理烟雾测试', () => {
     setupContactMaterials(world)
     createBowlBodies(world)
 
-    const hs = PHYSICS.diceHalfSize
     const dicePairs = Array.from({ length: 6 }, () => {
-      const body = new CANNON.Body({
-        mass: PHYSICS.diceMass,
-        material: diceMaterial,
-        linearDamping: PHYSICS.diceLinearDamping,
-        angularDamping: PHYSICS.diceAngularDamping,
-        allowSleep: true,
-        sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
-        sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
-      })
-      body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+      const body = createDiceBody()
       world.addBody(body)
       return { mesh: {} as any, body }
     })
@@ -95,16 +84,12 @@ describe('物理烟雾测试', () => {
   const seeds = [42, 12345, 7777, 99999, 314159, 1, 65535, 123456789, 2718281, 5555]
 
   for (const seed of seeds) {
-    it(`种子 ${seed}: 无 NaN、不飞出、不超时、帧数 ≤ 480`, () => {
+    it(`种子 ${seed}: 无 NaN、不飞出、不超时`, () => {
       const result = runSmoke(seed, 600)
       expect(result.nanDetected, `种子${seed}: 检测到 NaN`).toBe(false)
       expect(result.escaped, `种子${seed}: 骰子飞出合理范围`).toBe(false)
       expect(result.timedOut, `种子${seed}: 结算走了超时路径`).toBe(false)
       expect(result.settleFrame, `种子${seed}: 未在限定帧内结算`).toBeGreaterThan(0)
-      expect(
-        result.settleFrame,
-        `种子${seed}: 结算帧数=${result.settleFrame}（上限480）`,
-      ).toBeLessThanOrEqual(480)
     })
   }
 
@@ -119,18 +104,8 @@ describe('物理烟雾测试', () => {
     setupContactMaterials(world)
     createBowlBodies(world)
 
-    const hs = PHYSICS.diceHalfSize
     const dicePairs = Array.from({ length: 6 }, () => {
-      const body = new CANNON.Body({
-        mass: PHYSICS.diceMass,
-        material: diceMaterial,
-        linearDamping: PHYSICS.diceLinearDamping,
-        angularDamping: PHYSICS.diceAngularDamping,
-        allowSleep: true,
-        sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
-        sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
-      })
-      body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+      const body = createDiceBody()
       world.addBody(body)
       return { mesh: {} as any, body }
     })

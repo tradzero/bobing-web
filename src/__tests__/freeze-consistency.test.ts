@@ -3,8 +3,8 @@ import { describe, it, expect, afterEach } from 'vitest'
 import * as CANNON from 'cannon-es'
 import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies } from '@/physics/bowl-body'
-import { setupContactMaterials, diceMaterial } from '@/physics/materials'
-import { PHYSICS } from '@/config/physics'
+import { setupContactMaterials } from '@/physics/materials'
+import { createDiceBody } from '@/dice/dice-body'
 import { setRandom, resetRandom } from '@/utils/random'
 import { initThrowBody } from '@/dice/throw'
 import { checkSettled, createSettleState } from '@/dice/settle'
@@ -41,19 +41,9 @@ describe('冻结前后读数一致性', () => {
       setupContactMaterials(world)
       createBowlBodies(world)
 
-      const hs = PHYSICS.diceHalfSize
       const bodies: CANNON.Body[] = []
       for (let i = 0; i < 6; i++) {
-        const body = new CANNON.Body({
-          mass: PHYSICS.diceMass,
-          material: diceMaterial,
-          linearDamping: PHYSICS.diceLinearDamping,
-          angularDamping: PHYSICS.diceAngularDamping,
-          allowSleep: true,
-          sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
-          sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
-        })
-        body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+        const body = createDiceBody()
         initThrowBody(body)
         world.addBody(body)
         bodies.push(body)

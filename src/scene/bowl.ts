@@ -50,18 +50,18 @@ export function generateBowlProfile(): THREE.Vector2[] {
     points.push(new THREE.Vector2(r, y))
   }
 
-  // 碗底平底盘：从内壁最后保留点直接扇形收敛到中心，不重复外壁起点半径
-  points.push(new THREE.Vector2(0, 0))
+  // 不再收敛到中心 (0,0)，避免 LatheGeometry 极点法线奇异
+  // 碗底平面由独立 CircleGeometry 底盖覆盖
 
   return points
 }
 
 /**
  * 创建海碗可视模型
- * 使用 LatheGeometry 旋转体生成碗形，白瓷材质
- * 内壁基于共享 bowlInnerHeight 曲线，外壁 = 内壁半径方向偏移
+ * LatheGeometry 旋转体生成碗壁 + 独立 CircleGeometry 底盖
+ * 避免 Lathe 极点法线奇异导致的星芒伪影
  */
-export function createBowl(): THREE.Mesh {
+export function createBowl(): THREE.Group {
   const points = generateBowlProfile()
 
   // 128 圆周分段消除俯视棱线和摩尔纹，碗仅一个，性能可忽略
@@ -77,8 +77,24 @@ export function createBowl(): THREE.Mesh {
     side: THREE.DoubleSide,
   })
   const mesh = new THREE.Mesh(geometry, material)
-  // 碗只接收阴影，不投射，避免凹面自遮挡条纹
   mesh.castShadow = false
   mesh.receiveShadow = true
-  return mesh
+
+  // 独立底盖：最小遮缝策略，从上方微量盖住 Lathe 末端边缘
+  // 分段与碗体一致（128）避免内接多边形不吻合
+  const lastPoint = points[points.length - 1]
+  const CAP_R_EXPAND = 0.001   // 半径外扩，仅遮缝不暴露底盖
+  const CAP_Y_LIFT   = 0.0001  // 微量上浮，从上方盖住接缝避免透出桌面
+  const capGeo = new THREE.CircleGeometry(lastPoint.x + CAP_R_EXPAND, 128)
+  const cap = new THREE.Mesh(capGeo, material)
+  // CircleGeometry 默认面朝 +Z，旋转到 XZ 平面使法线朝 +Y（碗内侧）
+  cap.rotation.x = -Math.PI / 2
+  cap.position.y = lastPoint.y + CAP_Y_LIFT
+  cap.castShadow = false
+  cap.receiveShadow = true
+
+  const group = new THREE.Group()
+  group.add(mesh)
+  group.add(cap)
+  return group
 }

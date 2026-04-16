@@ -9,7 +9,8 @@ import { describe, it } from 'vitest'
 import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies, ESCAPE_Y, BOWL_RADIUS } from '@/physics/bowl-body'
 import { BOWL_HEIGHT } from '@/config/bowl'
-import { setupContactMaterials, diceMaterial } from '@/physics/materials'
+import { setupContactMaterials } from '@/physics/materials'
+import { createDiceBody } from '@/dice/dice-body'
 import { PHYSICS } from '@/config/physics'
 import { reseed } from '@/utils/random'
 import { throwDice } from '@/dice/throw'
@@ -20,7 +21,25 @@ import { SETTLE } from '@/config/settle'
 import * as CANNON from 'cannon-es'
 
 // ====== 在这里添加需要复现的种子 ======
-const SEEDS = [1776219009201]
+const SEEDS = [
+  // 原始 8 个问题种子
+  1776305089401,
+  1776305112201,
+  1776305133651,
+  1776305147534,
+  1776305161217,
+  1776305174984,
+  1776305192933,
+  1776305210067,
+  // 审查补充：慢结算 + 抖动
+  1776308075747,
+  1776308125213,
+  1776308167330,
+  1776308186180,
+  1776308201964,
+  // 审查补充：莫名倾角
+  1776308150130,
+]
 
 const MAX_FRAMES = 3000
 
@@ -34,18 +53,8 @@ describe('复现种子', () => {
       createBowlBodies(world)
 
       // 创建骰子 body（与运行时 create.ts 同构）并使用批量投掷路径（含去重）
-      const hs = PHYSICS.diceHalfSize
       const dicePairs = Array.from({ length: 6 }, () => {
-        const body = new CANNON.Body({
-          mass: PHYSICS.diceMass,
-          material: diceMaterial,
-          linearDamping: PHYSICS.diceLinearDamping,
-          angularDamping: PHYSICS.diceAngularDamping,
-          allowSleep: true,
-          sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
-          sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
-        })
-        body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+        const body = createDiceBody()
         world.addBody(body)
         return { mesh: {} as any, body }
       })

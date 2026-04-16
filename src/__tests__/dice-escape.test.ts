@@ -4,8 +4,7 @@ import * as CANNON from 'cannon-es'
 import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies, ESCAPE_Y, BOWL_RADIUS } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'
-import { PHYSICS } from '@/config/physics'
-import { diceMaterial } from '@/physics/materials'
+import { createDiceBody } from '@/dice/dice-body'
 import { setRandom, resetRandom } from '@/utils/random'
 import { initThrowBody } from '@/dice/throw'
 import { checkSettled, createSettleState } from '@/dice/settle'
@@ -42,19 +41,9 @@ describe('骰子逃逸防护', () => {
     setupContactMaterials(world)
     createBowlBodies(world)
 
-    const hs = PHYSICS.diceHalfSize
     const bodies: CANNON.Body[] = []
     for (let i = 0; i < 6; i++) {
-      const body = new CANNON.Body({
-        mass: PHYSICS.diceMass,
-        material: diceMaterial,
-        linearDamping: PHYSICS.diceLinearDamping,
-        angularDamping: PHYSICS.diceAngularDamping,
-        allowSleep: true,
-        sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
-        sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
-      })
-      body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+      const body = createDiceBody()
       initThrowBody(body)
       world.addBody(body)
       bodies.push(body)
@@ -133,19 +122,9 @@ describe('骰子逃逸防护', () => {
       setupContactMaterials(world)
       createBowlBodies(world)
 
-      const hs = PHYSICS.diceHalfSize
       const bodies: CANNON.Body[] = []
       for (let i = 0; i < 6; i++) {
-        const body = new CANNON.Body({
-          mass: PHYSICS.diceMass,
-          material: diceMaterial,
-          linearDamping: PHYSICS.diceLinearDamping,
-          angularDamping: PHYSICS.diceAngularDamping,
-          allowSleep: true,
-          sleepSpeedLimit: PHYSICS.diceSleepSpeedLimit,
-          sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
-        })
-        body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+        const body = createDiceBody()
         initThrowBody(body)
         world.addBody(body)
         bodies.push(body)

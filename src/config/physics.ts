@@ -19,16 +19,16 @@ export const PHYSICS = {
   /** 骰子角阻尼 */
   diceAngularDamping: 0.3,
 
-  /** 骰子 sleep 相关（更激进：高 speedLimit + 短 timeLimit，快速截断残余微抖） */
-  diceSleepSpeedLimit: 0.35,
-  diceSleepTimeLimit: 0.15,
+  /** 骰子 sleep 相关（收紧：低 speedLimit + 适中 timeLimit，平衡结算速度与斜停风险） */
+  diceSleepSpeedLimit: 0.20,
+  diceSleepTimeLimit: 0.32,
 
   /** 接触材质参数 */
   contact: {
-    /** 骰子-碗（bowlMaterial 同时用于碗底与墙壁，降低 restitution 减少微弹跳） */
-    diceBowl: { friction: 0.4, restitution: 0.15 },
-    /** 骰子-骰子 */
-    diceDice: { friction: 0.3, restitution: 0.25 },
+    /** 骰子-碗（bowlMaterial 同时用于碗底与墙壁，适度摩擦让骰子滑向平稳位置） */
+    diceBowl: { friction: 0.28, restitution: 0.15 },
+    /** 骰子-骰子（restitution 0.25→0.20：减少碰撞弹性，修复已知 tilt seed 的棱角互锁） */
+    diceDice: { friction: 0.3, restitution: 0.20 },
     /** 骰子-桌面 */
     diceTable: { friction: 0.5, restitution: 0.2 },
   },

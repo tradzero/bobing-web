@@ -191,6 +191,75 @@
 
 ---
 
+## 阶段 1+：碰撞体倒角优化（P0 补强 — 减少棱角互锁导致的倾斜停稳）
+
+> 目标：将骰子碰撞体从 `CANNON.Box`（8v/6f 锐棱）替换为棱倒角凸包 `ConvexPolyhedron`（24v/26f），减少骰子棱边互锁导致的 tilt。
+
+### Step 0：提取 physics-only 骰子 body 工厂
+
+- [x] 0.1 [实现] 新建 `src/dice/dice-body.ts`，定义 `ShapeMode = 'box' | 'chamfer'` 和 `DiceBodyOptions`（halfSize?、shapeMode?、chamferRatio?），导出 `createDiceBody(opts?): CANNON.Body`，当前内部仍创建 Box shape
+- [x] 0.2 [实现] 将 `FACE_NORMALS` 从 `create.ts` 迁移到 `dice-body.ts` 并重新导出；更新 `create.ts` 和 `read-face.ts` 的导入路径
+- [x] 0.3 [实现] `create.ts` 中 `createDice()` 改为调用 `createDiceBody()` 获取 body，不再手写 Body 构造 + addShape
+- [x] 0.4 [实现] 替换 13 个测试文件中骰子尺寸（halfSize = PHYSICS.diceHalfSize）的 `new CANNON.Body(…) + addShape(Box)` 为 `createDiceBody()`；保留 `engine-timing.test.ts` 和 `throw-invariants.test.ts` 中 0.02 尺寸的特殊夹具不动
+- [x] 0.5 [测试] 全量测试通过（302 tests），无回归
+- [x] 0.6 [验收] `grep "addShape.*Box" src/dice/` → 仅 `dice-body.ts` 内 shapeMode='box' 分支
+- [x] 0.7 [验收] `grep "addShape.*Box" src/__tests__/` → 仅 `engine-timing.test.ts` 和 `throw-invariants.test.ts` 的 0.02 夹具
+
+### Step 1：截角立方体凸包几何生成
+
+- [ ] 1.1 [实现] 新建 `src/dice/chamfer.ts`，导出 `createChamferedCubeHull(halfSize, chamfer): { vertices: number[][], faces: number[][] }`
+- [ ] 1.2 [实现] 几何定义：截角立方体（vertex truncation）— 24 顶点（每原始顶点切出 3 个新顶点）、14 面（8 三角形 + 6 八边形），满足欧拉关系 V-E+F = 24-36+14 = 2；所有面顶点逆时针 winding（从外侧看）
+- [ ] 1.3 [实现] 在 `config/physics.ts` 新增 `diceChamferRatio: 0.15`（倒角比例，0=Box 回退）
+- [ ] 1.4 [测试] `chamfer.test.ts`：顶点数 = 24，面数 = 14
+- [ ] 1.5 [测试] 所有面法线朝外（面积加权法线与质心→面心向量同向）
+- [ ] 1.6 [测试] 包围盒 ≤ 原 Box（每轴最大坐标 ≤ halfSize）
+- [ ] 1.7 [测试] `chamfer=0` 退化为标准 8 顶点 / 6 面立方体
+- [ ] 1.8 [测试] `CANNON.ConvexPolyhedron` 能用生成数据成功构造（无抛错）
+
+### Step 2：碰撞体替换
+
+- [ ] 2.1 [实现] `dice-body.ts` 中 `createDiceBody()` 新增 chamfer 分支：当 `shapeMode='chamfer'` 时调用 `createChamferedCubeHull()` 构建 `ConvexPolyhedron` 并 addShape
+- [ ] 2.2 [实现] 默认 shapeMode 改为 `'chamfer'`（`diceChamferRatio > 0` 时自动选择）
+- [ ] 2.3 [测试] 点数读取不受影响：复用 `read-face.test.ts` 24 个合法朝向 + 扰动样本全部通过
+- [ ] 2.4 [测试] 全量测试通过，无回归
+
+### Step 3：视觉网格对齐
+
+> 注：视觉 mesh 先接受近似对齐，不要求与物理截角凸包完全同构。RoundedBoxGeometry 是连续圆角而非截面三角形，作为第一版视觉对齐可接受，后续按需升级。
+
+- [ ] 3.1 [实现] `create.ts` 中将 `BoxGeometry` 替换为 `RoundedBoxGeometry`，radius 参数对齐 `PHYSICS.diceHalfSize * PHYSICS.diceChamferRatio`
+- [ ] 3.2 [验收] 确认 RoundedBoxGeometry 保留 6 个 material groups（materialIndex 0-5），现有 6 面材质映射无需改动
+- [ ] 3.3 [验收] 目视检查：四点红面和边框在倒角处无明显畸变
+
+### Step 4：性能基准
+
+- [ ] 4.1 [实现] 新建 `scripts/shape-bench.ts`（独立脚本，`npx tsx scripts/shape-bench.ts` 手动执行，不进 vitest 默认套件）：Box(8v/6f) vs Chamfer(24v/14f) 各 300 帧 × 3 轮，记录 `world.step()` 中位耗时和相对倍率
+- [ ] 4.2 [验收] 脚本以 stdout 输出倍率，不设绝对 wall-clock 阈值
+- [ ] 4.3 [验收] 确认倍率在可接受范围（预期 1.5-3x），若 >5x 则降低 chamferRatio
+
+### Step 4.5：试验 helper 贯通 shapeMode 参数
+
+- [ ] 4.5.1 [实现] 确保 param-sweep、tilt-stats、physics-smoke、reproduce-seed、jitter-diagnose 等关键试验 helper 的骰子 body 创建路径已切换为 `createDiceBody(opts?)`，可通过 `shapeMode` 覆盖
+- [ ] 4.5.2 [测试] 在 param-sweep 中验证 `createDiceBody({ shapeMode: 'box' })` 与 `createDiceBody({ shapeMode: 'chamfer' })` 产出的 body shape 类型分别为 Box 和 ConvexPolyhedron
+- [ ] 4.5.3 [验收] Step 5 对比测试中，Box 基线显式使用 `shapeMode: 'box'`，不受全局默认 chamfer 的影响
+
+### Step 5：tilt 回归验证
+
+- [ ] 5.1 [测试] `param-sweep.test.ts` 新增 chamfer 变体（500-seed + 6 特殊 seed），Box 基线显式用 `createDiceBody({ shapeMode: 'box' })`，与 chamfer 对比 tiltDice / tiltRounds / timeout / p95
+- [ ] 5.2 [测试] 6 个关键 seed 全部无回归：1776308150130、1776305112201、1776308167330、1776311021115、1776310976115、1776305192933
+- [ ] 5.3 [验收] chamfer 变体 tiltDice ≤ baseline（tilt 不恶化）
+- [ ] 5.4 [验收] 如 tilt 改善不明显，在 chamferRatio 0.10~0.25 范围扫参后选最优值
+
+### Step 6：收尾
+
+- [ ] 6.1 [实现] 更新 `ARCHITECTURE.md` 碰撞体方案章节，补充倒角方案描述
+- [ ] 6.2 [实现] 清理临时诊断测试文件（review-verify.test.ts、jitter-diagnose.test.ts、sleep-sweep.test.ts）
+- [ ] 6.3 [验收] 全量测试通过
+- [ ] 6.4 [验收] `pnpm build` 通过
+- [ ] 6.5 [验收] 连续 20 轮投掷无穿模、无卡死、无飞出
+
+---
+
 ## 阶段三：氛围与表现（P2 — 中秋装饰 + 音效 + 视觉反馈）
 
 ### 3A 场景氛围

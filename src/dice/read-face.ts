@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es'
-import { FACE_NORMALS } from './create'
+import { FACE_NORMALS } from './dice-body'
 
 const UP = new CANNON.Vec3(0, 1, 0)
 const _worldNormal = new CANNON.Vec3()
