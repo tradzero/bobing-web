@@ -9,7 +9,12 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sweep:param": "vite-node sweep/param-sweep.ts",
+    "sweep:sleep": "vite-node sweep/sleep-sweep.ts",
+    "sweep:timeout": "vite-node sweep/timeout-risk.ts",
+    "sweep:jitter": "vite-node sweep/jitter-diagnose.ts",
+    "sweep:tilt": "vite-node sweep/tilt-stats.ts"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
@@ -39,6 +44,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.0",
     "vite": "^8.0.4",
+    "vite-node": "^6.0.0",
     "vitest": "^4.1.4"
   }
 }
