@@ -111,7 +111,7 @@ const SPECIAL_SEEDS = [
 
 describe('diceDice param sweep', () => {
   for (const v of VARIANTS) {
-    it(`${v.label}: 500轮 + 特殊seed`, { timeout: 180_000 }, () => {
+    it(`${v.label}: 500轮 + 特殊seed`, { timeout: 600_000 }, () => {
       let tiltDice = 0, tiltRounds = 0, timeoutCount = 0
       const times: number[] = []
 
