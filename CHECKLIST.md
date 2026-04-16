@@ -207,14 +207,14 @@
 
 ### Step 1：截角立方体凸包几何生成
 
-- [ ] 1.1 [实现] 新建 `src/dice/chamfer.ts`，导出 `createChamferedCubeHull(halfSize, chamfer): { vertices: number[][], faces: number[][] }`
-- [ ] 1.2 [实现] 几何定义：截角立方体（vertex truncation）— 24 顶点（每原始顶点切出 3 个新顶点）、14 面（8 三角形 + 6 八边形），满足欧拉关系 V-E+F = 24-36+14 = 2；所有面顶点逆时针 winding（从外侧看）
-- [ ] 1.3 [实现] 在 `config/physics.ts` 新增 `diceChamferRatio: 0.15`（倒角比例，0=Box 回退）
-- [ ] 1.4 [测试] `chamfer.test.ts`：顶点数 = 24，面数 = 14
-- [ ] 1.5 [测试] 所有面法线朝外（面积加权法线与质心→面心向量同向）
-- [ ] 1.6 [测试] 包围盒 ≤ 原 Box（每轴最大坐标 ≤ halfSize）
-- [ ] 1.7 [测试] `chamfer=0` 退化为标准 8 顶点 / 6 面立方体
-- [ ] 1.8 [测试] `CANNON.ConvexPolyhedron` 能用生成数据成功构造（无抛错）
+- [x] 1.1 [实现] 新建 `src/dice/chamfer.ts`，导出 `createChamferedCubeHull(halfSize, chamfer): { vertices: number[][], faces: number[][] }`
+- [x] 1.2 [实现] 几何定义：截角立方体（vertex truncation）— 24 顶点（每原始顶点切出 3 个新顶点）、14 面（8 三角形 + 6 八边形），满足欧拉关系 V-E+F = 24-36+14 = 2；所有面顶点逆时针 winding（从外侧看）
+- [x] 1.3 [实现] 在 `config/physics.ts` 新增 `diceChamferRatio: 0.15`（倒角比例，0=Box 回退）
+- [x] 1.4 [测试] `chamfer.test.ts`：顶点数 = 24，面数 = 14
+- [x] 1.5 [测试] 所有面法线朝外（面积加权法线与质心→面心向量同向）
+- [x] 1.6 [测试] 包围盒 ≤ 原 Box（每轴最大坐标 ≤ halfSize）
+- [x] 1.7 [测试] `chamfer=0` 退化为标准 8 顶点 / 6 面立方体
+- [x] 1.8 [测试] `CANNON.ConvexPolyhedron` 能用生成数据成功构造（无抛错）
 
 ### Step 2：碰撞体替换
 

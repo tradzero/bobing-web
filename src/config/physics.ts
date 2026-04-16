@@ -14,6 +14,8 @@ export const PHYSICS = {
   diceMass: 0.03,
   /** 骰子半尺寸（立方体边长的一半） */
   diceHalfSize: 0.12,
+  /** 骰子倒角比例（0 = Box 回退，>0 = 截角立方体凸包） */
+  diceChamferRatio: 0.15,
   /** 骰子线性阻尼 */
   diceLinearDamping: 0.3,
   /** 骰子角阻尼 */
