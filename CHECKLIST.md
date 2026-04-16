@@ -253,7 +253,7 @@
 ### Step 6：收尾
 
 - [ ] 6.1 [实现] 更新 `ARCHITECTURE.md` 碰撞体方案章节，补充倒角方案描述
-- [ ] 6.2 [实现] 清理临时诊断测试文件（review-verify.test.ts、jitter-diagnose.test.ts、sleep-sweep.test.ts）
+- [x] 6.2 [实现] ~~清理临时诊断测试文件~~ → 已拆分为 `sweep/` 独立脚本（param-sweep、sleep-sweep、jitter-diagnose、tilt-stats、timeout-risk），`review-verify.test.ts` 保留快速部分
 - [ ] 6.3 [验收] 全量测试通过
 - [ ] 6.4 [验收] `pnpm build` 通过
 - [ ] 6.5 [验收] 连续 20 轮投掷无穿模、无卡死、无飞出

@@ -81,13 +81,34 @@ src/
 ├── utils/
 │   └── random.ts               # 可注入随机数源（生产用 Math.random，测试用固定种子）
 │
-└── __tests__/
+└── __tests__/                  # 快速测试（pnpm test，全量 <30s）
     ├── judge.test.ts           # 奖级判定：全部奖级示例 + 46656 种穷举校验
     ├── read-face.test.ts       # 点数读取：24 个合法朝向 + 近边界扰动样本
+    ├── chamfer.test.ts         # 倒角骰子几何验证：顶点/面数、对称性、尺寸
     ├── settle.test.ts          # 停稳检测：假时钟 + 快照序列、多种边界场景
+    ├── settle-regression.test.ts # 停稳回归：已知问题种子的结算路径验证
     ├── controller.test.ts      # 编排层集成：phase 变化、重复点击、history 上限、reset、sound
+    ├── engine-timing.test.ts   # 引擎时序：帧循环执行顺序验证
     ├── tilt-flow.test.ts       # 倾斜确认流程：tilt-confirm 进入/pending 隔离/接受/重掷/throw 拒绝/reset/冻结/35° 不触发
-    └── physics-smoke.test.ts   # 物理烟雾：真实世界 + 碗 + 骰子，固定种子跑 N 帧，无 NaN/不穿模
+    ├── physics-smoke.test.ts   # 物理烟雾：真实世界 + 碗 + 骰子，固定种子跑 N 帧，无 NaN/不穿模
+    ├── bowl-body.test.ts       # 碗碰撞体：Heightfield 几何、挡墙布局
+    ├── dice-escape.test.ts     # 骰子逃逸防护：多种子验证反弹后不飞出
+    ├── throw-geometry.test.ts  # 投掷几何：初始位置/速度分布验证
+    ├── throw-invariants.test.ts # 投掷不变量：确定性种子结果一致性
+    ├── fallback-rate.test.ts   # fallback 触发率统计
+    ├── freeze-consistency.test.ts # 冻结一致性：冻结帧 vs 非冻结帧结果一致
+    ├── reproduce-seed.test.ts  # 关键种子复现：已知问题种子的详细诊断
+    └── review-verify.test.ts   # 审查验证：高度分层、fallback 拓扑覆盖、关键种子复现
+
+sweep/                          # 独立长时间运行脚本（按需手动执行，不在 pnpm test 中）
+├── lib/
+│   ├── log.ts                  # NDJSON 增量日志器：appendFileSync 防崩溃丢失
+│   └── run-trial.ts            # 共享试验运行器：物理世界→投掷→步进→停稳→读数
+├── param-sweep.ts              # 摩擦/恢复系数参数扫描（pnpm sweep:param）
+├── sleep-sweep.ts              # sleepTimeLimit 参数扫描（pnpm sweep:sleep）
+├── timeout-risk.ts             # 超时风险统计（pnpm sweep:timeout）
+├── jitter-diagnose.ts          # 抖动种子诊断（pnpm sweep:jitter）
+└── tilt-stats.ts               # 倾斜统计（pnpm sweep:tilt）
 ```
 
 ## 核心数据流
@@ -265,6 +286,24 @@ interface GameState {
 | 物理烟雾 | 物理层整体 | 真实 cannon-es 世界 + 碗碰撞体 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能在预期时间内结算或触发超时 | 固定种子 + 帧循环 |
 
 **随机数可注入**：`utils/random.ts` 提供可替换的随机数源接口，生产环境使用 `Math.random`，测试时注入确定性种子生成器，确保投掷、物理烟雾和编排测试的稳定性。
+
+### 独立 sweep 脚本
+
+长时间运行的参数扫描、统计类测试已从 vitest 套件中拆出，放在 `sweep/` 目录下作为独立 `vite-node` 脚本运行。**不要将这些脚本重新写回 `src/__tests__/` 或注册为 vitest 测试。**
+
+| 命令 | 脚本 | 用途 | 典型耗时 | CLI 参数 |
+|------|------|------|----------|----------|
+| `pnpm sweep:param` | `sweep/param-sweep.ts` | box vs chamfer 多摩擦/恢复系数组合对比 | 5-30min | `--seeds=N --variant=0,1` |
+| `pnpm sweep:sleep` | `sweep/sleep-sweep.ts` | sleepTimeLimit 值对停稳路径的影响 | 2-5min | `--seeds=N --values=0.32,0.28` |
+| `pnpm sweep:timeout` | `sweep/timeout-risk.ts` | 大批量种子的超时率统计 | 3-10min | `--seeds=N`（默认 500） |
+| `pnpm sweep:jitter` | `sweep/jitter-diagnose.ts` | 特定种子的抖动峰值角诊断 | 2-5min | `--seeds=... --variant=0,1` |
+| `pnpm sweep:tilt` | `sweep/tilt-stats.ts` | 倾斜骰子概率分布统计 | 1-3min | `--trials=N`（默认 200） |
+
+**共享基础设施**（`sweep/lib/`）：
+- `log.ts`：`createLogger(name)` → 返回 `Logger`，日志写入 `logs/<name>-<timestamp>.ndjson`，使用 `appendFileSync` 逐条追加防崩溃丢失，同时生成 `.summary.txt`
+- `run-trial.ts`：`runTrial(config)` 完整执行一次投掷试验（创建世界→投掷→步进→停稳→读数→销毁），返回 `TrialResult`（seed、settlePath、settleTime、tiltCount、faces 等）；`parseArgs()` 解析 `--key=value` CLI 参数
+
+日志输出到 `logs/` 目录（已在 `.gitignore` 中），`vitest.config.ts` 的 `exclude` 已包含 `sweep/**`。
 
 ## 实现优先级
 
