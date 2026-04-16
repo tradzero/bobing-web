@@ -1,6 +1,7 @@
 import * as CANNON from 'cannon-es'
 import { PHYSICS } from '@/config/physics'
 import { diceMaterial } from '@/physics/materials'
+import { createChamferedCubeHull } from './chamfer'
 
 /** 碰撞体形状模式 */
 export type ShapeMode = 'box' | 'chamfer'
@@ -32,9 +33,9 @@ export const FACE_NORMALS: { normal: CANNON.Vec3; value: number }[] = [
  */
 export function createDiceBody(opts?: DiceBodyOptions): CANNON.Body {
   const hs = opts?.halfSize ?? PHYSICS.diceHalfSize
-  const _shapeMode = opts?.shapeMode ?? 'box'
-  // chamferRatio 预留给 Step 2，当前未使用
-  // const chamferRatio = opts?.chamferRatio ?? PHYSICS.diceChamferRatio ?? 0
+  const chamferRatio = opts?.chamferRatio ?? PHYSICS.diceChamferRatio
+  // diceChamferRatio > 0 时默认走 chamfer，显式传入 shapeMode 可覆盖
+  const _shapeMode = opts?.shapeMode ?? (chamferRatio > 0 ? 'chamfer' : 'box')
 
   const body = new CANNON.Body({
     mass: PHYSICS.diceMass,
@@ -46,11 +47,14 @@ export function createDiceBody(opts?: DiceBodyOptions): CANNON.Body {
     sleepTimeLimit: PHYSICS.diceSleepTimeLimit,
   })
 
-  // 当前仅支持 box，chamfer 分支在 Step 2 实现
-  if (_shapeMode === 'box') {
-    body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+  if (_shapeMode === 'chamfer') {
+    // 截角立方体凸包碰撞体
+    const chamfer = hs * chamferRatio
+    const { vertices, faces } = createChamferedCubeHull(hs, chamfer)
+    const verts = vertices.map(v => new CANNON.Vec3(v[0], v[1], v[2]))
+    body.addShape(new CANNON.ConvexPolyhedron({ vertices: verts, faces }))
   } else {
-    throw new Error(`shapeMode '${_shapeMode}' is not implemented yet (Step 2)`)
+    body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
   }
 
   return body

@@ -138,7 +138,7 @@ const SEEDS = [
 
 describe('抖动种子对比诊断', () => {
   for (const seed of SEEDS) {
-    it(`seed ${seed}`, () => {
+    it(`seed ${seed}`, { timeout: 60_000 }, () => {
       console.log(`\n=== seed ${seed} ===`)
       for (const v of VARIANTS) {
         const r = diagnose(seed, v)

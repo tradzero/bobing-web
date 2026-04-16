@@ -218,10 +218,10 @@
 
 ### Step 2：碰撞体替换
 
-- [ ] 2.1 [实现] `dice-body.ts` 中 `createDiceBody()` 新增 chamfer 分支：当 `shapeMode='chamfer'` 时调用 `createChamferedCubeHull()` 构建 `ConvexPolyhedron` 并 addShape
-- [ ] 2.2 [实现] 默认 shapeMode 改为 `'chamfer'`（`diceChamferRatio > 0` 时自动选择）
-- [ ] 2.3 [测试] 点数读取不受影响：复用 `read-face.test.ts` 24 个合法朝向 + 扰动样本全部通过
-- [ ] 2.4 [测试] 全量测试通过，无回归
+- [x] 2.1 [实现] `dice-body.ts` 中 `createDiceBody()` 新增 chamfer 分支：当 `shapeMode='chamfer'` 时调用 `createChamferedCubeHull()` 构建 `ConvexPolyhedron` 并 addShape
+- [x] 2.2 [实现] 默认 shapeMode 改为 `'chamfer'`（`diceChamferRatio > 0` 时自动选择）
+- [x] 2.3 [测试] 点数读取不受影响：复用 `read-face.test.ts` 24 个合法朝向 + 扰动样本全部通过
+- [x] 2.4 [测试] 全量测试通过，无回归
 
 ### Step 3：视觉网格对齐
 

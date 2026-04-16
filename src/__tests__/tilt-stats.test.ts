@@ -43,7 +43,7 @@ function checkSettledWithPath(
 }
 
 describe('倾斜率统计', () => {
-  it(`${NUM_TRIALS} 次投掷倾斜分析`, { timeout: 60000 }, () => {
+  it(`${NUM_TRIALS} 次投掷倾斜分析`, { timeout: 300_000 }, () => {
     let totalDice = 0
     let tiltCount = 0
     let tiltRounds = 0

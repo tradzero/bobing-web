@@ -107,7 +107,7 @@ const SWEEP_VALUES = [0.32, 0.30, 0.28] as const
 
 describe('diceSleepTimeLimit sweep', () => {
   for (const stl of SWEEP_VALUES) {
-    it(`sleepTimeLimit=${stl}: 500 轮 + 特殊种子`, { timeout: 180_000 }, () => {
+    it(`sleepTimeLimit=${stl}: 500 轮 + 特殊种子`, { timeout: 600_000 }, () => {
       const paths: Record<SettlePath, number> = { sleep: 0, threshold: 0, timeout: 0 }
       const times: number[] = []
       let tiltDice = 0

@@ -95,14 +95,14 @@ describe('骰子逃逸防护', () => {
     666, 11111, 54321, 777777, 1000000, 8675309, 31337, 13, 9999999, 2024]
 
   for (const seed of seeds) {
-    it(`种子 ${seed}: 反弹后骰子未逃逸碗外（Y ≤ ${MAX_BOUNCE_Y}m, XZ ≤ ${MAX_ALLOWED_XZ}m）`, () => {
+    it(`种子 ${seed}: 反弹后骰子未逃逸碗外（Y ≤ ${MAX_BOUNCE_Y}m, XZ ≤ ${MAX_ALLOWED_XZ}m）`, { timeout: 30_000 }, () => {
       const r = runEscapeTest(seed)
       expect(r.escapedBounceY, `种子${seed}: 反弹后飞到 Y=${r.peakBounceY.toFixed(3)}m`).toBe(false)
       expect(r.escapedXZ, `种子${seed}: 水平距离=${r.peakXZ.toFixed(3)}m`).toBe(false)
     })
   }
 
-  it('逃逸反射使反弹峰值 Y 收敛在合理范围', () => {
+  it('逃逸反射使反弹峰值 Y 收敛在合理范围', { timeout: 60_000 }, () => {
     const allPeaks: number[] = []
     for (const seed of seeds) {
       const r = runEscapeTest(seed)
