@@ -50,8 +50,7 @@ export function createDiceBody(opts?: DiceBodyOptions): CANNON.Body {
   if (_shapeMode === 'box') {
     body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
   } else {
-    // Step 2: chamfer 分支占位
-    body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+    throw new Error(`shapeMode '${_shapeMode}' is not implemented yet (Step 2)`)
   }
 
   return body

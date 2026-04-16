@@ -202,7 +202,7 @@
 - [x] 0.3 [实现] `create.ts` 中 `createDice()` 改为调用 `createDiceBody()` 获取 body，不再手写 Body 构造 + addShape
 - [x] 0.4 [实现] 替换 13 个测试文件中骰子尺寸（halfSize = PHYSICS.diceHalfSize）的 `new CANNON.Body(…) + addShape(Box)` 为 `createDiceBody()`；保留 `engine-timing.test.ts` 和 `throw-invariants.test.ts` 中 0.02 尺寸的特殊夹具不动
 - [x] 0.5 [测试] 全量测试通过（302 tests），无回归
-- [x] 0.6 [验收] `grep "addShape.*Box" src/dice/` → 仅 `dice-body.ts` 内 shapeMode='box' 分支
+- [x] 0.6 [验收] `grep "addShape.*Box" src/dice/` → 仅 `dice-body.ts` 内 box 分支（chamfer 占位为 throw Error）
 - [x] 0.7 [验收] `grep "addShape.*Box" src/__tests__/` → 仅 `engine-timing.test.ts` 和 `throw-invariants.test.ts` 的 0.02 夹具
 
 ### Step 1：截角立方体凸包几何生成

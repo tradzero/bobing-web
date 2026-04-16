@@ -4,6 +4,7 @@ import * as CANNON from 'cannon-es'
 import { initThrowBody, throwDice } from '@/dice/throw'
 import { THROW } from '@/config/throw'
 import { PHYSICS } from '@/config/physics'
+import { createDiceBody } from '@/dice/dice-body'
 import { setRandom, resetRandom } from '@/utils/random'
 
 /**
@@ -108,10 +109,8 @@ describe('批量投掷初始间距', () => {
   }
 
   function makeDicePairs() {
-    const hs = PHYSICS.diceHalfSize
     return Array.from({ length: 6 }, () => {
-      const body = new CANNON.Body({ mass: PHYSICS.diceMass })
-      body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))
+      const body = createDiceBody()
       const mesh = {} as any // 仅需 body
       return { mesh, body }
     })
