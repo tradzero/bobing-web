@@ -25,6 +25,10 @@ export interface TrialConfig {
   diceDiceRestitution?: number
   /** 覆盖 sleepTimeLimit */
   sleepTimeLimit?: number
+  /** 覆盖线性阻尼 */
+  linearDamping?: number
+  /** 覆盖角阻尼 */
+  angularDamping?: number
   /** 每帧回调（用于自定义追踪，如 peak 倾角） */
   onFrame?: (frame: number, time: number, bodies: CANNON.Body[]) => void
 }
@@ -49,6 +53,8 @@ export function runTrial(config: TrialConfig): TrialResult {
     diceDiceFriction,
     diceDiceRestitution,
     sleepTimeLimit,
+    linearDamping,
+    angularDamping,
     onFrame,
   } = config
 
@@ -73,6 +79,8 @@ export function runTrial(config: TrialConfig): TrialResult {
   const dicePairs = Array.from({ length: 6 }, () => {
     const body = createDiceBody(shapeMode ? { shapeMode } : undefined)
     if (sleepTimeLimit !== undefined) body.sleepTimeLimit = sleepTimeLimit
+    if (linearDamping !== undefined) body.linearDamping = linearDamping
+    if (angularDamping !== undefined) body.angularDamping = angularDamping
     world.addBody(body)
     return { mesh: {} as any, body }
   })

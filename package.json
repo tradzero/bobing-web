@@ -14,7 +14,8 @@
     "sweep:sleep": "vite-node sweep/sleep-sweep.ts",
     "sweep:timeout": "vite-node sweep/timeout-risk.ts",
     "sweep:jitter": "vite-node sweep/jitter-diagnose.ts",
-    "sweep:tilt": "vite-node sweep/tilt-stats.ts"
+    "sweep:tilt": "vite-node sweep/tilt-stats.ts",
+    "sweep:bench": "vite-node sweep/shape-bench.ts"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
