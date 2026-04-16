@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import * as CANNON from 'cannon-es'
 import { PHYSICS } from '@/config/physics'
 import { createDiceBody } from './dice-body'
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 
 // 从 dice-body.ts 重新导出，保持现有外部导入路径兼容
 export { FACE_NORMALS } from './dice-body'
@@ -149,7 +150,10 @@ export function createDice(): DicePair {
       }),
   )
 
-  const geometry = new THREE.BoxGeometry(hs * 2, hs * 2, hs * 2)
+  // 视觉网格：RoundedBoxGeometry 对齐物理截角凸包
+  // segments=2 足够圆角表现，radius 对齐 chamfer 比例
+  const chamferRadius = hs * PHYSICS.diceChamferRatio
+  const geometry = new RoundedBoxGeometry(hs * 2, hs * 2, hs * 2, 2, chamferRadius)
   const mesh = new THREE.Mesh(geometry, materials)
   mesh.castShadow = true
   mesh.receiveShadow = false

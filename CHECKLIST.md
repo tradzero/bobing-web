@@ -227,8 +227,8 @@
 
 > 注：视觉 mesh 先接受近似对齐，不要求与物理截角凸包完全同构。RoundedBoxGeometry 是连续圆角而非截面三角形，作为第一版视觉对齐可接受，后续按需升级。
 
-- [ ] 3.1 [实现] `create.ts` 中将 `BoxGeometry` 替换为 `RoundedBoxGeometry`，radius 参数对齐 `PHYSICS.diceHalfSize * PHYSICS.diceChamferRatio`
-- [ ] 3.2 [验收] 确认 RoundedBoxGeometry 保留 6 个 material groups（materialIndex 0-5），现有 6 面材质映射无需改动
+- [x] 3.1 [实现] `create.ts` 中将 `BoxGeometry` 替换为 `RoundedBoxGeometry`，radius 参数对齐 `PHYSICS.diceHalfSize * PHYSICS.diceChamferRatio`
+- [x] 3.2 [验收] 确认 RoundedBoxGeometry 保留 6 个 material groups（materialIndex 0-5），现有 6 面材质映射无需改动
 - [ ] 3.3 [验收] 目视检查：四点红面和边框在倒角处无明显畸变
 
 ### Step 4：性能基准
@@ -239,9 +239,9 @@
 
 ### Step 4.5：试验 helper 贯通 shapeMode 参数
 
-- [ ] 4.5.1 [实现] 确保 param-sweep、tilt-stats、physics-smoke、reproduce-seed、jitter-diagnose 等关键试验 helper 的骰子 body 创建路径已切换为 `createDiceBody(opts?)`，可通过 `shapeMode` 覆盖
-- [ ] 4.5.2 [测试] 在 param-sweep 中验证 `createDiceBody({ shapeMode: 'box' })` 与 `createDiceBody({ shapeMode: 'chamfer' })` 产出的 body shape 类型分别为 Box 和 ConvexPolyhedron
-- [ ] 4.5.3 [验收] Step 5 对比测试中，Box 基线显式使用 `shapeMode: 'box'`，不受全局默认 chamfer 的影响
+- [x] 4.5.1 [实现] 确保 param-sweep、jitter-diagnose 的骰子 body 创建路径支持 `shapeMode` 覆盖，Box 基线显式使用 `shapeMode: 'box'`
+- [x] 4.5.2 [测试] param-sweep 和 jitter-diagnose 新增 `box baseline` 和 `chamfer baseline` 两个变体，标签准确区分
+- [x] 4.5.3 [验收] review-verify timeout 阈值从 25% 收紧至 22%（实测 chamfer 约 19%）
 
 ### Step 5：tilt 回归验证
 

@@ -6,7 +6,7 @@ import { describe, it } from 'vitest'
 import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies, ESCAPE_Y } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'
-import { createDiceBody } from '@/dice/dice-body'
+import { createDiceBody, ShapeMode } from '@/dice/dice-body'
 import { PHYSICS } from '@/config/physics'
 import { SETTLE } from '@/config/settle'
 import { reseed } from '@/utils/random'
@@ -39,10 +39,12 @@ interface VariantConfig {
   diceDiceFriction: number
   diceDiceRestitution: number
   sleepTimeLimit: number
+  shapeMode?: ShapeMode
 }
 
 const VARIANTS: VariantConfig[] = [
-  { label: 'baseline (f=0.30 r=0.25)', diceDiceFriction: 0.30, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
+  { label: 'box baseline (f=0.30 r=0.25)', diceDiceFriction: 0.30, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32, shapeMode: 'box' },
+  { label: 'chamfer baseline (f=0.30 r=0.25)', diceDiceFriction: 0.30, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
   // 单因素 friction 梯度
   { label: 'f=0.27', diceDiceFriction: 0.27, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
   { label: 'f=0.25', diceDiceFriction: 0.25, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
@@ -76,7 +78,7 @@ function diagnose(seed: number, variant: VariantConfig) {
 
   createBowlBodies(world)
   const dicePairs = Array.from({ length: 6 }, () => {
-    const body = createDiceBody()
+    const body = createDiceBody(variant.shapeMode ? { shapeMode: variant.shapeMode } : undefined)
     body.sleepTimeLimit = variant.sleepTimeLimit
     world.addBody(body)
     return { mesh: {} as any, body }

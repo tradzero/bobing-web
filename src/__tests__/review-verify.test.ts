@@ -120,8 +120,8 @@ describe('问题1: timeout 风险验证', () => {
     }
     console.log(`${'='.repeat(60)}`)
 
-    // 断言: timeout 率不应过高（chamfer 凸包结算较慢，Step 5 调参后收紧）
-    expect(paths.timeout / N, `timeout 率 ${(paths.timeout / N * 100).toFixed(1)}% 超过 25%`).toBeLessThan(0.25)
+    // 断言: timeout 率不应过高（chamfer 凸包结算较慢，实测约 19%，阈值 22%）
+    expect(paths.timeout / N, `timeout 率 ${(paths.timeout / N * 100).toFixed(1)}% 超过 22%`).toBeLessThan(0.22)
   })
 })
 

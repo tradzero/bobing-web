@@ -6,7 +6,7 @@ import { describe, it } from 'vitest'
 import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies, ESCAPE_Y } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'
-import { createDiceBody } from '@/dice/dice-body'
+import { createDiceBody, ShapeMode } from '@/dice/dice-body'
 import { PHYSICS } from '@/config/physics'
 import { SETTLE } from '@/config/settle'
 import { reseed } from '@/utils/random'
@@ -18,10 +18,12 @@ interface Variant {
   label: string
   friction: number
   restitution: number
+  shapeMode?: ShapeMode
 }
 
 const VARIANTS: Variant[] = [
-  { label: 'baseline (f=0.30 r=0.25)', friction: 0.30, restitution: 0.25 },
+  { label: 'box baseline (f=0.30 r=0.25)', friction: 0.30, restitution: 0.25, shapeMode: 'box' },
+  { label: 'chamfer baseline (f=0.30 r=0.25)', friction: 0.30, restitution: 0.25 },
   { label: 'f=0.22 only', friction: 0.22, restitution: 0.25 },
   { label: 'r=0.20 only', friction: 0.30, restitution: 0.20 },
   { label: 'f=0.27 r=0.20', friction: 0.27, restitution: 0.20 },
@@ -53,7 +55,7 @@ function runTrial(seed: number, v: Variant): TrialResult {
 
   createBowlBodies(world)
   const dicePairs = Array.from({ length: 6 }, () => {
-    const body = createDiceBody()
+    const body = createDiceBody(v.shapeMode ? { shapeMode: v.shapeMode } : undefined)
     world.addBody(body)
     return { mesh: {} as any, body }
   })
