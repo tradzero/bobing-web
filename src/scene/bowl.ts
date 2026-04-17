@@ -12,6 +12,91 @@ const SEGMENTS = 48
 /** 碗口圆角翻边采样点数 */
 const RIM_ARC_STEPS = 4
 
+function createBowlPatternTexture(): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null
+
+  const canvas = document.createElement('canvas')
+  canvas.width = 2048
+  canvas.height = 512
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  // 先铺一层接近瓷白的底色，再在外壁对应的 UV 带绘制占位青花纹样。
+  ctx.fillStyle = '#fbf8f2'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  const stripeColor = '#2a5f93'
+  const motifColor = '#255789'
+  const softColor = 'rgba(46, 97, 148, 0.18)'
+
+  ctx.strokeStyle = stripeColor
+  ctx.lineWidth = 6
+  ctx.beginPath()
+  ctx.moveTo(0, 54)
+  ctx.lineTo(canvas.width, 54)
+  ctx.moveTo(0, 76)
+  ctx.lineTo(canvas.width, 76)
+  ctx.moveTo(0, 116)
+  ctx.lineTo(canvas.width, 116)
+  ctx.moveTo(0, 134)
+  ctx.lineTo(canvas.width, 134)
+  ctx.stroke()
+
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.moveTo(0, 196)
+  ctx.lineTo(canvas.width, 196)
+  ctx.moveTo(0, 302)
+  ctx.lineTo(canvas.width, 302)
+  ctx.stroke()
+
+  // 中段主纹样采用循环团花占位，保证左右拼接时 seam 不会突兀。
+  for (let x = -192; x <= canvas.width + 192; x += 256) {
+    ctx.strokeStyle = motifColor
+    ctx.lineWidth = 5
+    ctx.beginPath()
+    ctx.arc(x, 248, 44, 0, Math.PI * 2)
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.moveTo(x - 26, 248)
+    ctx.quadraticCurveTo(x, 216, x + 26, 248)
+    ctx.quadraticCurveTo(x, 280, x - 26, 248)
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.moveTo(x, 204)
+    ctx.quadraticCurveTo(x + 18, 228, x, 248)
+    ctx.quadraticCurveTo(x - 18, 228, x, 204)
+    ctx.moveTo(x, 292)
+    ctx.quadraticCurveTo(x + 18, 268, x, 248)
+    ctx.quadraticCurveTo(x - 18, 268, x, 292)
+    ctx.stroke()
+
+    ctx.fillStyle = softColor
+    ctx.beginPath()
+    ctx.arc(x, 248, 12, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  // 靠近碗口再叠一层连续卷草边饰，后续正式素材可直接替换这一段。
+  ctx.strokeStyle = motifColor
+  ctx.lineWidth = 4
+  for (let x = -160; x <= canvas.width + 160; x += 160) {
+    ctx.beginPath()
+    ctx.moveTo(x, 156)
+    ctx.quadraticCurveTo(x + 40, 138, x + 80, 156)
+    ctx.quadraticCurveTo(x + 120, 174, x + 160, 156)
+    ctx.stroke()
+  }
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.flipY = false
+  return texture
+}
+
 /**
  * 生成碗截面完整轮廓点列（外壁 → 碗口圆角翻边 → 内壁）
  * createBowl 直接消费此数组构建 LatheGeometry，T7 也引用同一函数校验
@@ -63,21 +148,23 @@ export function generateBowlProfile(): THREE.Vector2[] {
  */
 export function createBowl(): THREE.Group {
   const points = generateBowlProfile()
+  const bowlPattern = createBowlPatternTexture()
 
   // 128 圆周分段消除俯视棱线和摩尔纹，碗仅一个，性能可忽略
   const geometry = new THREE.LatheGeometry(points, 128)
-  // 白瓷釉面：MeshPhysicalMaterial + clearcoat 模拟瓷釉层
-  const material = new THREE.MeshPhysicalMaterial({
-    color: 0xf8f4ef,
-    roughness: 0.18,
+  // 白瓷釉面：继续用单色占位，但把釉感和层次做得更明显，强化海碗存在感。
+  const wallMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0xf7f3ee,
+    map: bowlPattern ?? undefined,
+    roughness: 0.12,
     metalness: 0.02,
-    envMapIntensity: 0.8,
+    envMapIntensity: 1.0,
     clearcoat: 1.0,
-    clearcoatRoughness: 0.05,
+    clearcoatRoughness: 0.03,
     side: THREE.DoubleSide,
   })
-  const mesh = new THREE.Mesh(geometry, material)
-  mesh.castShadow = false
+  const mesh = new THREE.Mesh(geometry, wallMaterial)
+  mesh.castShadow = true
   mesh.receiveShadow = true
 
   // 独立底盖：最小遮缝策略，从上方微量盖住 Lathe 末端边缘
@@ -86,7 +173,15 @@ export function createBowl(): THREE.Group {
   const CAP_R_EXPAND = 0.001   // 半径外扩，仅遮缝不暴露底盖
   const CAP_Y_LIFT   = 0.0001  // 微量上浮，从上方盖住接缝避免透出桌面
   const capGeo = new THREE.CircleGeometry(lastPoint.x + CAP_R_EXPAND, 128)
-  const cap = new THREE.Mesh(capGeo, material)
+  const capMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0xfdf8f1,
+    roughness: 0.08,
+    metalness: 0.01,
+    envMapIntensity: 1.05,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.02,
+  })
+  const cap = new THREE.Mesh(capGeo, capMaterial)
   // CircleGeometry 默认面朝 +Z，旋转到 XZ 平面使法线朝 +Y（碗内侧）
   cap.rotation.x = -Math.PI / 2
   cap.position.y = lastPoint.y + CAP_Y_LIFT

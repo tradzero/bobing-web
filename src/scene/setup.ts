@@ -9,8 +9,8 @@ export interface SceneContext {
   dispose: () => void
 }
 
-/** 桌面端默认机位 */
-const DESKTOP_PRESET = { position: [0, 6, 5] as [number, number, number], fov: 45 }
+/** 桌面端默认机位：相对移动端保留俯视感，但再拉近一点聚焦碗区 */
+const DESKTOP_PRESET = { position: [0, 4.6, 4.4] as [number, number, number], fov: 30 }
 /** 移动竖屏默认机位：拉近碗区域 */
 const MOBILE_PORTRAIT_PRESET = { position: [0, 4.0, 3.2] as [number, number, number], fov: 45 }
 

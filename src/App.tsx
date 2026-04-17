@@ -9,41 +9,66 @@ import { SoundToggle } from '@/ui/components/SoundToggle'
 import { ResetButton } from '@/ui/components/ResetButton'
 import { RoundDisplay } from '@/ui/components/RoundDisplay'
 import { TiltWarning } from '@/ui/components/TiltWarning'
-import { MobileBottomSheet } from '@/ui/components/MobileBottomSheet'
+import { useGameStore } from '@/ui/components/GameStoreContext'
+import { Prize } from '@/rules/types'
 
-function App() {
+const DISPLAY_PRIZES = Object.values(Prize).filter((prize) => prize !== Prize.None)
+
+export function GameOverlay() {
+  const phase = useGameStore((s) => s.phase)
+  const history = useGameStore((s) => s.history)
+  const prizeRecord = useGameStore((s) => s.prizeRecord)
+
+  const hasSettlement = phase === 'result' || phase === 'tilt-confirm'
+  const hasPrizeRecord = DISPLAY_PRIZES.some((prize) => (prizeRecord[prize] ?? 0) > 0)
+  const hasPanelContent = hasPrizeRecord || history.length > 0
+  const showContentPeek = !hasSettlement && !hasPanelContent
+
   return (
-    <GameViewport>
-      <div className="game-overlay">
-        {/* 顶部栏 */}
-        <div className="top-bar">
-          <div className="top-bar-start">
-            <div className="top-bar-brand">中秋博饼</div>
-            <RoundDisplay />
+    <div className="game-overlay">
+      {/* 顶部栏 */}
+      <div className="top-bar">
+        <div className="top-bar-start">
+          <div className="top-bar-brand">中秋博饼</div>
+          <RoundDisplay />
+        </div>
+        <div className="top-actions">
+          <SoundToggle />
+          <ResetButton />
+        </div>
+      </div>
+
+      <div className="mobile-dock">
+        {/* 底部操作区 */}
+        <div className="bottom-area">
+          <div className="settlement-slot">
+            <TiltWarning />
+            <ResultPanel />
           </div>
-          <div className="top-actions">
-            <SoundToggle />
-            <ResetButton />
-          </div>
+          <ThrowButton />
+          {showContentPeek && (
+            <div className="content-peek" role="note">
+              <span className="content-peek-label">记录区将在此展开</span>
+            </div>
+          )}
         </div>
 
-        <div className="mobile-dock">
-          {/* 右侧面板 */}
+        {/* 右侧面板 */}
+        {hasPanelContent && (
           <div className="side-panel">
             <PrizeRecord />
             <History />
           </div>
-
-          {/* 底部操作区 */}
-          <div className="bottom-area">
-            <MobileBottomSheet>
-              <TiltWarning />
-              <ResultPanel />
-            </MobileBottomSheet>
-            <ThrowButton />
-          </div>
-        </div>
+        )}
       </div>
+    </div>
+  )
+}
+
+function App() {
+  return (
+    <GameViewport>
+      <GameOverlay />
     </GameViewport>
   )
 }

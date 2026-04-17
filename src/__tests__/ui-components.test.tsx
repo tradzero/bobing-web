@@ -13,6 +13,7 @@ import { PrizeRecord } from '@/ui/components/PrizeRecord'
 import { RoundDisplay } from '@/ui/components/RoundDisplay'
 import { SoundToggle } from '@/ui/components/SoundToggle'
 import { TiltWarning } from '@/ui/components/TiltWarning'
+import { GameOverlay } from '@/App'
 import { Prize } from '@/rules/types'
 import type { ReactNode } from 'react'
 
@@ -192,20 +193,20 @@ describe('RoundDisplay', () => {
 describe('SoundToggle', () => {
   it('默认显示开启图标和 title', () => {
     render(<SoundToggle />, { wrapper: Wrapper })
-    const btn = screen.getByTitle('关闭音效')
-    expect(btn).toHaveTextContent('🔊')
+    const btn = screen.getByRole('button', { name: '关闭音效' })
+    expect(btn.querySelector('.btn-icon-glyph-sound.is-on')).not.toBeNull()
   })
 
   it('关闭后显示静音图标和 title', () => {
     act(() => store.getState().toggleSound())
     render(<SoundToggle />, { wrapper: Wrapper })
-    const btn = screen.getByTitle('开启音效')
-    expect(btn).toHaveTextContent('🔇')
+    const btn = screen.getByRole('button', { name: '开启音效' })
+    expect(btn.querySelector('.btn-icon-glyph-sound.is-off')).not.toBeNull()
   })
 
   it('点击调用 controller.toggleSound', async () => {
     render(<SoundToggle />, { wrapper: Wrapper })
-    await userEvent.click(screen.getByTitle('关闭音效'))
+    await userEvent.click(screen.getByRole('button', { name: '关闭音效' }))
     expect(mockCtrl.toggleSound).toHaveBeenCalledOnce()
   })
 })
@@ -235,6 +236,36 @@ describe('History', () => {
     expect(screen.getByText('历史记录')).toBeInTheDocument()
     expect(screen.getByText('第1轮')).toBeInTheDocument()
     expect(screen.getByText('三红')).toBeInTheDocument()
+  })
+})
+
+describe('GameOverlay', () => {
+  it('初始态显示内容区提示边且不渲染侧栏', () => {
+    const { container } = render(<GameOverlay />, { wrapper: Wrapper })
+
+    expect(screen.getByText('记录区将在此展开')).toBeInTheDocument()
+    expect(container.querySelector('.side-panel')).toBeNull()
+  })
+
+  it('首轮结算后隐藏提示边并渲染侧栏', () => {
+    act(() => {
+      store.getState().setResult({
+        diceValues: [4, 1, 2, 3, 5, 6],
+        result: {
+          prize: Prize.YiXiu,
+          priority: 12,
+          carryScore: 17,
+          matchedDice: [4],
+          remainDice: [1, 2, 3, 5, 6],
+          description: '一秀 带17',
+        },
+      })
+    })
+
+    const { container } = render(<GameOverlay />, { wrapper: Wrapper })
+
+    expect(screen.queryByText('记录区将在此展开')).toBeNull()
+    expect(container.querySelector('.side-panel')).not.toBeNull()
   })
 })
 
