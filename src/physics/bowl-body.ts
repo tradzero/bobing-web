@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es'
-import { bowlMaterial, tableMaterial } from './materials'
+import { bowlFloorMaterial, bowlWallMaterial, tableMaterial } from './materials'
 import {
   BOWL_RADIUS,
   bowlInnerHeight,
@@ -10,7 +10,7 @@ import {
 // 从共享模块 re-export，保持测试导入路径不变
 export { BOWL_RADIUS, BOWL_HEIGHT } from '@/config/bowl'
 
-/** Heightfield 每边网格点数（51：elementSize≈0.048m，骰子底面覆盖~5格，减少三角面棱线微弹跳） */
+/** Heightfield 每边网格点数（51：elementSize≈0.052m，骰子底面覆盖约 4.6~5 格，减少三角面棱线微弹跳） */
 export const HF_GRID_SIZE = 51
 /** 挡墙片数 */
 export const WALL_COUNT = 16
@@ -91,7 +91,7 @@ export function createBowlBodies(world: CANNON.World): BowlBodies {
 
   const bottom = new CANNON.Body({
     mass: 0,
-    material: bowlMaterial,
+    material: bowlFloorMaterial,
   })
   bottom.addShape(hfShape)
 
@@ -120,7 +120,7 @@ export function createBowlBodies(world: CANNON.World): BowlBodies {
 
     const wall = new CANNON.Body({
       mass: 0,
-      material: bowlMaterial,
+      material: bowlWallMaterial,
       position: new CANNON.Vec3(x, wallCenterY, z),
     })
 

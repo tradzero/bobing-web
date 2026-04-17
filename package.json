@@ -15,7 +15,13 @@
     "sweep:timeout": "vite-node sweep/timeout-risk.ts",
     "sweep:jitter": "vite-node sweep/jitter-diagnose.ts",
     "sweep:tilt": "vite-node sweep/tilt-stats.ts",
-    "sweep:bench": "vite-node sweep/shape-bench.ts"
+    "sweep:bench": "vite-node sweep/shape-bench.ts",
+    "sweep:contact-eq": "vite-node sweep/contact-equation-sweep.ts",
+    "sweep:contact-grid": "vite-node sweep/contact-equation-grid.ts",
+    "sweep:contact-validate": "vite-node sweep/contact-equation-validate.ts",
+    "sweep:solver-ab": "vite-node sweep/solver-ab.ts",
+    "sweep:parallel": "node scripts/run-sweeps.mjs",
+    "sweep:parallel:core": "node scripts/run-sweeps.mjs sleep timeout tilt"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",

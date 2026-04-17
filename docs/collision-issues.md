@@ -1,6 +1,8 @@
 # 碗碰撞体问题诊断与修复方案
 
 > 最后更新：2026-04-14
+>
+> 状态更新（2026-04-17）：当前运行时已采用 `HF_GRID_SIZE=51` 的 Heightfield 碗底，并使用 `bowlFloorMaterial` / `bowlWallMaterial` 分离碗底与挡墙材质。下文中关于 30×30 网格或 `bowlMaterial` 复用的内容，属于当时的设计估算或历史记录。
 
 ## 现象
 
@@ -67,7 +69,7 @@
 
 **1. Heightfield 碗底**
 
-- 网格大小：约 30×30，`elementSize` 覆盖碗口直径（~2.4m / 30 ≈ 0.08m 间距）
+- 初版估算：约 30×30，`elementSize` 覆盖碗口直径（~2.4m / 30 ≈ 0.08m 间距）；当前实现已提升到 `HF_GRID_SIZE=51`，`elementSize≈0.052m`
 - 高度函数：碗中心最低（y≈0），向外升高，拟合视觉碗 `bowl.ts` 的内壁曲线 `r = 1.2 * (y/0.7)^0.6 - 0.06` 的反函数
 - Heightfield position 居中，使碗中心对齐原点
 - 边缘坡度应平缓到碰撞数值稳定（初始调试目标 ~45°，最终由测试收敛），过陡部分由挡墙接管
@@ -84,7 +86,7 @@
 
 - 仍在 `bowl-body.ts` 中实现，导出同样的 `BowlBodies` 接口
 - 视觉碗 `bowl.ts`、场景、引擎等模块不受影响
-- `bowlMaterial` 和 `tableMaterial` 复用
+- 当前实现使用 `bowlFloorMaterial`、`bowlWallMaterial` 和 `tableMaterial`
 
 ### 相比离散墙片方案的优势
 

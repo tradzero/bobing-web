@@ -10,7 +10,7 @@
  * 输出: logs/jitter-diagnose-<timestamp>.ndjson + .summary.txt
  */
 import * as CANNON from 'cannon-es'
-import { runTrial, parseArgs, formatDuration } from './lib/run-trial'
+import { DEFAULT_SWEEP_CHAMFER_RATIO, runTrial, parseArgs, formatDuration } from './lib/run-trial'
 import { createLogger } from './lib/log'
 import { SETTLE } from '@/config/settle'
 import type { ShapeMode } from '@/dice/dice-body'
@@ -40,11 +40,12 @@ interface VariantConfig {
   diceDiceRestitution: number
   sleepTimeLimit: number
   shapeMode?: ShapeMode
+  chamferRatio?: number
 }
 
 const ALL_VARIANTS: VariantConfig[] = [
   { label: 'box baseline (f=0.30 r=0.25)', diceDiceFriction: 0.30, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32, shapeMode: 'box' },
-  { label: 'chamfer baseline (f=0.30 r=0.25)', diceDiceFriction: 0.30, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
+  { label: 'chamfer baseline (f=0.30 r=0.25)', diceDiceFriction: 0.30, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32, shapeMode: 'chamfer', chamferRatio: DEFAULT_SWEEP_CHAMFER_RATIO },
   { label: 'f=0.27', diceDiceFriction: 0.27, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
   { label: 'f=0.25', diceDiceFriction: 0.25, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
   { label: 'f=0.22', diceDiceFriction: 0.22, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
@@ -92,6 +93,7 @@ for (const seed of seeds) {
     const r = runTrial({
       seed,
       shapeMode: v.shapeMode,
+      chamferRatio: v.chamferRatio,
       diceDiceFriction: v.diceDiceFriction,
       diceDiceRestitution: v.diceDiceRestitution,
       sleepTimeLimit: v.sleepTimeLimit,

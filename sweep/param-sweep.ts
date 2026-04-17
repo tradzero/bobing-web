@@ -8,7 +8,7 @@
  *
  * 输出: logs/param-sweep-<timestamp>.ndjson + .summary.txt
  */
-import { runTrial, parseArgs, formatDuration, type SettlePath } from './lib/run-trial'
+import { DEFAULT_SWEEP_CHAMFER_RATIO, runTrial, parseArgs, formatDuration, type SettlePath } from './lib/run-trial'
 import { createLogger } from './lib/log'
 import type { ShapeMode } from '@/dice/dice-body'
 
@@ -17,11 +17,12 @@ interface Variant {
   friction: number
   restitution: number
   shapeMode?: ShapeMode
+  chamferRatio?: number
 }
 
 const ALL_VARIANTS: Variant[] = [
   { label: 'box baseline (f=0.30 r=0.25)', friction: 0.30, restitution: 0.25, shapeMode: 'box' },
-  { label: 'chamfer baseline (f=0.30 r=0.25)', friction: 0.30, restitution: 0.25 },
+  { label: 'chamfer baseline (f=0.30 r=0.25)', friction: 0.30, restitution: 0.25, shapeMode: 'chamfer', chamferRatio: DEFAULT_SWEEP_CHAMFER_RATIO },
   { label: 'f=0.22 only', friction: 0.22, restitution: 0.25 },
   { label: 'r=0.20 only', friction: 0.30, restitution: 0.20 },
   { label: 'f=0.27 r=0.20', friction: 0.27, restitution: 0.20 },
@@ -70,6 +71,7 @@ for (let vi = 0; vi < variants.length; vi++) {
     const r = runTrial({
       seed,
       shapeMode: v.shapeMode,
+      chamferRatio: v.chamferRatio,
       diceDiceFriction: v.friction,
       diceDiceRestitution: v.restitution,
     })
@@ -95,6 +97,7 @@ for (let vi = 0; vi < variants.length; vi++) {
     const r = runTrial({
       seed,
       shapeMode: v.shapeMode,
+      chamferRatio: v.chamferRatio,
       diceDiceFriction: v.friction,
       diceDiceRestitution: v.restitution,
     })

@@ -150,10 +150,11 @@ export function createDice(): DicePair {
       }),
   )
 
-  // 视觉网格：RoundedBoxGeometry 对齐物理截角凸包
-  // segments=2 足够圆角表现，radius 对齐 chamfer 比例
+  // 视觉网格与当前物理模式保持一致：默认 box，实验时再启用圆角近似
   const chamferRadius = hs * PHYSICS.diceChamferRatio
-  const geometry = new RoundedBoxGeometry(hs * 2, hs * 2, hs * 2, 2, chamferRadius)
+  const geometry = chamferRadius > 0
+    ? new RoundedBoxGeometry(hs * 2, hs * 2, hs * 2, 2, chamferRadius)
+    : new THREE.BoxGeometry(hs * 2, hs * 2, hs * 2)
   const mesh = new THREE.Mesh(geometry, materials)
   mesh.castShadow = true
   mesh.receiveShadow = false

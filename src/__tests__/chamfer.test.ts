@@ -10,7 +10,8 @@ import { PHYSICS } from '@/config/physics'
  */
 describe('createChamferedCubeHull', () => {
   const h = PHYSICS.diceHalfSize
-  const chamfer = h * PHYSICS.diceChamferRatio
+  // 几何 helper 测试不绑定运行时默认配置，避免默认回退 box 时丢失 chamfer 覆盖。
+  const chamfer = h * 0.15
 
   /** 计算面法线（前 3 顶点的叉积） */
   function faceNormal(vertices: number[][], face: number[]): number[] {

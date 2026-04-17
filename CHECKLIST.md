@@ -260,6 +260,63 @@
 
 ---
 
+## 阶段 1++：碗底弹跳修复（P0 补强 — 倒角凸包与离散 Heightfield 接触拓扑切换）
+
+> **根因**：倒角凸包在离散 Heightfield 上发生接触拓扑切换，表现为两类同源异常：
+> - 阶段 A（动态弹跳期）：主问题骰子在动态旋转中与离散碗底发生接触拓扑切换，出现可见大幅二次弹跳
+> - 阶段 B（尾段微振荡期）：接近静止后 ConvexPolyhedron 与 Heightfield 局部边缘效应导致角速度短促突增，反复打破 stable 窗口
+>
+> **执行约束**：
+> - 阶段 1 含 box 对照基线（用于判断修复后是否接近 box 稳定性）
+> - 阶段 2 拆材质后须插入等价性回归门（参数不变，指标不漂移）
+> - 阶段 4 HF 分辨率对比须同时记性能门槛
+> - 阶段 5 chamferRatio=0 仅作对照项，不作为默认候选修复
+>
+> **暂不前置**：solver iterations 增加、低速段主动衰减角速度、velocity clamp、diceDice restitution 大幅下调
+
+### Phase 1：建立回归基线
+
+- [x] P1.1 [实现] 新建 `sweep/bounce-baseline.ts`：固定两条回归场景（idle 初始化 + seed 1776390018022 投掷），同时跑 chamfer 和 box 对照
+- [x] P1.2 [实现] idle 场景指标：主问题骰子最大二次抬升高度、首次全部 sleep 时间、是否出现 sleep 前可见二次弹跳
+- [x] P1.3 [实现] seed 1776390018022 场景指标：frame 100 后主问题骰子最大 Y 回升、stable window 被打破次数、首次全部 sleep 时间、最大反弹高度、滚动总时长
+- [x] P1.4 [验收] 运行输出 chamfer 和 box 两组基线数据，确认指标可解释
+
+### Phase 2：拆碗底/碗壁材质
+
+- [x] P2.1 [实现] `materials.ts`：`bowlMaterial` 拆为 `bowlFloorMaterial` + `bowlWallMaterial`
+- [x] P2.2 [实现] `materials.ts`：`setupContactMaterials()` 新增 `diceFloor` 和 `diceWall` 两组 ContactMaterial，初始参数与原 `diceBowl` 完全一致
+- [x] P2.3 [实现] `bowl-body.ts`：碗底 body 改用 `bowlFloorMaterial`，挡墙 body 改用 `bowlWallMaterial`
+- [x] P2.4 [实现] `config/physics.ts`：`contact.diceBowl` 拆为 `contact.diceFloor` + `contact.diceWall`，初始值相同
+- [x] P2.5 [测试] 全量测试通过，无回归
+- [ ] P2.6 [验收] **等价性回归门**：重跑阶段 1 基线，确认所有指标无明显漂移（拆材质本身不改变行为）
+
+### Phase 3：碗底 restitution sweep
+
+- [x] P3.1 [实现] 新建 `sweep/floor-restitution-sweep.ts`：仅改碗底 restitution（0.15 / 0.08 / 0.05 / 0.02），墙面保持 0.15
+- [ ] P3.2 [验收] 同时检验：二次弹跳是否减少、首次落碗弹性感是否过死、墙面回弹是否保持原设定
+- [ ] P3.3 [验收] 选定最佳碗底 restitution 值并写入 `config/physics.ts`
+
+### Phase 4：Heightfield 分辨率对比
+
+- [x] P4.1 [实现] 新建 `sweep/hf-resolution-sweep.ts`：对比 51 / 81 / 101 三档
+- [ ] P4.2 [验收] 检验：阶段 B stable broken 次数、阶段 A 最大二次抬升、性能成本（物理步进耗时、首轮总耗时）
+- [ ] P4.3 [验收] 选定最佳 HF_GRID_SIZE 并更新 `bowl-body.ts`
+
+### Phase 5：chamferRatio sweep（如需）
+
+- [x] P5.1 [实现] 新建 `sweep/chamfer-sweep.ts`：对比 0.15 / 0.12 / 0.10 / 0（box 对照，不作为候选修复）
+- [ ] P5.2 [验收] 确认前四阶段修复是否已足够，chamferRatio=0 仅回答"是否只能靠退回 box 解决"
+- [ ] P5.3 [验收] 如需调整 chamferRatio，更新 `config/physics.ts` 并重跑全量测试
+
+### 收尾
+
+- [x] PF.1 [验收] 全量测试通过（`pnpm test`）
+- [x] PF.2 [验收] `pnpm build` 通过
+- [ ] PF.3 [验收] 连续 20 轮投掷无碗底异常弹跳
+- [ ] PF.4 [验收] 更新 `ARCHITECTURE.md` 碗碰撞体方案章节
+
+---
+
 ## 阶段三：氛围与表现（P2 — 中秋装饰 + 音效 + 视觉反馈）
 
 ### 3A 场景氛围

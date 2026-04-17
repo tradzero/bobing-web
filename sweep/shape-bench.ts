@@ -9,7 +9,7 @@ import { createDiceBody, type ShapeMode } from '@/dice/dice-body'
 import { PHYSICS } from '@/config/physics'
 import { reseed } from '@/utils/random'
 import { throwDice } from '@/dice/throw'
-import { parseArgs } from './lib/run-trial'
+import { DEFAULT_SWEEP_CHAMFER_RATIO, parseArgs } from './lib/run-trial'
 
 const args = parseArgs()
 const FRAMES = Number(args['frames'] ?? 300)
@@ -23,7 +23,11 @@ function benchRound(shapeMode: ShapeMode, frames: number): number {
   createBowlBodies(world)
 
   const dicePairs = Array.from({ length: 6 }, () => {
-    const body = createDiceBody({ shapeMode })
+    const body = createDiceBody(
+      shapeMode === 'chamfer'
+        ? { shapeMode, chamferRatio: DEFAULT_SWEEP_CHAMFER_RATIO }
+        : { shapeMode },
+    )
     world.addBody(body)
     return { mesh: {} as any, body }
   })

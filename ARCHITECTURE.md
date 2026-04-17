@@ -275,10 +275,10 @@ interface GameState {
 
 ### 骰子碰撞体
 
-默认使用截角立方体凸包（`ConvexPolyhedron` 24v/14f），替代原始 `Box`（8v/6f）锐棱碰撞体：
+当前运行时默认回退为 Box（8v/6f）；chamfer `ConvexPolyhedron`（24v/14f）仍保留在 sweep / 对照脚本中，用于继续评估物理权衡：
 
 - **倒角生成**：`dice/chamfer.ts` → `createChamferedCubeHull(halfSize, chamfer)`，每个原始顶点切出 3 个新顶点，产生 8 个三角形面 + 6 个八边形面
-- **参数**：`PHYSICS.diceChamferRatio = 0.15`（`chamfer = halfSize × ratio`），`shapeMode: 'box' | 'chamfer'` 可切换
+- **参数**：`PHYSICS.diceChamferRatio = 0`（运行时默认 box），`shapeMode: 'box' | 'chamfer'` 可切换；sweep 层独立保留 `0.15` 作为 chamfer 基线
 - **效果**：减少骰子棱边互锁导致的倾斜停稳（200-seed tilt: 2 → 0），代价是 `world.step()` 耗时约 3.2x
 - **阻尼补偿**：chamfer 圆角使骰子更易滚动，`linearDamping`/`angularDamping` 从 0.30 提升到 0.35 以补偿（timeout 率: 18% → 8%）
 - **视觉对齐**：`RoundedBoxGeometry` 连续圆角作为视觉近似，radius 对齐物理倒角参数
@@ -308,6 +308,7 @@ interface GameState {
 | `pnpm sweep:timeout` | `sweep/timeout-risk.ts` | 大批量种子的超时率统计 | 3-10min | `--seeds=N`（默认 500） |
 | `pnpm sweep:jitter` | `sweep/jitter-diagnose.ts` | 特定种子的抖动峰值角诊断 | 2-5min | `--seeds=... --variant=0,1` |
 | `pnpm sweep:tilt` | `sweep/tilt-stats.ts` | 倾斜骰子概率分布统计 | 1-3min | `--trials=N`（默认 200） |
+| `pnpm sweep:parallel -- --jobs=2 sleep timeout tilt` | `scripts/run-sweeps.mjs` | 多进程并发执行多个独立 sweep 脚本 | 取决于最长脚本 | `--jobs=N` + 任务名列表 |
 
 **共享基础设施**（`sweep/lib/`）：
 - `log.ts`：`createLogger(name)` → 返回 `Logger`，日志写入 `logs/<name>-<timestamp>.ndjson`，使用 `appendFileSync` 逐条追加防崩溃丢失，同时生成 `.summary.txt`

@@ -60,13 +60,15 @@ export function createEngine(opts: EngineOptions): Engine {
     const dt = Math.min(timer.getDelta(), 0.1) // 限制最大 delta，防止切 tab 回来物理爆炸
     elapsedTime += dt
 
-    // 1. 物理步进
-    worldStep(dt)
+    // 1. 物理步进（settle 后停止，防止 ConvexPolyhedron-Heightfield 幽灵碰撞唤醒骰子）
+    if (!settled) {
+      worldStep(dt)
 
-    // 2. 逃逸防护：骰子超过碗口高度且向上运动时反射速度，防止弹出
-    for (const { body } of dicePairs) {
-      if (body.position.y > ESCAPE_Y && body.velocity.y > 0) {
-        body.velocity.y = -body.velocity.y * 0.3
+      // 2. 逃逸防护：骰子超过碗口高度且向上运动时反射速度，防止弹出
+      for (const { body } of dicePairs) {
+        if (body.position.y > ESCAPE_Y && body.velocity.y > 0) {
+          body.velocity.y = -body.velocity.y * 0.3
+        }
       }
     }
 

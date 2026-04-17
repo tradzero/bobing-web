@@ -1,6 +1,8 @@
 # 碗底缓慢碰撞/抖动问题诊断与修复方案
 
 > 最后更新：2026-04-14（v4，碗底曲线重构方案）
+>
+> 状态更新（2026-04-17）：当前运行时已是 `HF_GRID_SIZE=51`、`elementSize≈0.052m`，并且碗底/碗壁材质已拆分为 `bowlFloorMaterial` / `bowlWallMaterial`，接触参数为 `diceFloor` / `diceWall`。文中出现的 `31×31`、`0.08m`、`diceBowl`、`bowlMaterial` 等表述，若未特别注明“初版诊断”，都不应再视为当前实现。
 
 ## 现象
 
@@ -10,7 +12,7 @@
 
 ### 1. Heightfield 三角面边缘碰撞
 
-Heightfield 由 31×31 网格构成，`elementSize = 0.08m`。骰子边长 0.24m，仅覆盖约 3 个网格单元。
+初版诊断时 Heightfield 为 31×31 网格，`elementSize = 0.08m`。当前运行时已提升到 51×51，`elementSize ≈ 0.052m`，骰子边长 0.24m 覆盖约 4.6~5 个网格单元。
 
 骰子在碗底时，底面跨越多个三角面。cannon-es 对 Box-Heightfield 碰撞的处理方式是将 Box 转为 ConvexPolyhedron，再对每个三角面做 separating-axis 检测。当骰子底面恰好跨两个三角面的**棱线**时，可能产生方向不一致的微小碰撞响应，导致骰子反复弹起一个极小高度。
 
@@ -24,13 +26,13 @@ offset=2  h=0.03667m  slope=0.274
 
 即使在最平坦的碗底中心，相邻网格点之间仍有 ~0.015m 高度差，三角面法线与水平面并非完全平行。
 
-网格单元边长 0.08m 与骰子底面 0.24m 之比仅为 1:3，三角面棱线离散感较强。
+即便提升到当前的 `elementSize ≈ 0.052m`，网格单元边长与骰子底面 0.24m 之比仍只有约 1:4.6，三角面棱线离散感只是减轻，并未被根除。
 
 ### 2. 弹性恢复系数过高
 
-当前 `diceBowl.restitution = 0.3`。对于碗底微弹跳场景，0.3 的 restitution 意味着每次碰撞后保留 ~30% 的法向速度。碗底坡度 ~0.18 产生的恢复加速度 ~1.8 m/s²，与 restitution 的能量保留叠加，使微弹跳衰减缓慢。
+当前运行时已经拆分为 `diceFloor.restitution = 0.15` 与 `diceWall.restitution = 0.15`。初版诊断里使用过统一的 `diceBowl.restitution = 0.3`，那个结论只适用于当时尚未拆材质、尚未降 restitution 的阶段。
 
-**注意**：当前碗底和挡墙共用同一个 `bowlMaterial`（见 `bowl-body.ts` 碗底 body 和挡墙 body 均使用 `bowlMaterial`），对应的接触材质为 `materials.ts` 中的 `diceBowl` ContactMaterial。修改 `diceBowl.restitution` 会**同时影响碗底和挡墙碰撞**。
+**注意**：当前碗底和挡墙已经分离。碗底使用 `bowlFloorMaterial`，挡墙使用 `bowlWallMaterial`，降低 `diceFloor.restitution` 不会再直接改变墙面回弹。
 
 ### 3. Sleep 条件过严苛
 
@@ -69,7 +71,7 @@ stableDuration:  0.5 s
 
 | 因素 | 影响 | 严重度 |
 |------|------|--------|
-| Heightfield 网格分辨率低（31×31，elementSize=0.08m） | 三角面棱线离散感强，产生微弹跳源头 | ★★★ |
+| Heightfield 离散分辨率仍有限（当前 51×51，elementSize≈0.052m） | 三角面棱线离散感仍是微弹跳源头 | ★★★ |
 | Heightfield 三角面棱线碰撞 | 法线不一致导致微碰撞响应 | ★★★ |
 | restitution 0.3 偏高（碗底+挡墙共用） | 微弹跳衰减慢 | ★★☆ |
 | sleep timeLimit 1s 过长 | 延迟进入 sleep | ★★☆ |
@@ -80,7 +82,7 @@ stableDuration:  0.5 s
 
 ### A. 提高 Heightfield 分辨率（从源头平滑三角面）
 
-将 `HF_GRID_SIZE` 从 31 提高到 51，使 `elementSize` 从 0.08m 降低到 ~0.048m。骰子底面 0.24m 可覆盖约 5 个网格单元，三角面棱线密度更高、法线过渡更平滑，直接减少棱线碰撞产生的微弹跳。
+已将 `HF_GRID_SIZE` 从 31 提高到 51，使 `elementSize` 从 0.08m 降低到约 0.052m。骰子底面 0.24m 可覆盖约 4.6~5 个网格单元，三角面棱线密度更高、法线过渡更平滑，但这一步本身不足以完全消除 chamfer 弹跳。
 
 ```ts
 // bowl-body.ts
@@ -109,13 +111,14 @@ const BLEND_RADIUS = 0.35   // 从平坦过渡到曲线的混合区外边界
 
 ### C. 降低碗体 restitution（减少微弹跳能量保留）
 
-将 `diceBowl.restitution` 从 0.3 降至 0.15。微弹跳每次只保留 ~15% 法向速度，衰减速度大幅提升。
+已将统一 `diceBowl.restitution` 拆解为 `diceFloor.restitution` / `diceWall.restitution`，当前默认均为 0.15。后续只需要单独扫 `diceFloor.restitution`，不再连带影响墙面回弹。
 
 ```ts
-diceBowl: { friction: 0.4, restitution: 0.15 }
+diceFloor: { friction: 0.28, restitution: 0.15 }
+diceWall: { friction: 0.28, restitution: 0.15 }
 ```
 
-**重要约束**：当前 `bowlMaterial` 被碗底和挡墙共用。降低 restitution 会同时影响骰子撞挡墙时的弹性。如果需要挡墙保留更高弹性感，须拆分为 `bowlBottomMaterial` + `bowlWallMaterial` 两个材质。
+**当前状态**：这个约束已经解除。碗底/碗壁分材质后，`diceFloor` 和 `diceWall` 已可独立调参。
 
 **优点**：简单直接  
 **权衡**：碗整体弹性感减弱；是否拆分材质由实际手感决定
@@ -205,7 +208,7 @@ T5: 固定种子收敛时间测试
 |------|------|----------|
 | A | `src/physics/bowl-body.ts` | `HF_GRID_SIZE` 31 → 51 |
 | B | `src/physics/bowl-body.ts` | `bowlCurveHeight` / `generateHeightfieldData` 加平坦区 + smoothstep |
-| C | `src/config/physics.ts` | `diceBowl.restitution` 0.3 → 0.15 |
+| C | `src/config/physics.ts` | `contact.diceFloor` / `contact.diceWall` 分离，默认 restitution 均为 0.15 |
 | D1 | `src/config/physics.ts` | damping 参数 |
 | D2 | `src/config/physics.ts` | sleep 参数 |
 | E | `src/config/settle.ts` | settle 阈值 + 持续时间（保守微调） |
@@ -218,7 +221,7 @@ T5: 固定种子收敛时间测试
 | 方案 | 变更 | 状态 |
 |------|------|------|
 | A (P0) | `HF_GRID_SIZE` 31 → 51 | ✅ 已实施 |
-| C (P1) | `diceBowl.restitution` 0.3 → 0.15 | ✅ 已实施 |
+| C (P1) | `contact.diceFloor` / `contact.diceWall` 分离，默认 restitution=0.15 | ✅ 已实施 |
 | D2 (P1) | `sleepSpeedLimit` 0.1→0.15, `sleepTimeLimit` 1.0→0.5 | ✅ 已实施 |
 | T5 | 纯物理收敛时间回归测试（3 seeds, <120帧限制） | ✅ 已添加 |
 | D1 | damping 0.3 → 0.5 | ❌ 不适用（所有测试值均使最差情况恶化） |
