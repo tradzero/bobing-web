@@ -3,7 +3,7 @@
 ## 技术栈
 
 | 层面 | 选型 | 版本策略 |
-|------|------|----------|
+| ---- | ---- | -------- |
 | 工程基座 | Vite + TypeScript | latest stable |
 | 包管理 | pnpm | latest stable |
 | UI 层 | React | 19.x |
@@ -11,7 +11,7 @@
 | 3D 渲染 | Three.js（原生命令式，不使用 R3F） | latest stable |
 | 物理引擎 | cannon-es（原生命令式） | latest stable |
 | 测试 | Vitest | latest stable |
-| CSS | CSS Modules + CSS Variables | — |
+| CSS | 原生 CSS 文件 + CSS Variables | — |
 
 ## 架构原则
 
@@ -24,13 +24,14 @@
 7. **核心逻辑可测试**：奖级判定、点数读取、停稳检测为纯函数/可隔离逻辑，Vitest 重点覆盖。随机数源抽为可注入接口，测试时注入确定性种子。
 8. **StrictMode 幂等**：引擎初始化和销毁必须幂等。React StrictMode 会在开发环境双调用 effect，GameViewport 的 cleanup 必须完整销毁引擎实例，重建时不产生残留。
 9. **移动端布局不引入额外 UI 状态**：移动端采用真实上下布局，结算卡仅通过 CSS 在上下分界线处做轻度侵入，不再维护 `peek / expanded / hidden` 之类的局部状态。store 只提供 `phase` 驱动 `ResultPanel / TiltWarning` 的显隐，不影响 game/controller 的业务状态机。
+10. **视觉占位先于正式素材**：当前允许用程序化木纹、程序化青花纹样等占位资源推进画面；后续替换正式素材时应通过贴图/样式替换完成，不反向改动业务流、物理结构和 UI 状态机。
 
 ## 项目结构
 
-```
+```text
 src/
 ├── main.tsx                    # 入口：仅 createRoot().render(<App />)
-├── App.tsx                     # React 根组件：overlay 组件作为 GameViewport 的 children
+├── App.tsx                     # React 根组件：GameViewport + GameOverlay（顶栏、结算区、内容 peek、侧栏）
 │
 ├── config/
 │   ├── physics.ts              # 物理参数：质量、阻尼、摩擦、弹性、步长、子步进
@@ -44,9 +45,10 @@ src/
 │   └── store.ts                # Zustand store：游戏状态 + 纯状态设置器
 │
 ├── scene/
-│   ├── setup.ts                # Three.js 场景、renderer、灯光、摄像机（不含 rAF 循环）
-│   ├── table.ts                # 桌面模型与木纹材质
-│   └── bowl.ts                 # 海碗可视模型
+│   ├── setup.ts                # Three.js 场景、renderer、灯光、摄像机预设（不含 rAF 循环）
+│   ├── table.ts                # 圆桌占位模型 + 程序化木纹/圈层；后续可叠桌布
+│   ├── bowl.ts                 # 海碗可视模型 + 程序化青花纹样占位
+│   └── decorations.ts          # 旧桌面装饰实验文件，当前未接入 GameViewport 运行时
 │
 ├── physics/
 │   ├── world.ts                # cannon-es 世界初始化、暴露 world 实例和 step 函数（不自持循环）
@@ -55,8 +57,10 @@ src/
 │
 ├── dice/
 │   ├── create.ts               # 骰子 mesh + rigid body 创建（含红四贴图）
+│   ├── dice-body.ts            # 骰子物理 body：box / chamfer 形状切换与 FACE_NORMALS
 │   ├── throw.ts                # 投掷逻辑：随机位置、速度、角速度（随机数源可注入）
 │   ├── settle.ts               # 停稳检测：纯函数，接受骰子状态返回是否停稳（不自持轮询）
+│   ├── contact-cluster-assist.ts # 尾段低速接触簇冻结辅助，减少轻碰撞反复打断 stable window
 │   └── read-face.ts            # 朝上面读取：六面法线与世界 up 向量点积
 │
 ├── rules/
@@ -74,7 +78,7 @@ src/
 │   │   ├── PrizeRecord.tsx     # 本局累计奖级记录（奖池/榜单面板）
 │   │   ├── History.tsx         # 最近 5 轮历史记录
 │   │   └── SoundToggle.tsx     # 音效开关
-│   └── styles/                 # CSS Modules 样式文件
+│   └── styles/                 # 原生 CSS 文件：global.css / variables.css / game.css
 │
 ├── audio/
 │   └── sound.ts                # 音效管理：碰撞声、中奖提示音、节流控制
@@ -98,6 +102,7 @@ src/
     ├── throw-invariants.test.ts # 投掷不变量：确定性种子结果一致性
     ├── fallback-rate.test.ts   # fallback 触发率统计
     ├── freeze-consistency.test.ts # 冻结一致性：冻结帧 vs 非冻结帧结果一致
+    ├── contact-cluster-assist.test.ts # 尾段接触簇冻结辅助逻辑
     ├── reproduce-seed.test.ts  # 关键种子复现：已知问题种子的详细诊断
     └── review-verify.test.ts   # 审查验证：高度分层、fallback 拓扑覆盖、关键种子复现
 
@@ -112,9 +117,16 @@ sweep/                          # 独立长时间运行脚本（按需手动执�
 └── tilt-stats.ts               # 倾斜统计（pnpm sweep:tilt）
 ```
 
+## 当前视觉占位策略
+
+- 运行时场景当前只接入桌面、海碗和 6 颗骰子；`scene/decorations.ts` 保留为旧实验文件，不在 `GameViewport` 中挂载。
+- 海碗外壁当前使用 `CanvasTexture` 生成程序化青花纹样占位，正式纹样素材的尺寸、比例、无缝与格式规范记录在 `UI-CHECKLIST.md`。
+- 桌面当前使用程序化木纹与环形嵌饰作为占位视觉；后续美术方向优先在现有桌体上叠加桌布，而不是继续扩展桌腿、桌裙板或独立摆件。
+- 这类视觉占位的目标是先稳定构图与层次，不改变物理世界、碰撞体和游戏状态流。
+
 ## 核心数据流
 
-```
+```text
 用户点击掷骰按钮
     │
     ▼
@@ -167,7 +179,7 @@ Engine 回调 → GameController.onSettled():
 
 ## 游戏状态机
 
-```
+```text
         throw()                        onSettled()
 IDLE ──────────▶ ROLLING ──────────────────────────▶ RESULT
   ▲                                       │            │
@@ -184,17 +196,17 @@ IDLE ──────────▶ ROLLING ───────────
 ```
 
 | Phase | UI 状态 | 引擎行为 |
-|-------|---------|----------|
+| ----- | ------- | -------- |
 | `idle` | 掷骰按钮可用，等待操作 | 骰子静止在碗中或初始位置 |
 | `rolling` | 按钮禁用，显示"骰子翻滚中" | 施加初速度 → 物理步进 → 停稳检测，全过程统一阶段 |
-| `tilt-confirm` | 按钮禁用，TiltWarning 显示（接受/重掷）| 骰子已冻结，等待用户决策 |
+| `tilt-confirm` | 按钮禁用，TiltWarning 显示（接受/重掷） | 骰子已冻结，等待用户决策 |
 | `result` | 显示结果面板，按钮恢复为"再掷一次" | 骰子静止，等待下一轮或重置 |
 
 说明：不再区分 throwing 和 settling。对 UI 来说两者表现完全一致（按钮禁用），合并为 rolling 减少边界管理复杂度。tilt-confirm 为倾斜确认态，骰子物理体已冻结，结果数据预写入 store 供 UI 预览但不提交至历史记录，等待用户选择接受或重掷。
 
 ## Zustand Store 结构（概要）
 
-```typescript
+```ts
 // 判定结果完整对象
 interface JudgeResult {
   prize: Prize              // 奖级枚举
@@ -255,7 +267,7 @@ interface GameState {
 ## 奖级优先级表（确认版）
 
 | 优先级 | 奖级 | 判定条件 | 备注 |
-|--------|------|----------|------|
+| ------ | ---- | -------- | ---- |
 | 1 | 状元插金花 | 4 个四 + 2 个一 | 最高奖 |
 | 2 | 满堂红 | 6 个四 | |
 | 3 | 遍地锦 | 6 个一 | |
@@ -296,11 +308,12 @@ interface GameState {
 ## 测试策略
 
 | 层级 | 模块 | 测试重点 | 方法 |
-|------|------|----------|------|
+| ---- | ---- | -------- | ---- |
 | 规则穷举 | `rules/judge.ts` | 46656 种有序结果全扫，每组只命中一个最高优先级，返回完整 JudgeResult | Vitest 参数化穷举 |
 | 规则示例 | `rules/judge.ts` | 全部 13 种奖级的典型用例 + 带数计算正确性 | 纯函数单测 |
 | 点数读取 | `dice/read-face.ts` | 24 个立方体合法朝向 + 近边界轻微扰动样本 | 构造已知四元数 |
 | 停稳检测 | `dice/settle.ts` | 全 sleep 直接结算、低速窗口被中断重计时、单骰未停、超时兜底、阈值抖动不提前结算 | 假时钟 + 快照序列 |
+| 接触簇辅助 | `dice/contact-cluster-assist.ts` | activationDelay、生效簇大小、簇外活跃骰子存在时不得介入、持续时间满足后冻结 | node 环境纯逻辑单测 |
 | 编排集成 | `game/controller.ts` | phase 变化正确、rolling 中二次点击被拒、rolling 中 reset 被拒、history 只保留最近 HISTORY_MAX_LENGTH 轮、reset 清理当轮+累计、sound toggle 不影响主流程 | mock dice/judge/engine |
 | 倾斜确认流程 | `game/controller.ts` + `store.ts` | onSettled 倾斜检测→tilt-confirm、35° 靠壁正常姿态不触发、pending 隔离（不写 history/prizeRecord/round）、acceptTilted 提交完整内容、rethrow 重新投掷、throw 在 tilt-confirm 被拒、reset 清空 pending、冻结一致性 | 构造已知四元数 mock DicePair，settleWithoutThrow 跳过随机投掷 |
 | 物理烟雾 | 物理层整体 | 真实 cannon-es 世界 + 碗碰撞体 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能在预期时间内结算或触发超时 | 固定种子 + 帧循环 |
@@ -312,19 +325,26 @@ interface GameState {
 长时间运行的参数扫描、统计类测试已从 vitest 套件中拆出，放在 `sweep/` 目录下作为独立 `vite-node` 脚本运行。**不要将这些脚本重新写回 `src/__tests__/` 或注册为 vitest 测试。**
 
 | 命令 | 脚本 | 用途 | 典型耗时 | CLI 参数 |
-|------|------|------|----------|----------|
+| ---- | ---- | ---- | -------- | -------- |
 | `pnpm sweep:param` | `sweep/param-sweep.ts` | box vs chamfer 多摩擦/恢复系数组合对比 | 5-30min | `--seeds=N --variant=0,1` |
 | `pnpm sweep:sleep` | `sweep/sleep-sweep.ts` | sleepTimeLimit 值对停稳路径的影响 | 2-5min | `--seeds=N --values=0.32,0.28` |
 | `pnpm sweep:timeout` | `sweep/timeout-risk.ts` | 大批量种子的超时率统计 | 3-10min | `--seeds=N`（默认 500） |
 | `pnpm sweep:jitter` | `sweep/jitter-diagnose.ts` | 特定种子的抖动峰值角诊断 | 2-5min | `--seeds=... --variant=0,1` |
 | `pnpm sweep:tilt` | `sweep/tilt-stats.ts` | 倾斜骰子概率分布统计 | 1-3min | `--trials=N`（默认 200） |
+| `pnpm sweep:bench` | `sweep/shape-bench.ts` | box / chamfer 形状性能对比基准 | 1-3min | `--steps=N --variant=0,1` |
+| `pnpm sweep:contact-eq` | `sweep/contact-equation-sweep.ts` | 接触方程参数扫描 | 3-10min | `--seeds=N --values=...` |
+| `pnpm sweep:contact-grid` | `sweep/contact-equation-grid.ts` | 接触方程参数网格搜索 | 5-20min | `--seeds=N` |
+| `pnpm sweep:contact-validate` | `sweep/contact-equation-validate.ts` | 对候选接触方程参数做复验 | 3-10min | `--seeds=N --preset=...` |
+| `pnpm sweep:solver-ab` | `sweep/solver-ab.ts` | solver 相关参数 A/B 对比 | 3-10min | `--seeds=N --variant=...` |
 | `pnpm sweep:parallel -- --jobs=2 sleep timeout tilt` | `scripts/run-sweeps.mjs` | 多进程并发执行多个独立 sweep 脚本 | 取决于最长脚本 | `--jobs=N` + 任务名列表 |
+| `pnpm sweep:parallel:core` | `scripts/run-sweeps.mjs` | 并发执行 sleep / timeout / tilt 三类核心 sweep | 取决于最长脚本 | 预设任务组合 |
 
 **共享基础设施**（`sweep/lib/`）：
+
 - `log.ts`：`createLogger(name)` → 返回 `Logger`，日志写入 `logs/<name>-<timestamp>.ndjson`，使用 `appendFileSync` 逐条追加防崩溃丢失，同时生成 `.summary.txt`
 - `run-trial.ts`：`runTrial(config)` 完整执行一次投掷试验（创建世界→投掷→步进→停稳→读数→销毁），返回 `TrialResult`（seed、settlePath、settleTime、tiltCount、faces 等）；`parseArgs()` 解析 `--key=value` CLI 参数
 
-日志输出到 `logs/` 目录（已在 `.gitignore` 中），`vitest.config.ts` 的 `exclude` 已包含 `sweep/**`。
+日志输出到 `logs/` 目录（已在 `.gitignore` 中），`vitest.config.ts` 的 `exclude` 已包含 `sweep/**`。`sweep/` 目录下还存在 `bounce-baseline.ts`、`box-tilt-200seed.ts`、`combo-sweep.ts` 等一次性或历史诊断脚本，这些文件不视为稳定命令接口。
 
 ## 实现优先级
 
