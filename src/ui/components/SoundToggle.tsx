@@ -12,7 +12,8 @@ export function SoundToggle() {
       onClick={() => ctrl.toggleSound()}
       title={soundEnabled ? '关闭音效' : '开启音效'}
     >
-      {soundEnabled ? '🔊' : '🔇'}
+      <span className="btn-icon-ring" aria-hidden="true" />
+      <span className="btn-icon-glyph">{soundEnabled ? '🔊' : '🔇'}</span>
     </button>
   )
 }

@@ -9,6 +9,7 @@ import { SoundToggle } from '@/ui/components/SoundToggle'
 import { ResetButton } from '@/ui/components/ResetButton'
 import { RoundDisplay } from '@/ui/components/RoundDisplay'
 import { TiltWarning } from '@/ui/components/TiltWarning'
+import { MobileBottomSheet } from '@/ui/components/MobileBottomSheet'
 
 function App() {
   return (
@@ -16,24 +17,31 @@ function App() {
       <div className="game-overlay">
         {/* 顶部栏 */}
         <div className="top-bar">
-          <RoundDisplay />
+          <div className="top-bar-start">
+            <div className="top-bar-brand">中秋博饼</div>
+            <RoundDisplay />
+          </div>
           <div className="top-actions">
             <SoundToggle />
             <ResetButton />
           </div>
         </div>
 
-        {/* 右侧面板 */}
-        <div className="side-panel">
-          <PrizeRecord />
-          <History />
-        </div>
+        <div className="mobile-dock">
+          {/* 右侧面板 */}
+          <div className="side-panel">
+            <PrizeRecord />
+            <History />
+          </div>
 
-        {/* 底部操作区 */}
-        <div className="bottom-area">
-          <TiltWarning />
-          <ResultPanel />
-          <ThrowButton />
+          {/* 底部操作区 */}
+          <div className="bottom-area">
+            <MobileBottomSheet>
+              <TiltWarning />
+              <ResultPanel />
+            </MobileBottomSheet>
+            <ThrowButton />
+          </div>
         </div>
       </div>
     </GameViewport>

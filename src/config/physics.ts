@@ -18,8 +18,10 @@ export const PHYSICS = {
   diceMass: 0.03,
   /** 骰子半尺寸（立方体边长的一半） */
   diceHalfSize: 0.12,
-  /** 骰子倒角比例（当前默认 0 = 运行时回退 Box；>0 时启用截角立方体凸包） */
+  /** 骰子物理倒角比例（当前默认 0 = 运行时使用 Box 碰撞体；>0 时启用截角立方体凸包） */
   diceChamferRatio: 0,
+  /** 骰子视觉倒角比例（仅影响显示网格，不影响物理碰撞；取 0.14，让 8 个角更圆润，同时仍控制与 box 碰撞体的视觉偏差） */
+  diceVisualChamferRatio: 0.14,
   /** 骰子线性阻尼（保留 0.35，便于与既有 box/chamfer sweep 结果对齐） */
   diceLinearDamping: 0.35,
   /** 骰子角阻尼（与线性阻尼保持一致，减少长尾结算） */
@@ -56,9 +58,9 @@ export const PHYSICS = {
       frictionEquationStiffness: 1e7,
       frictionEquationRelaxation: 3,
     },
-    /** 骰子-骰子（0.22 是当前弹性折中值；接触方程做了低速黏连收敛优化） */
+    /** 骰子-骰子（f=0.25 是当前手测可接受版本；0.22 是当前弹性折中值） */
     diceDice: {
-      friction: 0.3,
+      friction: 0.25,
       restitution: 0.22,
       // sweep 验证表明 r=6 是关键改善维度；stiffness 在 4e6-8e6 间差异很小，取中间值 6e6。
       contactEquationStiffness: 6e6,

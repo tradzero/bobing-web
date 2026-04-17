@@ -13,6 +13,7 @@ export function TiltWarning() {
 
   return (
     <div className="tilt-warning">
+      <div className="tilt-warning-kicker">结果确认</div>
       <div className="tilt-warning-icon">⚠</div>
       <div className="tilt-warning-text">
         {tiltLabels}骰子倾斜，结果可能不准确

@@ -4,5 +4,10 @@ import { useGameStore } from './GameStoreContext'
 export function RoundDisplay() {
   const round = useGameStore((s) => s.round)
 
-  return <div className="round-display">第 {round} 轮</div>
+  return (
+    <div className="round-display">
+      <div className="round-display-kicker">当前轮次</div>
+      <div className="round-display-value">第 {round} 轮</div>
+    </div>
+  )
 }

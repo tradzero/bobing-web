@@ -13,7 +13,8 @@ export function ResetButton() {
       onClick={() => ctrl.reset()}
       title="重置游戏"
     >
-      ↺
+      <span className="btn-icon-ring" aria-hidden="true" />
+      <span className="btn-icon-glyph">↺</span>
     </button>
   )
 }

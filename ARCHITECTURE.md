@@ -23,6 +23,7 @@
 6. **响应式归 CSS**：布局、按钮尺寸、面板排列等响应式适配交给 CSS 媒体查询。脚本层仅处理 canvas resize、DPR、camera aspect ratio。
 7. **核心逻辑可测试**：奖级判定、点数读取、停稳检测为纯函数/可隔离逻辑，Vitest 重点覆盖。随机数源抽为可注入接口，测试时注入确定性种子。
 8. **StrictMode 幂等**：引擎初始化和销毁必须幂等。React StrictMode 会在开发环境双调用 effect，GameViewport 的 cleanup 必须完整销毁引擎实例，重建时不产生残留。
+9. **移动端结算浮层状态只属于 UI**：移动端结算浮层的 `peek / expanded / hidden` 仅是展示层局部状态，不写入 Zustand store，不影响 game/controller 的业务状态机。store 只提供 `phase` 作为浮层显隐和默认开合的驱动信号。
 
 ## 项目结构
 
@@ -67,6 +68,7 @@ src/
 │   ├── components/
 │   │   ├── GameViewport.tsx    # 3D 容器：持有 canvas ref、创建/销毁引擎实例（幂等）；接受 children，通过 Provider 包裹
 │   │   ├── ThrowButton.tsx     # 掷骰按钮（rolling/tilt-confirm 禁用 + 状态文案）
+│   │   ├── MobileBottomSheet.tsx # 移动端结算浮层：仅承载 ResultPanel / TiltWarning，支持拖拽开合
 │   │   ├── ResetButton.tsx     # 重置按钮
 │   │   ├── TiltWarning.tsx     # 倾斜确认面板：显示倾斜骰子编号，提供「接受结果」「重掷」按钮
 │   │   ├── ResultPanel.tsx     # 当轮结果面板：点数组合 + 奖级 + 带数（tilt-confirm 期间隐藏）
@@ -241,6 +243,13 @@ interface GameState {
 ```
 
 注意：UI 组件只通过 selector 读取 store，所有业务操作（掷骰、重置）通过 GameController 实例方法调用，不直接调用 store 的 set 方法。
+
+## 移动端浮板不变量
+
+- 移动端底部固定层的视觉顺序固定为：`PrizeRecord / History` → `ThrowButton`；其中 `ThrowButton` 是唯一主操作入口，必须固定在最底部。
+- `ResultPanel / TiltWarning` 不参与固定底层排序，只作为单独悬浮的结算浮层出现在游戏界面上方。
+- 结算浮层允许 `peek / expanded / hidden` 三态：`result / tilt-confirm` 时默认回到 peek，用户可手势上滑展开或下滑收起，以查看游戏界面。
+- 该结算浮层只改变 DOM UI 的可见性和层级，不改变掷骰、结算、重掷、重置等业务流程。
 
 ## 奖级优先级表（确认版）
 

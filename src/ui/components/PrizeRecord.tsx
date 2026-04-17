@@ -13,15 +13,18 @@ export function PrizeRecord() {
   if (!hasAny) return null
 
   return (
-    <div className="panel-card">
-      <div className="panel-title">奖级统计</div>
+    <div className="panel-card panel-card-stats">
+      <div className="panel-header">
+        <div className="panel-title">奖级统计</div>
+        <div className="panel-subtitle">本局累计</div>
+      </div>
       <ul className="prize-list">
         {DISPLAY_PRIZES.map((p) => {
           const count = prizeRecord[p] ?? 0
           if (count === 0) return null
           return (
             <li key={p} className="prize-item">
-              <span>{PRIZE_NAMES[p]}</span>
+              <span className="prize-name">{PRIZE_NAMES[p]}</span>
               <span className="count">×{count}</span>
             </li>
           )

@@ -10,11 +10,13 @@ export function ThrowButton() {
 
   return (
     <button
-      className="btn btn-throw"
+      className={`btn btn-throw ${isRolling ? 'is-rolling' : ''}`}
       disabled={isBusy}
       onClick={() => ctrl.throw()}
     >
-      {isRolling ? '骰子翻滚中' : '掷骰'}
+      <span className="btn-throw-ornament" aria-hidden="true" />
+      <span className="btn-throw-label">{isRolling ? '骰子翻滚中' : '掷骰'}</span>
+      <span className="btn-throw-ornament" aria-hidden="true" />
     </button>
   )
 }
