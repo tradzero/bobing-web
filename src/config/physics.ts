@@ -16,10 +16,10 @@ export const PHYSICS = {
   diceHalfSize: 0.12,
   /** 骰子倒角比例（0 = Box 回退，>0 = 截角立方体凸包） */
   diceChamferRatio: 0.15,
-  /** 骰子线性阻尼 */
-  diceLinearDamping: 0.3,
-  /** 骰子角阻尼 */
-  diceAngularDamping: 0.3,
+  /** 骰子线性阻尼（chamfer 倒角后骰子更易滚动，从 0.30 提升到 0.35 补偿） */
+  diceLinearDamping: 0.35,
+  /** 骰子角阻尼（同步提升，配合线性阻尼减少 timeout 率） */
+  diceAngularDamping: 0.35,
 
   /** 骰子 sleep 相关（收紧：低 speedLimit + 适中 timeLimit，平衡结算速度与斜停风险） */
   diceSleepSpeedLimit: 0.20,

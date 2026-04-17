@@ -8,7 +8,6 @@ export function createTable(): THREE.Group {
   const radius = 4
   const topHeight = 0.12      // 桌面板厚度
   const skirtHeight = 0.23    // 侧壁裙边厚度
-  const totalHeight = topHeight + skirtHeight  // ≈0.35
 
   const group = new THREE.Group()
 

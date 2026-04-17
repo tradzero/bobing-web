@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from 'vitest'
-import * as CANNON from 'cannon-es'
 import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'

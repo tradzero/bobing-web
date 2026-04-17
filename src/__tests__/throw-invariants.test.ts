@@ -3,7 +3,6 @@ import { describe, it, expect, afterEach } from 'vitest'
 import * as CANNON from 'cannon-es'
 import { initThrowBody, throwDice } from '@/dice/throw'
 import { THROW } from '@/config/throw'
-import { PHYSICS } from '@/config/physics'
 import { createDiceBody } from '@/dice/dice-body'
 import { setRandom, resetRandom } from '@/utils/random'
 

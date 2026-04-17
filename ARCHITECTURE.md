@@ -273,6 +273,16 @@ interface GameState {
 
 碗内壁曲线（纯幂函数零偏移）定义在 `config/bowl.ts`，物理层和渲染层共用同一函数，消除几何分叉。
 
+### 骰子碰撞体
+
+默认使用截角立方体凸包（`ConvexPolyhedron` 24v/14f），替代原始 `Box`（8v/6f）锐棱碰撞体：
+
+- **倒角生成**：`dice/chamfer.ts` → `createChamferedCubeHull(halfSize, chamfer)`，每个原始顶点切出 3 个新顶点，产生 8 个三角形面 + 6 个八边形面
+- **参数**：`PHYSICS.diceChamferRatio = 0.15`（`chamfer = halfSize × ratio`），`shapeMode: 'box' | 'chamfer'` 可切换
+- **效果**：减少骰子棱边互锁导致的倾斜停稳（200-seed tilt: 2 → 0），代价是 `world.step()` 耗时约 3.2x
+- **阻尼补偿**：chamfer 圆角使骰子更易滚动，`linearDamping`/`angularDamping` 从 0.30 提升到 0.35 以补偿（timeout 率: 18% → 8%）
+- **视觉对齐**：`RoundedBoxGeometry` 连续圆角作为视觉近似，radius 对齐物理倒角参数
+
 ## 测试策略
 
 | 层级 | 模块 | 测试重点 | 方法 |

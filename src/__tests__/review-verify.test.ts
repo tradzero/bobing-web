@@ -92,7 +92,7 @@ describe('高度分层验证', () => {
     const heightSets: number[][] = []
     for (let trial = 0; trial < 100; trial++) {
       reseed(70000 + trial * 100)
-      const { world, step, dispose } = createPhysicsWorld()
+      const { world, dispose } = createPhysicsWorld()
       setupContactMaterials(world)
       createBowlBodies(world)
 
@@ -134,7 +134,7 @@ describe('fallback 拓扑覆盖', () => {
 
     for (let trial = 0; trial < 1000; trial++) {
       reseed(80000 + trial * 7)
-      const { world, step, dispose } = createPhysicsWorld()
+      const { world, dispose } = createPhysicsWorld()
       setupContactMaterials(world)
       createBowlBodies(world)
 
