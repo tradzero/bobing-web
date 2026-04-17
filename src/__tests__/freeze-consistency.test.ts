@@ -56,7 +56,7 @@ describe('冻结前后读数一致性', () => {
       for (let f = 0; f < 600; f++) {
         step(dt)
         const currentTime = (f + 1) * dt
-        if (checkSettled(bodies, currentTime, settleState)) {
+        if (checkSettled(bodies, currentTime, settleState, world)) {
           settled = true
           break
         }

@@ -100,7 +100,7 @@ describe('复现种子', () => {
           }
         }
 
-        if (checkSettled(bodies, currentTime, settleState)) {
+        if (checkSettled(bodies, currentTime, settleState, world)) {
           settled = true
           settleFrame = i
           break

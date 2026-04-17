@@ -12,6 +12,7 @@ import { SETTLE } from '@/config/settle'
 import { reseed } from '@/utils/random'
 import { throwDice } from '@/dice/throw'
 import { readAllFacesDetailed, type FaceReadResult } from '@/dice/read-face'
+import { checkSettled, createSettleState } from '@/dice/settle'
 
 export type SettlePath = 'sleep' | 'threshold' | 'timeout'
 
@@ -52,6 +53,8 @@ export interface TrialConfig {
   solverIterations?: number
   /** 覆盖 solver 收敛容差 */
   solverTolerance?: number
+  /** 覆盖尾段接触簇辅助层开关，默认使用运行时配置 */
+  contactClusterAssistEnabled?: boolean
   /** 每帧回调（用于自定义追踪，如 peak 倾角） */
   onFrame?: (frame: number, time: number, bodies: CANNON.Body[]) => void
 }
@@ -91,6 +94,7 @@ export function runTrial(config: TrialConfig): TrialResult {
     solverMode,
     solverIterations,
     solverTolerance,
+    contactClusterAssistEnabled,
     onFrame,
   } = config
 
@@ -155,8 +159,7 @@ export function runTrial(config: TrialConfig): TrialResult {
   let settleFrame = -1
   let allSleepTime = -1
   let allSleepFrame = -1
-  let stableBrokenCount = 0
-  const stableState = { stableStartTime: -1 }
+  const settleState = createSettleState(0)
 
   for (let i = 0; i < maxFrames; i++) {
     step(dt)
@@ -173,33 +176,18 @@ export function runTrial(config: TrialConfig): TrialResult {
     if (onFrame) onFrame(i, t, bodies)
 
     // 结算检测
-    if (bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)) {
-      allSleepTime = t
-      allSleepFrame = i
-      settlePath = 'sleep'
+    if (checkSettled(bodies, t, settleState, world, contactClusterAssistEnabled)) {
       settleFrame = i
-      break
-    }
-    if (t >= SETTLE.timeout) {
-      settleFrame = i
-      break
-    }
-
-    const allBelow = bodies.every(
-      (b) =>
-        b.velocity.length() < SETTLE.speedThreshold &&
-        b.angularVelocity.length() < SETTLE.angularThreshold,
-    )
-    if (allBelow) {
-      if (stableState.stableStartTime < 0) stableState.stableStartTime = t
-      else if (t - stableState.stableStartTime >= SETTLE.stableDuration) {
+      if (bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)) {
+        allSleepTime = t
+        allSleepFrame = i
+        settlePath = 'sleep'
+      } else if (t - settleState.startTime >= SETTLE.timeout) {
+        settlePath = 'timeout'
+      } else {
         settlePath = 'threshold'
-        settleFrame = i
-        break
       }
-    } else {
-      if (stableState.stableStartTime >= 0) stableBrokenCount++
-      stableState.stableStartTime = -1
+      break
     }
   }
 
@@ -222,7 +210,7 @@ export function runTrial(config: TrialConfig): TrialResult {
     settleFrame,
     allSleepTime,
     allSleepFrame,
-    stableBrokenCount,
+    stableBrokenCount: settleState.stableBrokenCount,
     tiltCount,
     maxTiltAngle,
     faces,

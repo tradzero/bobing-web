@@ -66,7 +66,7 @@ describe('物理烟雾测试', () => {
         }
       }
 
-      if (settleFrame < 0 && checkSettled(bodies, currentTime, settleState)) {
+      if (settleFrame < 0 && checkSettled(bodies, currentTime, settleState, world)) {
         settleFrame = f + 1
         // 检查是否超时路径
         const elapsed = currentTime - settleState.startTime
@@ -136,7 +136,7 @@ describe('物理烟雾测试', () => {
         ).toBe(false)
       }
 
-      if (checkSettled(bodies, currentTime, settleState)) break
+      if (checkSettled(bodies, currentTime, settleState, world)) break
     }
 
     dispose()

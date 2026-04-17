@@ -27,7 +27,7 @@ export interface Engine {
  * 每帧顺序执行：物理步进 → body→mesh 同步 → 停稳检测 → 渲染
  */
 export function createEngine(opts: EngineOptions): Engine {
-  const { sceneCtx, worldStep, dicePairs, onSettled } = opts
+  const { sceneCtx, world, worldStep, dicePairs, onSettled } = opts
   const { scene, camera, renderer } = sceneCtx
   const timer = new THREE.Timer()
   let timerInitialized = false
@@ -85,7 +85,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     // 4. 停稳检测
     if (settleState && !settled) {
-      if (checkSettled(bodies, elapsedTime, settleState)) {
+      if (checkSettled(bodies, elapsedTime, settleState, world)) {
         settled = true
         onSettled()
       }

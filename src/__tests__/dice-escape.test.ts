@@ -83,7 +83,7 @@ describe('骰子逃逸防护', () => {
       }
 
       const currentTime = (f + 1) * dt
-      if (checkSettled(bodies, currentTime, settleState)) break
+      if (checkSettled(bodies, currentTime, settleState, world)) break
     }
 
     dispose()
@@ -139,7 +139,7 @@ describe('骰子逃逸防护', () => {
             body.velocity.y = -body.velocity.y * 0.3
           }
         }
-        if (checkSettled(bodies, (f + 1) * dt, settleState)) break
+        if (checkSettled(bodies, (f + 1) * dt, settleState, world)) break
       }
 
       // 结算后骰子应在碗内（Y > -0.5, 水平距 < 碗半径）

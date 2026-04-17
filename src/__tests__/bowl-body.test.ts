@@ -376,7 +376,7 @@ describe('T6: 结算路径回归测试（throwDice + 逃逸反射）', () => {
         }
       }
 
-      if (checkSettled(bodies, currentTime, settleState)) {
+      if (checkSettled(bodies, currentTime, settleState, world)) {
         let path: 'sleep' | 'threshold' | 'timeout'
         const allSleeping = bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)
         if (allSleeping) {

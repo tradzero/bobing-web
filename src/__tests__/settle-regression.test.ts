@@ -8,6 +8,7 @@ import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies, ESCAPE_Y } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'
 import { createDiceBody } from '@/dice/dice-body'
+import { checkSettled, createSettleState } from '@/dice/settle'
 import { PHYSICS } from '@/config/physics'
 import { SETTLE } from '@/config/settle'
 import { reseed } from '@/utils/random'
@@ -17,25 +18,10 @@ import * as CANNON from 'cannon-es'
 
 type SettlePath = 'sleep' | 'threshold' | 'timeout'
 
-function checkSettledWithPath(
-  bodies: CANNON.Body[],
-  currentTime: number,
-  state: { startTime: number; stableStartTime: number },
-): SettlePath | null {
+function classifySettlePath(bodies: CANNON.Body[], currentTime: number, startTime: number): SettlePath {
   if (bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)) return 'sleep'
-  if (currentTime - state.startTime >= SETTLE.timeout) return 'timeout'
-  const allBelow = bodies.every(
-    (b) =>
-      b.velocity.length() < SETTLE.speedThreshold &&
-      b.angularVelocity.length() < SETTLE.angularThreshold,
-  )
-  if (allBelow) {
-    if (state.stableStartTime < 0) state.stableStartTime = currentTime
-    else if (currentTime - state.stableStartTime >= SETTLE.stableDuration) return 'threshold'
-  } else {
-    state.stableStartTime = -1
-  }
-  return null
+  if (currentTime - startTime >= SETTLE.timeout) return 'timeout'
+  return 'threshold'
 }
 
 function runTrial(seed: number) {
@@ -56,7 +42,7 @@ function runTrial(seed: number) {
   const maxFrames = 800
   let currentTime = 0
   let path: SettlePath = 'timeout'
-  const settleState = { startTime: 0, stableStartTime: -1 }
+  const settleState = createSettleState(0)
 
   for (let i = 0; i < maxFrames; i++) {
     step(dt)
@@ -66,8 +52,10 @@ function runTrial(seed: number) {
         body.velocity.y = -body.velocity.y * 0.3
       }
     }
-    const result = checkSettledWithPath(bodies, currentTime, settleState)
-    if (result) { path = result; break }
+    if (checkSettled(bodies, currentTime, settleState, world)) {
+      path = classifySettlePath(bodies, currentTime, settleState.startTime)
+      break
+    }
   }
 
   const detailed = readAllFacesDetailed(bodies)
