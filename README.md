@@ -11,7 +11,7 @@
 - 已完成移动端真实上下布局，不再使用可拖拽底部浮层
 - 已完成桌面程序化木纹占位与海碗程序化青花占位
 - 当前 THROW v3 默认投掷为 `stratified-ring`（六槽、随机整体旋转与槽位分配）；SETTLE v4 中 contact-cluster assist 默认关闭
-- 已落地统一物理 runner、命名 variant A/B、单 seed 复现、200-seed 验收、floor-relaunch 事件门禁、浏览器结构/CPU profile 门禁与连续 20 轮 soak
+- 已落地统一物理 runner、命名 variant A/B、单 seed 复现、200-seed 验收、headless cadence comparison v1、floor-relaunch 事件门禁、浏览器结构/CPU profile 门禁与连续 20 轮 soak
 - 生产当前仅让基础质量 `tier=reduced` 的高像素视口在 rolling 降至 1x；`full` 档保持基础 DPR，static 一律恢复基础 1.0～1.5 DPR 与 350 万像素预算；阴影仍逐 rolling render 刷新
 - 当前运行时场景只接入桌面、海碗和骰子；灯笼、月饼等摆件不在当前推进范围内
 - 后续视觉方向优先是桌布方案与正式海碗纹样素材，而不是重做桌体或继续扩展桌面摆件
@@ -55,23 +55,24 @@ http://127.0.0.1:5173
 
 ## 常用命令
 
-| 命令                              | 说明                                                                |
-| --------------------------------- | ------------------------------------------------------------------- |
-| `pnpm dev`                        | 启动 Vite 开发服务器                                                |
-| `pnpm build`                      | TypeScript 构建 + 生产打包                                          |
-| `pnpm preview`                    | 本地预览生产构建结果                                                |
-| `pnpm lint`                       | 运行 ESLint                                                         |
-| `pnpm test`                       | 运行 Vitest 全量测试                                                |
-| `pnpm test:watch`                 | 以 watch 模式运行 Vitest                                            |
-| `pnpm test:physics`               | 运行固定 watch seeds 与快速物理回归                                 |
-| `pnpm test:seed -- --seed=<seed>` | 用统一 runner 复现单个 seed 并输出结构化诊断                        |
-| `pnpm test:acceptance`            | 运行默认 200-seed 物理预算门禁                                      |
-| `pnpm test:physics:ab`            | 交替运行命名 A/B preset、watch/batch cohort 与 natural continuation |
-| `pnpm test:e2e`                   | 运行 Playwright 桌面/移动端真实流程门禁                             |
-| `pnpm test:e2e:soak`              | 桌面/移动各连续 20 轮，检查安全包络、状态提交与 WebGL 资源稳定      |
-| `pnpm bench:browser`              | 门禁渲染结构与 profile 完整性/substeps，毫秒仅写 JSON/截图 artifact |
-| `pnpm bench:browser:render-ab`    | 5 seeds × ABBA/BAAB 配对渲染 A/B，行为/安全硬门禁、毫秒仅观测       |
-| `pnpm sweep:parallel:core`        | 并发执行 sleep / timeout / tilt 三类核心 sweep                      |
+| 命令                              | 说明                                                                   |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| `pnpm dev`                        | 启动 Vite 开发服务器                                                   |
+| `pnpm build`                      | TypeScript 构建 + 生产打包                                             |
+| `pnpm preview`                    | 本地预览生产构建结果                                                   |
+| `pnpm lint`                       | 运行 ESLint                                                            |
+| `pnpm test`                       | 运行 Vitest 全量测试                                                   |
+| `pnpm test:watch`                 | 以 watch 模式运行 Vitest                                               |
+| `pnpm test:physics`               | 运行固定 watch seeds 与快速物理回归                                    |
+| `pnpm test:seed -- --seed=<seed>` | 用统一 runner 复现单个 seed 并输出结构化诊断                           |
+| `pnpm test:acceptance`            | 运行默认 200-seed 物理预算门禁                                         |
+| `pnpm test:physics:ab`            | 交替运行命名 A/B preset、watch/batch cohort 与 natural continuation    |
+| `pnpm test:physics:cadence`       | 运行 versioned headless cadence exact 等价、安全、守恒与 overload 门禁 |
+| `pnpm test:e2e`                   | 运行 Playwright 桌面/移动端真实流程门禁                                |
+| `pnpm test:e2e:soak`              | 桌面/移动各连续 20 轮，检查安全包络、状态提交与 WebGL 资源稳定         |
+| `pnpm bench:browser`              | 门禁渲染结构与 profile 完整性/substeps，毫秒仅写 JSON/截图 artifact    |
+| `pnpm bench:browser:render-ab`    | 5 seeds × ABBA/BAAB 配对渲染 A/B，行为/安全硬门禁、毫秒仅观测          |
+| `pnpm sweep:parallel:core`        | 并发执行 sleep / timeout / tilt 三类核心 sweep                         |
 
 ## 文档索引
 
@@ -124,9 +125,11 @@ clean checkpoint `6901f4d90e7557f2bdcf2081abffb37952c2f6f5` 的 schema v6 / rend
 
 `maxSubSteps` 从 8 裸降到 4 已被排除：慢帧下会丢弃更多积压模拟时间，seed 25042 暴露了 cadence 分叉风险。后续物理追帧优化应改为显式 accumulator，并在每个 Cannon 子步执行 guard、roll safety 与 settle 检测，再以固定 seed 的多种帧调度序列验收。
 
-当前已落地未接生产的 headless cadence foundation v1：`reference-exact / exact-cap6 / exact-cap4` 共用唯一投掷 lifecycle 与 exact-step session，并覆盖 60/30Hz、确定性 jitter、单次/持续 100ms 与 visibility suspend。runner 对每帧及总量执行时间守恒门禁，中途结算 backlog 明确标为 abandoned；cap4 持续 100ms 会在 250ms 高水位进入独立 `timing-overload` 且不生成正常 roll。正常候选同时比较 initial-state、canonical final-state 与完整 `RollRunResult`。现阶段只有直接测试中的 4 个 watch seed 等价证据；200-seed comparison/CLI 与浏览器 timing experiment 仍未落地，因此生产 Engine 继续使用旧 batched 调度。
+当前已落地但未接生产的 headless cadence foundation 与 comparison/CLI v1：`reference-exact / exact-cap6 / exact-cap4` 共用唯一投掷 lifecycle 与 exact-step session，并覆盖 60/30Hz、确定性 jitter、单次/持续 100ms 与 visibility suspend。runner 对每帧及总量执行时间守恒门禁，中途结算 backlog 明确标为 abandoned；正常候选 exact 比较 initial-state、canonical final-state、完整 `RollRunResult`、`JudgeResult` 与安全事实，cap4 持续 100ms 则进入独立 `timing-overload` 且不生成正常 roll。
 
-仓库已加入未接入生产的 fixed-step accumulator v1 纯状态机，用单元测试锁定 wall-time 分类、backlog 守恒、cap4 跨帧追赶、early-stop、pause、插值余量和显式 overload。当前运行时仍使用原 Engine/Cannon 批处理链路；只有 exact-step cap6/cap4 的多 cadence A/B、异常流程和浏览器门禁全部通过后，才会考虑切换生产默认。
+clean checkpoint `92c3e5f7fa23694660d3a3ad9802894e562755f7` 的正式 cadence artifact 为 `artifacts/cadence/head-92c3e5f-200-seeds.json`，start/end 均 clean 且 repository state unchanged。200 total seeds 包含 20 个 watch（含 25042）与 180 个 batch，完成 780/780 runs；normal comparisons 560/560、overload checks 20/20 通过，failure=0。watch 完整覆盖 5 cadence × 2 cap；batch 在每种 cadence 各分配 36 seeds，并对同 seed 跑 cap6/cap4。visibility suspend 的 5s hidden 时间全部进入 paused/discarded；持续 100ms/cap4 在第 6 帧、执行 20 个 exact steps 后以 `800/3ms` queue 返回 `timing-overload`，`roll=null`。这只是 headless 调度正确性证据，不是浏览器 FPS 或生产性能结论；生产 Engine 仍使用旧 Cannon batched 调度，Engine 接线、浏览器 timing experiment、visibility 生命周期与产品 overload 错误流程仍待完成。
+
+仓库已加入未接入生产的 fixed-step accumulator v1 纯状态机，用单元测试锁定 wall-time 分类、backlog 守恒、cap4 跨帧追赶、early-stop、pause、插值余量和显式 overload。headless exact-step cap6/cap4 多 cadence A/B 已通过；当前运行时仍使用原 Engine/Cannon 批处理链路，只有 Engine/异常流程接线与浏览器门禁完成后，才会考虑切换生产默认。
 
 最终 tier-aware 策略的 schema v5 浏览器门禁已重跑：`test:e2e` 4/4、`bench:browser` 桌面/移动 2/2 通过。桌面 `reduced` 档从 idle/settled 的 3,498,014 pixels、DPR `1.445028` 降至 rolling 的 1,676,160 pixels、DPR 1；移动 `full` 档 idle/rolling 均为 562,185 pixels、DPR 1.5，settled 仅因 CSS 布局变化为 414,765 pixels，DPR 仍为 1.5。rolling shadow 请求与真实渲染帧一致，桌面 17/17、移动 19/19。`test:e2e:soak` 桌面/移动各 20 轮 2/2 通过：桌面 77.181s、17 natural / 3 stable、最长 8.346s、最大半径/穿透 0.6567970953m/0.0548978013m；移动 55.144s、20 natural、最长 3.299s、最大半径/穿透 0.6555080668m/0.0536350029m。两端 boundary/wall/guard/non-finite/页面错误均为 0，资源每轮稳定为 `1/8/6/10`。wall time 只作本次环境观察；此前全视口 rolling 1x 与 schema v4 数据仅为历史 checkpoint。
 
