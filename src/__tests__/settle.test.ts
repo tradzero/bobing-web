@@ -34,15 +34,15 @@ describe('停稳检测', () => {
       mockBody({ sleeping: true }),
       mockBody({ sleeping: true }),
     ]
-    expect(checkSettled(bodies, 1, state)).toBe(true)
+    expect(checkSettled(bodies, 1, state)).toEqual({
+      reason: 'natural-sleep',
+      elapsed: 1,
+    })
   })
 
   it('非全部 sleep 不应直接结算', () => {
-    const bodies = [
-      mockBody({ sleeping: true }),
-      mockBody({ sleeping: false, speed: 1 }),
-    ]
-    expect(checkSettled(bodies, 1, state)).toBe(false)
+    const bodies = [mockBody({ sleeping: true }), mockBody({ sleeping: false, speed: 1 })]
+    expect(checkSettled(bodies, 1, state)).toBeNull()
   })
 
   it('低速窗口被中断后重新计时', () => {
@@ -66,6 +66,71 @@ describe('停稳检测', () => {
     expect(state.stableStartTime).toBe(0.5) // 重新计时
   })
 
+  it('空间姿态与读面持续稳定时，默认忽略速度噪声且不修改刚体', () => {
+    const bodies = [mockBody({ speed: 5, angularSpeed: 10 })]
+    const before = {
+      position: bodies[0].position.clone(),
+      quaternion: bodies[0].quaternion.clone(),
+      velocity: bodies[0].velocity.clone(),
+      angularVelocity: bodies[0].angularVelocity.clone(),
+      sleepState: bodies[0].sleepState,
+    }
+
+    expect(checkSettled(bodies, SETTLE.poseStableWindow.activationDelay, state)).toBeNull()
+    expect(
+      checkSettled(
+        bodies,
+        SETTLE.poseStableWindow.activationDelay + SETTLE.poseStableWindow.duration,
+        state,
+      ),
+    ).toEqual({
+      reason: 'pose-stable-window',
+      elapsed: SETTLE.poseStableWindow.activationDelay + SETTLE.poseStableWindow.duration,
+    })
+
+    expect(bodies[0].position.toArray()).toEqual(before.position.toArray())
+    expect(bodies[0].quaternion.toArray()).toEqual(before.quaternion.toArray())
+    expect(bodies[0].velocity.toArray()).toEqual(before.velocity.toArray())
+    expect(bodies[0].angularVelocity.toArray()).toEqual(before.angularVelocity.toArray())
+    expect(bodies[0].sleepState).toBe(before.sleepState)
+  })
+
+  it('显式禁用姿态稳定窗口时，相同姿态不会触发该结算路径', () => {
+    const bodies = [mockBody({ speed: 0.06, angularSpeed: 0.06 })]
+    const startedAt = SETTLE.poseStableWindow.activationDelay
+
+    expect(checkSettled(bodies, startedAt, state, undefined, undefined, false)).toBeNull()
+    expect(
+      checkSettled(
+        bodies,
+        startedAt + SETTLE.poseStableWindow.duration,
+        state,
+        undefined,
+        undefined,
+        false,
+      ),
+    ).toBeNull()
+    expect(state.poseStableAnchor).toBeNull()
+    expect(state.poseStableBrokenCount).toBe(0)
+  })
+
+  it('姿态漂移或读面变化会打断只读窗口并重新锚定', () => {
+    const bodies = [mockBody({ speed: 0.06, angularSpeed: 0.06 })]
+    const startedAt = SETTLE.poseStableWindow.activationDelay
+    expect(checkSettled(bodies, startedAt, state)).toBeNull()
+
+    bodies[0].position.x += SETTLE.poseStableWindow.maxPositionDrift * 2
+    expect(checkSettled(bodies, startedAt + 0.4, state)).toBeNull()
+    expect(state.poseStableAnchor).toBeNull()
+    expect(state.poseStableBrokenCount).toBe(1)
+
+    bodies[0].position.x = 0
+    expect(checkSettled(bodies, startedAt + 0.5, state)).toBeNull()
+    bodies[0].quaternion.setFromEuler(Math.PI / 2, 0, 0)
+    expect(checkSettled(bodies, startedAt + 0.9, state)).toBeNull()
+    expect(state.poseStableBrokenCount).toBe(2)
+  })
+
   it('只有一颗骰子一直未停，不应提前结算', () => {
     const bodies = [
       mockBody({ speed: 0.01, angularSpeed: 0.01 }),
@@ -76,7 +141,7 @@ describe('停稳检测', () => {
     for (let t = 0; t < SETTLE.stableDuration + 1; t += 0.1) {
       const result = checkSettled(bodies, t, state)
       if (t < SETTLE.timeout) {
-        expect(result).toBe(false)
+        expect(result).toBeNull()
       }
     }
   })
@@ -88,9 +153,12 @@ describe('停稳检测', () => {
     ]
 
     // 超时前不应结算
-    expect(checkSettled(bodies, SETTLE.timeout - 0.1, state)).toBe(false)
+    expect(checkSettled(bodies, SETTLE.timeout - 0.1, state)).toBeNull()
     // 超时后强制结算
-    expect(checkSettled(bodies, SETTLE.timeout, state)).toBe(true)
+    expect(checkSettled(bodies, SETTLE.timeout, state)).toEqual({
+      reason: 'timeout',
+      elapsed: SETTLE.timeout,
+    })
   })
 
   it('接近阈值反复抖动但不应提前结算', () => {
@@ -119,8 +187,31 @@ describe('停稳检测', () => {
 
     // 最后持续低速足够时间
     const result1 = checkSettled(bodies, t, state)
-    expect(result1).toBe(false) // 刚开始不够
+    expect(result1).toBeNull() // 刚开始不够
     const result2 = checkSettled(bodies, t + SETTLE.stableDuration, state)
-    expect(result2).toBe(true) // 足够了
+    expect(result2).toEqual({
+      reason: 'stable-window',
+      elapsed: t + SETTLE.stableDuration,
+    })
+  })
+
+  it('本轮接触簇辅助介入后使用 cluster-assist 原因', () => {
+    const bodies = [mockBody({ sleeping: true }), mockBody({ sleeping: true })]
+    state.contactClusterAssist.assistedClusterKeys.add('1-2')
+
+    expect(checkSettled(bodies, 2, state)).toEqual({
+      reason: 'cluster-assist',
+      elapsed: 2,
+    })
+  })
+
+  it('达到超时上限时 timeout 诊断优先于 sleep 或 cluster-assist', () => {
+    const bodies = [mockBody({ sleeping: true })]
+    state.contactClusterAssist.assistedClusterKeys.add('1-2')
+
+    expect(checkSettled(bodies, SETTLE.timeout, state)).toEqual({
+      reason: 'timeout',
+      elapsed: SETTLE.timeout,
+    })
   })
 })

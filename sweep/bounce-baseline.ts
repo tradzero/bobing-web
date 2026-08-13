@@ -14,7 +14,7 @@ import { setupContactMaterials } from '@/physics/materials'
 import { createDiceBody, type ShapeMode } from '@/dice/dice-body'
 import { PHYSICS } from '@/config/physics'
 import { reseed } from '@/utils/random'
-import { DEFAULT_SWEEP_CHAMFER_RATIO, runTrial } from './lib/run-trial'
+import { DEFAULT_SWEEP_CHAMFER_RATIO, runTrial, type SettlePath } from './lib/run-trial'
 
 // ─── 指标类型 ───────────────────────────────────────────
 
@@ -49,7 +49,7 @@ interface ThrowMetrics {
   /** 投掷阶段滚动总时长 (s，从投掷到 settle) */
   totalRollDuration: number
   /** settle 路径 */
-  settlePath: 'sleep' | 'threshold' | 'timeout'
+  settlePath: SettlePath
   /** 每颗骰子 frame100+ Y 范围 */
   perDieYRange: { min: number; max: number; delta: number }[]
 }
@@ -119,7 +119,7 @@ function runIdleScene(shapeMode: ShapeMode): IdleMetrics {
     }
 
     // 全部 sleep 检测
-    if (allSleepFrame < 0 && bodies.every(b => b.sleepState === CANNON.Body.SLEEPING)) {
+    if (allSleepFrame < 0 && bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)) {
       allSleepFrame = f
       allSleepTime = t
     }
@@ -147,7 +147,7 @@ function runIdleScene(shapeMode: ShapeMode): IdleMetrics {
     worstDieIndex: worstIdx,
     allSleepFrame,
     allSleepTime,
-    visibleBounceBeforeSleep: secondaryLifts.some(l => l > 0.005),
+    visibleBounceBeforeSleep: secondaryLifts.some((l) => l > 0.005),
     perDieYRange,
   }
 }
@@ -205,11 +205,15 @@ function printIdleMetrics(label: string, m: IdleMetrics) {
   console.log(`  主问题骰子: die${m.worstDieIndex + 1}`)
   console.log(`  最大二次抬升: ${(m.maxSecondaryLift * 1000).toFixed(1)}mm`)
   console.log(`  可见弹跳(>5mm): ${m.visibleBounceBeforeSleep ? '⚠️ YES' : '✓ NO'}`)
-  console.log(`  全部 sleep 帧: ${m.allSleepFrame} (${m.allSleepTime >= 0 ? m.allSleepTime.toFixed(2) + 's' : 'N/A'})`)
+  console.log(
+    `  全部 sleep 帧: ${m.allSleepFrame} (${m.allSleepTime >= 0 ? m.allSleepTime.toFixed(2) + 's' : 'N/A'})`,
+  )
   console.log(`  每颗骰子 Y 范围:`)
   m.perDieYRange.forEach((r, i) => {
     const tag = r.delta > 0.01 ? '⚠️' : '✓'
-    console.log(`    die${i + 1}: [${r.min.toFixed(4)}, ${r.max.toFixed(4)}] delta=${(r.delta * 1000).toFixed(1)}mm ${tag}`)
+    console.log(
+      `    die${i + 1}: [${r.min.toFixed(4)}, ${r.max.toFixed(4)}] delta=${(r.delta * 1000).toFixed(1)}mm ${tag}`,
+    )
   })
 }
 
@@ -218,14 +222,18 @@ function printThrowMetrics(label: string, m: ThrowMetrics) {
   console.log(`  主问题骰子: die${m.worstDieIndex + 1}`)
   console.log(`  frame100+ 最大 Y 回升: ${(m.maxYRiseAfter100 * 1000).toFixed(1)}mm`)
   console.log(`  stable 打破次数: ${m.stableBrokenCount}`)
-  console.log(`  全部 sleep 帧: ${m.allSleepFrame} (${m.allSleepTime >= 0 ? m.allSleepTime.toFixed(2) + 's' : 'N/A'})`)
+  console.log(
+    `  全部 sleep 帧: ${m.allSleepFrame} (${m.allSleepTime >= 0 ? m.allSleepTime.toFixed(2) + 's' : 'N/A'})`,
+  )
   console.log(`  最大反弹高度: ${m.maxBounceHeight.toFixed(3)}m`)
   console.log(`  滚动总时长: ${m.totalRollDuration.toFixed(2)}s`)
   console.log(`  settle 路径: ${m.settlePath}`)
   console.log(`  每颗骰子 frame100+ Y 范围:`)
   m.perDieYRange.forEach((r, i) => {
     const tag = r.delta > 0.01 ? '⚠️' : '✓'
-    console.log(`    die${i + 1}: [${r.min.toFixed(4)}, ${r.max.toFixed(4)}] delta=${(r.delta * 1000).toFixed(1)}mm ${tag}`)
+    console.log(
+      `    die${i + 1}: [${r.min.toFixed(4)}, ${r.max.toFixed(4)}] delta=${(r.delta * 1000).toFixed(1)}mm ${tag}`,
+    )
   })
 }
 
@@ -235,10 +243,18 @@ console.log('╔═════════════════════�
 console.log('║       碗底弹跳回归基线（chamfer + box 对照）       ║')
 console.log('╚══════════════════════════════════════════════════╝')
 console.log()
-console.log(`配置: chamferRatio=${PHYSICS.diceChamferRatio}, damping=${PHYSICS.diceLinearDamping}/${PHYSICS.diceAngularDamping}`)
-console.log(`      sleepSpeed=${PHYSICS.diceSleepSpeedLimit}, sleepTime=${PHYSICS.diceSleepTimeLimit}`)
-console.log(`      diceFloor: friction=${PHYSICS.contact.diceFloor.friction}, restitution=${PHYSICS.contact.diceFloor.restitution}`)
-console.log(`      diceWall: friction=${PHYSICS.contact.diceWall.friction}, restitution=${PHYSICS.contact.diceWall.restitution}`)
+console.log(
+  `配置: chamferRatio=${PHYSICS.diceChamferRatio}, damping=${PHYSICS.diceLinearDamping}/${PHYSICS.diceAngularDamping}`,
+)
+console.log(
+  `      sleepSpeed=${PHYSICS.diceSleepSpeedLimit}, sleepTime=${PHYSICS.diceSleepTimeLimit}`,
+)
+console.log(
+  `      diceFloor: friction=${PHYSICS.contact.diceFloor.friction}, restitution=${PHYSICS.contact.diceFloor.restitution}`,
+)
+console.log(
+  `      diceWall: friction=${PHYSICS.contact.diceWall.friction}, restitution=${PHYSICS.contact.diceWall.restitution}`,
+)
 console.log(`      HF_GRID_SIZE=51, elementSize=0.052m`)
 
 const shapeModes: ShapeMode[] = ['chamfer', 'box']

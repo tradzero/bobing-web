@@ -6,7 +6,7 @@
 export type RandomFn = () => number
 
 /** mulberry32 PRNG，质量足够且轻量 */
-function mulberry32(seed: number): RandomFn {
+export function mulberry32(seed: number): RandomFn {
   let s = seed | 0
   return () => {
     s = (s + 0x6d2b79f5) | 0
@@ -14,6 +14,22 @@ function mulberry32(seed: number): RandomFn {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+
+/**
+ * 从主 seed 派生稳定的 32-bit 子流 seed。
+ * salt 由调用方按随机用途固定；新增或调整子流时应由调用方递增自己的 plan 版本。
+ */
+export function deriveRandomSeed(seed: number, salt: number): number {
+  let mixed = (seed | 0) ^ (salt | 0)
+  mixed = Math.imul(mixed ^ (mixed >>> 16), 0x21f0aaad)
+  mixed = Math.imul(mixed ^ (mixed >>> 15), 0x735a2d97)
+  return (mixed ^ (mixed >>> 15)) >>> 0
+}
+
+/** 创建不影响全局随机源的、可复现的 mulberry32 子流。 */
+export function createRandomSubstream(seed: number, salt: number): RandomFn {
+  return mulberry32(deriveRandomSeed(seed, salt))
 }
 
 let _seed: number = Date.now()

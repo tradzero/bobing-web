@@ -15,6 +15,8 @@ import { SoundToggle } from '@/ui/components/SoundToggle'
 import { TiltWarning } from '@/ui/components/TiltWarning'
 import { GameOverlay } from '@/App'
 import { Prize } from '@/rules/types'
+import type { DicePair } from '@/dice/create'
+import { createDiceBody } from '@/dice/dice-body'
 import type { ReactNode } from 'react'
 
 /**
@@ -42,6 +44,14 @@ function Wrapper({ children }: { children: ReactNode }) {
       </GameControllerContext.Provider>
     </GameStoreContext.Provider>
   )
+}
+
+/** controller 的真实投掷入口要求恰好 6 颗骰子；mesh 不参与该接线测试。 */
+function createControllerDicePairs(): DicePair[] {
+  return Array.from({ length: 6 }, () => ({
+    mesh: {} as DicePair['mesh'],
+    body: createDiceBody(),
+  }))
 }
 
 beforeEach(() => {
@@ -389,7 +399,10 @@ describe('TiltWarning 真实接线', () => {
       }),
     )
     // 真实 controller，acceptTilted 调用 store.commitPending
-    const realCtrl = new GameController({ store: realStore, dicePairs: [] })
+    const realCtrl = new GameController({
+      store: realStore,
+      dicePairs: createControllerDicePairs(),
+    })
 
     render(
       <GameStoreContext.Provider value={realStore}>
@@ -426,8 +439,14 @@ describe('TiltWarning 真实接线', () => {
       stop: vi.fn(),
       dispose: vi.fn(),
       beginSettle: vi.fn(),
+      returnToIdle: vi.fn(),
+      invalidate: vi.fn(),
+      getDiagnostics: vi.fn(),
     }
-    const realCtrl = new GameController({ store: realStore, dicePairs: [] })
+    const realCtrl = new GameController({
+      store: realStore,
+      dicePairs: createControllerDicePairs(),
+    })
     realCtrl.setEngine(mockEngine)
 
     render(

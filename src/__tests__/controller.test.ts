@@ -6,6 +6,9 @@ import { UI } from '@/config/ui'
 import type { Engine } from '@/game/engine'
 import type { DicePair } from '@/dice/create'
 import * as CANNON from 'cannon-es'
+import { bowlInnerHeight } from '@/config/bowl'
+import { PHYSICS } from '@/config/physics'
+import { REST_RING_RADIUS } from '@/dice/rest'
 
 /** 创建 mock engine */
 function mockEngine(): Engine {
@@ -14,6 +17,9 @@ function mockEngine(): Engine {
     stop: vi.fn(),
     dispose: vi.fn(),
     beginSettle: vi.fn(),
+    returnToIdle: vi.fn(),
+    invalidate: vi.fn(),
+    getDiagnostics: vi.fn(),
   }
 }
 
@@ -23,7 +29,7 @@ function mockDicePairs(count = 6): DicePair[] {
     const body = new CANNON.Body({ mass: 1 })
     // 默认四元数 (0,0,0,1) → +y 朝上 → 点数 1
     body.quaternion.set(0, 0, 0, 1)
-    return { mesh: {} as any, body }
+    return { mesh: {} as DicePair['mesh'], body }
   })
 }
 
@@ -132,6 +138,43 @@ describe('GameController 编排层集成测试', () => {
     expect(state.currentResult!.priority).toBeGreaterThanOrEqual(1)
   })
 
+  it('一次性 nextSeed 和实际投掷/停稳路径可诊断', () => {
+    controller = new GameController({ store, dicePairs, nextSeed: 42 })
+    controller.setEngine(engine)
+
+    controller.throw()
+    expect(controller.getRollDiagnostics()).toMatchObject({
+      seed: 42,
+      throwAlgorithmVersion: 3,
+      placementAlgorithm: 'stratified-ring',
+      placementAttempts: expect.any(Number),
+      placementRestarts: expect.any(Number),
+      placementGroupAttempts: expect.any(Number),
+      randomPlanVersion: 1,
+      placementPath: 'constructive',
+      settleAlgorithmVersion: 4,
+      settleReason: null,
+      settleElapsed: null,
+    })
+
+    for (const { body } of dicePairs) body.quaternion.set(0, 0, 0, 1)
+    controller.onSettled({ reason: 'natural-sleep', elapsed: 2.1 })
+    expect(controller.getRollDiagnostics()).toMatchObject({
+      seed: 42,
+      settleReason: 'natural-sleep',
+      settleElapsed: 2.1,
+    })
+
+    const now = vi.spyOn(Date, 'now').mockReturnValue(123_456)
+    controller.throw()
+    expect(controller.getRollDiagnostics()).toMatchObject({
+      seed: 123_456,
+      settleReason: null,
+      settleElapsed: null,
+    })
+    now.mockRestore()
+  })
+
   // ── 物理副作用测试 ──
 
   it('onSettled 冻结骰子：速度/角速度清零 + sleep', () => {
@@ -167,12 +210,17 @@ describe('GameController 编排层集成测试', () => {
     controller.reset()
 
     for (const { body } of dicePairs) {
-      // 位置恢复到碗底附近
-      expect(body.position.y).toBeCloseTo(0.3)
-      // previousPosition 同步
+      // 位置恢复到碗底表面上方
+      expect(body.position.y).toBeGreaterThan(
+        bowlInnerHeight(REST_RING_RADIUS) + PHYSICS.diceHalfSize,
+      )
+      // previous/interpolated position 同步
       expect(body.previousPosition.x).toBe(body.position.x)
       expect(body.previousPosition.y).toBe(body.position.y)
       expect(body.previousPosition.z).toBe(body.position.z)
+      expect(body.interpolatedPosition.x).toBe(body.position.x)
+      expect(body.interpolatedPosition.y).toBe(body.position.y)
+      expect(body.interpolatedPosition.z).toBe(body.position.z)
       // 四元数恢复为单位四元数
       expect(body.quaternion.w).toBe(1)
       expect(body.quaternion.x).toBe(0)
@@ -181,8 +229,9 @@ describe('GameController 编排层集成测试', () => {
       expect(body.angularVelocity.length()).toBe(0)
       // AABB 标记更新
       expect(body.aabbNeedsUpdate).toBe(true)
-      // 骰子已唤醒
-      expect(body.sleepState).not.toBe(CANNON.Body.SLEEPING)
+      // idle 不推进物理，静态骰子应保持休眠
+      expect(body.sleepState).toBe(CANNON.Body.SLEEPING)
     }
+    expect(engine.returnToIdle).toHaveBeenCalledTimes(1)
   })
 })

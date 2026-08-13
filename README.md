@@ -10,6 +10,8 @@
 - 已完成当轮结果、累计奖级记录、最近 5 轮历史记录、音效开关与重置流程
 - 已完成移动端真实上下布局，不再使用可拖拽底部浮层
 - 已完成桌面程序化木纹占位与海碗程序化青花占位
+- 当前 THROW v3 默认投掷为 `stratified-ring`（六槽、随机整体旋转与槽位分配）；SETTLE v4 中 contact-cluster assist 默认关闭
+- 已落地统一物理 runner、命名 variant A/B、单 seed 复现、200-seed 验收与浏览器结构性能门禁
 - 当前运行时场景只接入桌面、海碗和骰子；灯笼、月饼等摆件不在当前推进范围内
 - 后续视觉方向优先是桌布方案与正式海碗纹样素材，而不是重做桌体或继续扩展桌面摆件
 
@@ -19,21 +21,22 @@
 - cannon-es 固定时间步长物理模拟，渲染循环与物理解耦
 - Heightfield 连续碗底 + 竖直挡墙的碗碰撞体方案，不依赖 Trimesh
 - 基于六面法线与世界 up 向量点积的稳定点数读取
-- sleep、低速窗口、超时兜底、接触簇辅助共同组成的停稳链路
+- 可观测的 natural sleep、低速窗口、只读 pose-stable、历史 cluster-assist 与 timeout 停稳路径
+- 投掷 layout/dynamics 使用独立可复现随机子流；普通运行由时间种子 mulberry32 驱动，不使用 `Math.random`
 - 奖级规则数据驱动，支持状元子级优先级与带数规则
 - React + Zustand DOM overlay UI，业务写入集中在 GameController
 
 ## 技术栈
 
-| 层面 | 选型 |
-| ---- | ---- |
-| 工程基座 | Vite + TypeScript |
-| UI | React 19 |
-| 状态管理 | Zustand |
-| 3D 渲染 | Three.js |
-| 物理引擎 | cannon-es |
-| 测试 | Vitest |
-| 样式 | 原生 CSS + CSS Variables |
+| 层面     | 选型                     |
+| -------- | ------------------------ |
+| 工程基座 | Vite + TypeScript        |
+| UI       | React 19                 |
+| 状态管理 | Zustand                  |
+| 3D 渲染  | Three.js                 |
+| 物理引擎 | cannon-es                |
+| 测试     | Vitest                   |
+| 样式     | 原生 CSS + CSS Variables |
 
 ## 快速开始
 
@@ -50,24 +53,30 @@ http://127.0.0.1:5173
 
 ## 常用命令
 
-| 命令 | 说明 |
-| ---- | ---- |
-| `pnpm dev` | 启动 Vite 开发服务器 |
-| `pnpm build` | TypeScript 构建 + 生产打包 |
-| `pnpm preview` | 本地预览生产构建结果 |
-| `pnpm lint` | 运行 ESLint |
-| `pnpm test` | 运行 Vitest 全量测试 |
-| `pnpm test:watch` | 以 watch 模式运行 Vitest |
-| `pnpm sweep:parallel:core` | 并发执行 sleep / timeout / tilt 三类核心 sweep |
+| 命令                              | 说明                                                                |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `pnpm dev`                        | 启动 Vite 开发服务器                                                |
+| `pnpm build`                      | TypeScript 构建 + 生产打包                                          |
+| `pnpm preview`                    | 本地预览生产构建结果                                                |
+| `pnpm lint`                       | 运行 ESLint                                                         |
+| `pnpm test`                       | 运行 Vitest 全量测试                                                |
+| `pnpm test:watch`                 | 以 watch 模式运行 Vitest                                            |
+| `pnpm test:physics`               | 运行固定 watch seeds 与快速物理回归                                 |
+| `pnpm test:seed -- --seed=<seed>` | 用统一 runner 复现单个 seed 并输出结构化诊断                        |
+| `pnpm test:acceptance`            | 运行默认 200-seed 物理预算门禁                                      |
+| `pnpm test:physics:ab`            | 交替运行命名 A/B preset、watch/batch cohort 与 natural continuation |
+| `pnpm test:e2e`                   | 运行 Playwright 桌面/移动端真实流程门禁                             |
+| `pnpm bench:browser`              | 门禁浏览器渲染结构、DPR/像素预算与静态零帧，保留 JSON/截图 artifact |
+| `pnpm sweep:parallel:core`        | 并发执行 sleep / timeout / tilt 三类核心 sweep                      |
 
 ## 文档索引
 
-| 文档 | 用途 |
-| ---- | ---- |
-| [AGENTS.md](./AGENTS.md) | 项目目标、当前视觉方向、开发约束与工作流 |
+| 文档                                 | 用途                                                    |
+| ------------------------------------ | ------------------------------------------------------- |
+| [AGENTS.md](./AGENTS.md)             | 项目目标、当前视觉方向、开发约束与工作流                |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 技术架构、数据流、状态机、碰撞体方案、测试与 sweep 策略 |
-| [CHECKLIST.md](./CHECKLIST.md) | 分阶段开发清单 |
-| [UI-CHECKLIST.md](./UI-CHECKLIST.md) | UI 收敛项、移动端布局不变量、海碗与桌布素材待办 |
+| [CHECKLIST.md](./CHECKLIST.md)       | 分阶段开发清单                                          |
+| [UI-CHECKLIST.md](./UI-CHECKLIST.md) | UI 收敛项、移动端布局不变量、海碗与桌布素材待办         |
 
 ## 当前视觉路线
 
@@ -95,9 +104,12 @@ http://127.0.0.1:5173
 - 奖级判定与带数规则
 - 点数读取与朝向扰动
 - 停稳检测与回归种子
+- 默认分层环形投掷、layout/dynamics 随机子流和历史 sampler 兼容
 - 控制流、倾斜确认流程与 UI 行为
 - 真实物理烟雾、逃逸防护、冻结一致性
-- 接触簇辅助逻辑
+- 接触簇辅助的历史显式 variant 与默认禁用契约
+
+`test:acceptance` 的当前默认预算要求 assist/fallback 均为 0、pose-stable 不超过 2%。`test:physics:ab` 将历史问题 seed 与批量 seed 分成 watch/batch cohort，并对每个非自然结算运行最多 20 秒的同 seed 自然延续对照。完整口径与当前逻辑基线见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
 `sweep/` 目录下保留了长时间运行的参数扫描和诊断脚本，例如：
 

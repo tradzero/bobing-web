@@ -47,13 +47,22 @@ describe('contact-cluster settle assist', () => {
   it('存在簇外活跃骰子时不应介入', () => {
     const bodyA = makeBody(SETTLE.contactClusterAssist.speedThreshold * 0.5, 0)
     const bodyB = makeBody(SETTLE.contactClusterAssist.speedThreshold * 0.4, 0)
-    const bodyC = makeBody(SETTLE.contactClusterAssist.speedThreshold * 0.3, 0)
+    const outsideSpeed = (SETTLE.speedThreshold + SETTLE.contactClusterAssist.speedThreshold) / 2
+    const bodyC = makeBody(outsideSpeed, 0)
     const world = makeWorldWithContacts([bodyA, bodyB])
     const state = createContactClusterAssistState()
-    const currentTime = SETTLE.contactClusterAssist.activationDelay + SETTLE.contactClusterAssist.persistenceDuration + 0.05
+    const startTime = 0
+    const firstProbe = SETTLE.contactClusterAssist.activationDelay + 0.01
+    const secondProbe = firstProbe + SETTLE.contactClusterAssist.persistenceDuration + 0.01
+
+    expect(bodyC.velocity.length()).toBeGreaterThan(SETTLE.speedThreshold)
+    expect(bodyC.velocity.length()).toBeLessThan(SETTLE.contactClusterAssist.speedThreshold)
 
     expect(
-      applyContactClusterSettleAssist(world, [bodyA, bodyB, bodyC], currentTime, state, 0),
+      applyContactClusterSettleAssist(world, [bodyA, bodyB, bodyC], firstProbe, state, startTime),
+    ).toBe(false)
+    expect(
+      applyContactClusterSettleAssist(world, [bodyA, bodyB, bodyC], secondProbe, state, startTime),
     ).toBe(false)
     expect(bodyA.sleepState).not.toBe(CANNON.Body.SLEEPING)
     expect(bodyB.sleepState).not.toBe(CANNON.Body.SLEEPING)
@@ -67,9 +76,9 @@ describe('contact-cluster settle assist', () => {
     const state = createContactClusterAssistState()
     const currentTime = SETTLE.contactClusterAssist.activationDelay - 0.01
 
-    expect(
-      applyContactClusterSettleAssist(world, [bodyA, bodyB], currentTime, state, 0),
-    ).toBe(false)
+    expect(applyContactClusterSettleAssist(world, [bodyA, bodyB], currentTime, state, 0)).toBe(
+      false,
+    )
     expect(bodyA.sleepState).not.toBe(CANNON.Body.SLEEPING)
     expect(bodyB.sleepState).not.toBe(CANNON.Body.SLEEPING)
   })

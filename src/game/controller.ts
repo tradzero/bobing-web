@@ -1,5 +1,9 @@
 import type { DicePair } from '@/dice/create'
-import { throwDice } from '@/dice/throw'
+import {
+  THROW_ALGORITHM_VERSION,
+  throwDice,
+  type ThrowDiagnostics,
+} from '@/dice/throw'
 import { readAllFacesDetailed } from '@/dice/read-face'
 import { judge } from '@/rules/judge'
 import { SETTLE } from '@/config/settle'
@@ -7,10 +11,29 @@ import { reseed, getCurrentSeed } from '@/utils/random'
 import { soundManager } from '@/audio/sound'
 import type { createGameStore } from './store'
 import type { Engine } from './engine'
+import { SETTLE_ALGORITHM_VERSION, type SettleResult } from '@/dice/settle'
+import { placeDiceAtRest } from '@/dice/rest'
 
 export interface GameControllerDeps {
   store: ReturnType<typeof createGameStore>
   dicePairs: DicePair[]
+  /** 仅供可复现验收注入；只影响下一次投掷，消费后立即清空。 */
+  nextSeed?: number
+}
+
+export interface GameRollDiagnostics {
+  seed: number | null
+  throwAlgorithmVersion: typeof THROW_ALGORITHM_VERSION
+  placementAlgorithm: ThrowDiagnostics['algorithm'] | null
+  placementAttempts: number | null
+  placementRestarts: number | null
+  placementGroupAttempts: number | null
+  randomPlanVersion: ThrowDiagnostics['randomPlanVersion']
+  placementPath: ThrowDiagnostics['placementPath'] | null
+  fallbackLayout: ThrowDiagnostics['fallbackLayout']
+  settleAlgorithmVersion: typeof SETTLE_ALGORITHM_VERSION
+  settleReason: SettleResult['reason'] | 'external-call' | null
+  settleElapsed: number | null
 }
 
 /**
@@ -21,10 +44,46 @@ export class GameController {
   private store: ReturnType<typeof createGameStore>
   private engine: Engine | null = null
   private dicePairs: DicePair[]
+  private nextSeed: number | undefined
+  private rollDiagnostics: GameRollDiagnostics = {
+    seed: null,
+    throwAlgorithmVersion: THROW_ALGORITHM_VERSION,
+    placementAlgorithm: null,
+    placementAttempts: null,
+    placementRestarts: null,
+    placementGroupAttempts: null,
+    randomPlanVersion: null,
+    placementPath: null,
+    fallbackLayout: null,
+    settleAlgorithmVersion: SETTLE_ALGORITHM_VERSION,
+    settleReason: null,
+    settleElapsed: null,
+  }
 
   constructor(deps: GameControllerDeps) {
     this.store = deps.store
     this.dicePairs = deps.dicePairs
+    this.nextSeed = deps.nextSeed
+  }
+
+  private startRoll(): void {
+    const seed = reseed(this.nextSeed)
+    this.nextSeed = undefined
+    const placement = throwDice(this.dicePairs, { seed })
+    this.rollDiagnostics = {
+      seed,
+      throwAlgorithmVersion: THROW_ALGORITHM_VERSION,
+      placementAlgorithm: placement.algorithm,
+      placementAttempts: placement.attempts,
+      placementRestarts: placement.restarts,
+      placementGroupAttempts: placement.groupAttempts,
+      randomPlanVersion: placement.randomPlanVersion,
+      placementPath: placement.placementPath,
+      fallbackLayout: placement.fallbackLayout,
+      settleAlgorithmVersion: SETTLE_ALGORITHM_VERSION,
+      settleReason: null,
+      settleElapsed: null,
+    }
   }
 
   /** 注入 engine 引用（解决 controller ↔ engine 循环依赖） */
@@ -38,8 +97,7 @@ export class GameController {
     if (phase === 'rolling' || phase === 'tilt-confirm' || !this.engine) return
 
     this.store.getState().setPhase('rolling')
-    reseed()  // 每次投掷重新播种，便于复现
-    throwDice(this.dicePairs)
+    this.startRoll()
     this.engine.beginSettle()
   }
 
@@ -47,8 +105,13 @@ export class GameController {
    * 停稳回调：读取详细点数 → 冻结骰子 → 判定倾斜 → 分流
    * 冻结在判定之前，确保 tilt-confirm 期间骰子姿态不漂移
    */
-  onSettled(): void {
+  onSettled(settleResult?: SettleResult): void {
     const bodies = this.dicePairs.map((p) => p.body)
+    this.rollDiagnostics = {
+      ...this.rollDiagnostics,
+      settleReason: settleResult?.reason ?? 'external-call',
+      settleElapsed: settleResult?.elapsed ?? null,
+    }
 
     // 1. 读取详细结果（点数 + 可信度）
     const detailedResults = readAllFacesDetailed(bodies)
@@ -65,6 +128,8 @@ export class GameController {
     // 控制台输出完整结算结果，含种子便于复现
     console.log('[博饼结算]', {
       seed: getCurrentSeed(),
+      settleReason: settleResult?.reason ?? 'external-call',
+      settleElapsed: settleResult?.elapsed,
       diceValues,
       ...result,
       confidences: detailedResults.map((r) => r.confidence.toFixed(3)),
@@ -101,8 +166,7 @@ export class GameController {
     if (phase !== 'tilt-confirm') return
 
     this.store.getState().clearPending()
-    reseed()
-    throwDice(this.dicePairs)
+    this.startRoll()
     this.engine?.beginSettle()
   }
 
@@ -113,17 +177,8 @@ export class GameController {
 
     this.store.getState().resetState()
 
-    // 骰子回到碗底附近初始位置
-    this.dicePairs.forEach(({ body }, i) => {
-      const angle = (i / this.dicePairs.length) * Math.PI * 2
-      body.position.set(Math.cos(angle) * 0.3, 0.3, Math.sin(angle) * 0.3)
-      body.previousPosition.copy(body.position)
-      body.velocity.set(0, 0, 0)
-      body.angularVelocity.set(0, 0, 0)
-      body.quaternion.set(0, 0, 0, 1)
-      body.aabbNeedsUpdate = true
-      body.wakeUp()
-    })
+    placeDiceAtRest(this.dicePairs)
+    this.engine?.returnToIdle()
   }
 
   /** 音效开关 */
@@ -131,5 +186,10 @@ export class GameController {
     this.store.getState().toggleSound()
     const { soundEnabled } = this.store.getState()
     soundManager.setMuted(!soundEnabled)
+  }
+
+  /** 返回独立快照，供浏览器门禁与本地诊断记录实际投掷路径。 */
+  getRollDiagnostics(): GameRollDiagnostics {
+    return { ...this.rollDiagnostics }
   }
 }

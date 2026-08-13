@@ -9,6 +9,7 @@ import { createPhysicsWorld } from '@/physics/world'
 import { createBowlBodies, ESCAPE_Y } from '@/physics/bowl-body'
 import { setupContactMaterials } from '@/physics/materials'
 import { createDiceBody } from '@/dice/dice-body'
+import type { DicePair } from '@/dice/create'
 import { checkSettled, createSettleState } from '@/dice/settle'
 import { PHYSICS } from '@/config/physics'
 import { SETTLE } from '@/config/settle'
@@ -20,7 +21,11 @@ import * as CANNON from 'cannon-es'
 
 type SettlePath = 'sleep' | 'threshold' | 'timeout'
 
-function classifySettlePath(bodies: CANNON.Body[], currentTime: number, startTime: number): SettlePath {
+function classifySettlePath(
+  bodies: CANNON.Body[],
+  currentTime: number,
+  startTime: number,
+): SettlePath {
   if (bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)) return 'sleep'
   if (currentTime - startTime >= SETTLE.timeout) return 'timeout'
   return 'threshold'
@@ -35,7 +40,7 @@ function runTrial(seed: number) {
   const dicePairs = Array.from({ length: 6 }, () => {
     const body = createDiceBody()
     world.addBody(body)
-    return { mesh: {} as any, body }
+    return { mesh: {} as DicePair['mesh'], body }
   })
   throwDice(dicePairs)
   const bodies = dicePairs.map((p) => p.body)
@@ -84,7 +89,7 @@ describe('高度分层验证', () => {
       const dicePairs = Array.from({ length: 6 }, () => {
         const body = createDiceBody()
         world.addBody(body)
-        return { mesh: {} as any, body }
+        return { mesh: {} as DicePair['mesh'], body }
       })
       throwDice(dicePairs)
       heightSets.push(dicePairs.map((p) => p.body.position.y))
@@ -126,30 +131,15 @@ describe('fallback 拓扑覆盖', () => {
       const dicePairs = Array.from({ length: 6 }, () => {
         const body = createDiceBody()
         world.addBody(body)
-        return { mesh: {} as any, body }
+        return { mesh: {} as DicePair['mesh'], body }
       })
-      throwDice(dicePairs)
-
-      const rs = dicePairs
-        .map((p) => {
-          const { x, z } = p.body.position
-          return Math.sqrt(x * x + z * z)
-        })
-        .sort((a, b) => a - b)
-
-      const rRange = rs[5] - rs[0]
-
-      if (rs[0] < 0.05) {
-        center15Count++
-      } else if (rRange < 0.15) {
-        ring6Count++
-      } else {
-        const innerRange = rs[2] - rs[0]
-        const outerRange = rs[5] - rs[3]
-        const gap = rs[3] - rs[2]
-        if (gap > 0.08 && innerRange < 0.1 && outerRange < 0.1) {
-          dual33Count++
-        }
+      // 这项历史契约只验证 legacy-v1 fallback 的三种拓扑。
+      // 使用真实 diagnostics，避免从构造式/新默认路径的位置反推布局而产生假阳性。
+      const diagnostics = throwDice(dicePairs, { algorithm: 'legacy-v1' })
+      if (diagnostics.placementPath === 'fallback') {
+        if (diagnostics.fallbackLayout === 'ring6') ring6Count++
+        else if (diagnostics.fallbackLayout === 'dual33') dual33Count++
+        else if (diagnostics.fallbackLayout === 'center15') center15Count++
       }
 
       dispose()
@@ -171,16 +161,22 @@ describe('关键种子复现', () => {
   for (const seed of slowSeeds) {
     it(`慢结算种子 ${seed}`, { timeout: 30_000 }, () => {
       const { path, settleTime, tilts } = runTrial(seed)
-      console.log(`  seed=${seed} path=${path} time=${settleTime.toFixed(2)}s tilts=${tilts.length}`)
+      console.log(
+        `  seed=${seed} path=${path} time=${settleTime.toFixed(2)}s tilts=${tilts.length}`,
+      )
     })
   }
 
   it(`莫名倾角种子 ${tiltSeed}`, { timeout: 30_000 }, () => {
     const { path, settleTime, tilts, detailed } = runTrial(tiltSeed)
-    console.log(`  seed=${tiltSeed} path=${path} time=${settleTime.toFixed(2)}s tilts=${tilts.length}`)
+    console.log(
+      `  seed=${tiltSeed} path=${path} time=${settleTime.toFixed(2)}s tilts=${tilts.length}`,
+    )
     for (const d of detailed) {
       const angle = Math.acos(Math.min(1, d.confidence)) * (180 / Math.PI)
-      console.log(`    die${detailed.indexOf(d) + 1}: value=${d.value} conf=${d.confidence.toFixed(3)} angle=${angle.toFixed(1)}°`)
+      console.log(
+        `    die${detailed.indexOf(d) + 1}: value=${d.value} conf=${d.confidence.toFixed(3)} angle=${angle.toFixed(1)}°`,
+      )
     }
   })
 })

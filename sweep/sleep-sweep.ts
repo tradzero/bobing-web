@@ -11,7 +11,7 @@
 import { runTrial, parseArgs, formatDuration, type SettlePath } from './lib/run-trial'
 import { createLogger } from './lib/log'
 
-const DEFAULT_VALUES = [0.32, 0.30, 0.28]
+const DEFAULT_VALUES = [0.32, 0.3, 0.28]
 const SLOW_SEEDS = [1776308075747, 1776308125213, 1776308167330, 1776308186180, 1776308201964]
 const TILT_SEED = 1776308150130
 
@@ -19,9 +19,7 @@ const TILT_SEED = 1776308150130
 const args = parseArgs()
 const N = parseInt(args['seeds'] ?? '500', 10)
 const BASE_SEED = 50000
-const sweepValues = args['values']
-  ? args['values'].split(',').map(Number)
-  : DEFAULT_VALUES
+const sweepValues = args['values'] ? args['values'].split(',').map(Number) : DEFAULT_VALUES
 
 const log = createLogger('sleep-sweep')
 console.log(`sleep-sweep: ${N} seeds × ${sweepValues.length} 值, 日志 → ${log.filePath}`)
@@ -32,10 +30,15 @@ const totalStart = Date.now()
 for (let vi = 0; vi < sweepValues.length; vi++) {
   const stl = sweepValues[vi]
   const vStart = Date.now()
-  const paths: Record<SettlePath, number> = { sleep: 0, threshold: 0, timeout: 0 }
+  const paths: Record<SettlePath, number> = {
+    'natural-sleep': 0,
+    'stable-window': 0,
+    'pose-stable-window': 0,
+    'cluster-assist': 0,
+    timeout: 0,
+  }
   const times: number[] = []
   let tiltDice = 0
-  let tiltRounds = 0
 
   // ── 批量 seed ──
   for (let i = 0; i < N; i++) {
@@ -44,7 +47,6 @@ for (let vi = 0; vi < sweepValues.length; vi++) {
     paths[r.settlePath]++
     times.push(r.settleTime)
     tiltDice += r.tiltCount
-    if (r.tiltCount > 0) tiltRounds++
 
     log.append({
       type: 'trial',
@@ -92,7 +94,8 @@ for (let vi = 0; vi < sweepValues.length; vi++) {
   const elapsed = formatDuration(Date.now() - vStart)
 
   const line =
-    `[stl=${stl}] sleep=${paths.sleep} thresh=${paths.threshold} timeout=${paths.timeout} ` +
+    `[stl=${stl}] natural-sleep=${paths['natural-sleep']} stable-window=${paths['stable-window']} pose-stable-window=${paths['pose-stable-window']} ` +
+    `cluster-assist=${paths['cluster-assist']} timeout=${paths.timeout} ` +
     `tilt=${tiltDice}/${N * 6} avg=${avg.toFixed(2)}s p50=${p50.toFixed(2)}s p90=${p90.toFixed(2)}s p95=${p95.toFixed(2)}s >5s=${over5s} (${elapsed})`
   console.log(`  ${vi + 1}/${sweepValues.length} ${line}`)
   summaryLines.push(line)

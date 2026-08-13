@@ -3,6 +3,33 @@ import { describe, it, expect } from 'vitest'
 import { judge } from '@/rules/judge'
 import { Prize } from '@/rules/types'
 
+describe('输入契约', () => {
+  it.each([
+    { diceValues: [] },
+    { diceValues: [1, 2, 3, 4, 5] },
+    { diceValues: [1, 2, 3, 4, 5, 6, 1] },
+  ])('拒绝非 6 颗骰子的组合：$diceValues', ({ diceValues }) => {
+    expect(() => judge(diceValues)).toThrow(RangeError)
+    expect(() => judge(diceValues)).toThrow(/恰好 6 颗骰子/)
+  })
+
+  it.each([
+    { diceValues: [0, 1, 2, 3, 4, 5] },
+    { diceValues: [1, 2, 3, 4, 5, 7] },
+    { diceValues: [1, 2, 3, 4, 5, 1.5] },
+    { diceValues: [1, 2, 3, 4, 5, Number.NaN] },
+    { diceValues: [1, 2, 3, 4, 5, Number.POSITIVE_INFINITY] },
+    { diceValues: [1, 2, 3, 4, 5, Number.NEGATIVE_INFINITY] },
+  ])('拒绝不在 1..6 内的有限整数：$diceValues', ({ diceValues }) => {
+    expect(() => judge(diceValues)).toThrow(RangeError)
+    expect(() => judge(diceValues)).toThrow(/1 到 6 的有限整数/)
+  })
+
+  it('拒绝非数组输入', () => {
+    expect(() => judge(null as unknown as number[])).toThrow(TypeError)
+  })
+})
+
 describe('奖级判定 - 全部 13 种奖级典型用例', () => {
   it('状元插金花：4个四 + 2个一', () => {
     const r = judge([4, 1, 4, 4, 1, 4])
@@ -214,6 +241,7 @@ describe('六子内部排序', () => {
 })
 
 describe('穷举校验 - 46656 种组合', () => {
+  // correctness 门禁固定覆盖全部组合；超时只留出共享 CI 的调度噪声，不作为性能指标。
   it('每种组合只命中一个最高优先级，且输出一致', () => {
     let count = 0
     for (let a = 1; a <= 6; a++) {
@@ -239,18 +267,13 @@ describe('穷举校验 - 46656 种组合', () => {
                 expect(r2.carryScore).toBe(r.carryScore)
 
                 // matchedDice + remainDice 应包含所有原始骰子
-                const all = [...r.matchedDice, ...r.remainDice].sort(
-                  (x, y) => x - y,
-                )
+                const all = [...r.matchedDice, ...r.remainDice].sort((x, y) => x - y)
                 const expected = [...dice].sort((x, y) => x - y)
                 expect(all).toEqual(expected)
 
                 // 带数一致性（未中奖时 carryScore=0 但 remainDice 为全部骰子）
                 if (r.prize !== Prize.None) {
-                  const expectedCarry = r.remainDice.reduce(
-                    (sum, v) => sum + v,
-                    0,
-                  )
+                  const expectedCarry = r.remainDice.reduce((sum, v) => sum + v, 0)
                   expect(r.carryScore).toBe(expectedCarry)
                 } else {
                   expect(r.carryScore).toBe(0)
@@ -262,5 +285,5 @@ describe('穷举校验 - 46656 种组合', () => {
       }
     }
     expect(count).toBe(46656)
-  })
+  }, 15_000)
 })

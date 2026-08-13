@@ -1,94 +1,63 @@
 // @vitest-environment node
-import { describe, it, expect, afterEach } from 'vitest'
-import * as CANNON from 'cannon-es'
-import { createPhysicsWorld } from '@/physics/world'
-import { createBowlBodies } from '@/physics/bowl-body'
-import { setupContactMaterials } from '@/physics/materials'
-import { createDiceBody } from '@/dice/dice-body'
-import { setRandom, resetRandom } from '@/utils/random'
-import { initThrowBody } from '@/dice/throw'
-import { checkSettled, createSettleState } from '@/dice/settle'
-import { readAllFaces } from '@/dice/read-face'
+import { describe, expect, it } from 'vitest'
+import { SETTLE } from '@/config/settle'
+import { runRoll } from '@/physics/roll-runner'
+import { judge } from '@/rules/judge'
 
 /**
- * 冻结前后读数一致性测试
- * 在真实物理路径结算瞬间，先读一次点数，再模拟 controller 冻结
- * （velocity/angularVelocity 归零 + sleep），再读一次点数
- * 两次结果必须完全一致
- *
- * 防止冻结改变四元数、read-face 受速度影响等隐蔽回归
+ * 对历史上确实触发 cluster-assist 的固定 seed 做反事实：默认路径必须继续到
+ * natural sleep；显式历史 variant 仍可复现人工截断，便于后续 A/B。
  */
-describe('冻结前后读数一致性', () => {
-  afterEach(() => {
-    resetRandom()
-  })
+describe('接触簇冻结反事实一致性', () => {
+  const regressions = [
+    { seed: 65_000, values: [1, 5, 4, 1, 2, 6] },
+    { seed: 67_000, values: [4, 3, 4, 4, 5, 5] },
+    { seed: 208_000, values: [5, 4, 5, 6, 1, 2] },
+    { seed: 212_000, values: [4, 3, 2, 3, 2, 3] },
+  ] as const
 
-  function makeLCG(initialSeed: number) {
-    let seed = initialSeed
-    return () => {
-      seed = (seed * 16807) % 2147483647
-      return (seed - 1) / 2147483646
-    }
-  }
+  for (const { seed, values } of regressions) {
+    it(`种子 ${seed}: 默认自然结算，显式 variant 可复现 Assist`, () => {
+      const natural = runRoll({ seed, throwPlacementAlgorithm: 'legacy-v1' })
+      const assisted = runRoll({
+        seed,
+        throwPlacementAlgorithm: 'legacy-v1',
+        contactClusterAssistEnabled: true,
+      })
+      const reproduce = `pnpm test:seed -- --seed=${seed}`
 
-  const seeds = [42, 12345, 7777, 99999, 314159]
+      expect(natural.settleReason, reproduce).toBe('natural-sleep')
+      expect(natural.assistInterventionCount, reproduce).toBe(0)
+      expect(assisted.settleReason, reproduce).toBe('cluster-assist')
+      expect(assisted.assistInterventionCount, reproduce).toBeGreaterThan(0)
 
-  for (const seed of seeds) {
-    it(`种子 ${seed}: 冻结前后点数一致`, () => {
-      setRandom(makeLCG(seed))
-
-      const { world, step, dispose } = createPhysicsWorld()
-      setupContactMaterials(world)
-      createBowlBodies(world)
-
-      const bodies: CANNON.Body[] = []
-      for (let i = 0; i < 6; i++) {
-        const body = createDiceBody()
-        initThrowBody(body)
-        world.addBody(body)
-        bodies.push(body)
-      }
-
-      const dt = 1 / 60
-      const settleState = createSettleState(0)
-      let settled = false
-
-      for (let f = 0; f < 600; f++) {
-        step(dt)
-        const currentTime = (f + 1) * dt
-        if (checkSettled(bodies, currentTime, settleState, world)) {
-          settled = true
-          break
-        }
-      }
-
-      expect(settled, `种子${seed}: 未能在限定帧内结算`).toBe(true)
-
-      // 冻结前读数
-      const readBefore = readAllFaces(bodies)
-
-      // 模拟 controller.onSettled 冻结
-      for (const body of bodies) {
-        body.velocity.set(0, 0, 0)
-        body.angularVelocity.set(0, 0, 0)
-        body.sleep()
-      }
-
-      // 冻结后读数
-      const readAfter = readAllFaces(bodies)
-
-      expect(
-        readAfter,
-        `种子${seed}: 冻结前${readBefore} 冻结后${readAfter}`,
-      ).toEqual(readBefore)
-
-      // 额外验证：每个点数在 1-6 范围
-      for (const v of readAfter) {
-        expect(v).toBeGreaterThanOrEqual(1)
-        expect(v).toBeLessThanOrEqual(6)
-      }
-
-      dispose()
+      const assistedValues = assisted.finalFaces.map(({ value }) => value)
+      const naturalValues = natural.finalFaces.map(({ value }) => value)
+      expect(naturalValues, reproduce).toEqual(values)
+      expect(assistedValues, reproduce).toEqual(naturalValues)
+      expect(judge(assistedValues), reproduce).toEqual(judge(naturalValues))
     })
   }
+
+  it('种子 208000: 默认路径按自然终态进入倾斜确认', () => {
+    const natural = runRoll({ seed: 208_000, throwPlacementAlgorithm: 'legacy-v1' })
+    const assisted = runRoll({
+      seed: 208_000,
+      throwPlacementAlgorithm: 'legacy-v1',
+      contactClusterAssistEnabled: true,
+    })
+    const naturallyTilted = natural.finalFaces[1]
+    const prematurelyAccepted = assisted.finalFaces[1]
+
+    expect(natural.settleReason).toBe('natural-sleep')
+    expect(natural.ambiguousDiceCount).toBe(1)
+    expect(naturallyTilted.value).toBe(4)
+    expect(naturallyTilted.confidence).toBeLessThan(SETTLE.tiltThreshold)
+
+    // 历史 Assist 在相同骰面尚高于阈值时截断，证明两条路径的 UI 语义确有差异。
+    expect(assisted.settleReason).toBe('cluster-assist')
+    expect(assisted.ambiguousDiceCount).toBe(0)
+    expect(prematurelyAccepted.value).toBe(4)
+    expect(prematurelyAccepted.confidence).toBeGreaterThan(SETTLE.tiltThreshold)
+  })
 })

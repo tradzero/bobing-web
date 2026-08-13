@@ -1,7 +1,16 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { initThrowBody, throwDice } from '@/dice/throw'
+import {
+  createThrowRandomPlan,
+  initThrowBody,
+  mapThrowHeightUnit,
+  throwDice,
+  type FallbackLayout,
+  type ThrowDiagnostics,
+  type ThrowHeightBand,
+  type ThrowPlacementAlgorithm,
+} from '@/dice/throw'
 import { THROW } from '@/config/throw'
 import { createDiceBody } from '@/dice/dice-body'
 import { setRandom, resetRandom } from '@/utils/random'
@@ -110,7 +119,7 @@ describe('批量投掷初始间距', () => {
   function makeDicePairs() {
     return Array.from({ length: 6 }, () => {
       const body = createDiceBody()
-      const mesh = {} as any // 仅需 body
+      const mesh = {} as never // 仅需 body
       return { mesh, body }
     })
   }
@@ -139,4 +148,158 @@ describe('批量投掷初始间距', () => {
       }
     })
   }
+
+  for (const algorithm of [
+    'radial-rejection',
+    'uniform-area-restarts',
+    'stratified-ring',
+  ] satisfies ThrowPlacementAlgorithm[]) {
+    it(`${algorithm}: 固定 seed 样本同时满足 pairwise 与散布半径约束`, () => {
+      const pairs = makeDicePairs()
+      for (const seed of testSeeds) {
+        throwDice(pairs, { seed, algorithm })
+
+        for (let i = 0; i < pairs.length; i++) {
+          const pi = pairs[i].body.position
+          expect(Math.hypot(pi.x, pi.z)).toBeLessThanOrEqual(THROW.spreadRadius + 0.001)
+          for (let j = i + 1; j < pairs.length; j++) {
+            const pj = pairs[j].body.position
+            expect(Math.hypot(pi.x - pj.x, pi.z - pj.z)).toBeGreaterThanOrEqual(
+              THROW.minSeparation - 0.001,
+            )
+          }
+        }
+      }
+    })
+  }
+})
+
+function heightBandsForDiagnostics(
+  diagnostics: ThrowDiagnostics,
+  diceCount: number,
+): ThrowHeightBand[] {
+  if (diagnostics.placementPath !== 'fallback') return Array(diceCount).fill(null)
+
+  const bandsByLayout: Record<FallbackLayout, ThrowHeightBand[]> = {
+    ring6: ['high', 'low', 'high', 'low', 'high', 'low'],
+    dual33: ['high', 'high', 'high', 'low', 'low', 'low'],
+    center15: ['high', 'low', 'low', 'low', 'low', 'low'],
+  }
+  return bandsByLayout[diagnostics.fallbackLayout]
+}
+
+function fromUnit(unit: number, min: number, max: number): number {
+  return min + unit * (max - min)
+}
+
+describe('位置 sampler 与动力学随机子流隔离', () => {
+  function makeDicePairs() {
+    return Array.from({ length: 6 }, () => ({
+      mesh: {} as never,
+      body: createDiceBody(),
+    }))
+  }
+
+  it('同 seed 的 radial 与 uniform 使用完全相同的 quaternion/velocity/angular units', () => {
+    const seed = 55000
+    const radialPairs = makeDicePairs()
+    const uniformPairs = makeDicePairs()
+    const radialDiagnostics = throwDice(radialPairs, { seed, algorithm: 'radial-rejection' })
+    const uniformDiagnostics = throwDice(uniformPairs, {
+      seed,
+      algorithm: 'uniform-area-restarts',
+    })
+    const plan = createThrowRandomPlan(seed, 6)
+    const radialBands = heightBandsForDiagnostics(radialDiagnostics, 6)
+    const uniformBands = heightBandsForDiagnostics(uniformDiagnostics, 6)
+
+    expect(radialDiagnostics.randomPlanVersion).toBe(plan.version)
+    expect(uniformDiagnostics.randomPlanVersion).toBe(plan.version)
+    // 此 seed 在 uniform 五轮失败后进入分层 fallback，确保测试覆盖 height unit 重映射。
+    expect(uniformDiagnostics).toMatchObject({
+      placementPath: 'fallback',
+      fallbackLayout: 'center15',
+    })
+
+    for (let i = 0; i < 6; i++) {
+      const radial = radialPairs[i].body
+      const uniform = uniformPairs[i].body
+      const units = plan.dice[i]
+
+      expect(radial.quaternion.toArray()).toEqual(uniform.quaternion.toArray())
+      expect(radial.angularVelocity.toArray()).toEqual(uniform.angularVelocity.toArray())
+      expect(radial.position.y).toBeCloseTo(mapThrowHeightUnit(units.height, radialBands[i]), 14)
+      expect(uniform.position.y).toBeCloseTo(mapThrowHeightUnit(units.height, uniformBands[i]), 14)
+
+      const expectedVx = fromUnit(
+        units.velocity[0],
+        THROW.horizontalSpeedMin,
+        THROW.horizontalSpeedMax,
+      )
+      const expectedVy = fromUnit(units.velocity[1], THROW.downSpeedMin, THROW.downSpeedMax)
+      const expectedVz = fromUnit(
+        units.velocity[2],
+        THROW.horizontalSpeedMin,
+        THROW.horizontalSpeedMax,
+      )
+
+      // 去掉由不同初始位置产生的向心项后，两种 sampler 的基础速度完全同源。
+      expect(radial.velocity.x + radial.position.x * 0.5).toBeCloseTo(expectedVx, 14)
+      expect(uniform.velocity.x + uniform.position.x * 0.5).toBeCloseTo(expectedVx, 14)
+      expect(radial.velocity.y).toBe(expectedVy)
+      expect(uniform.velocity.y).toBe(expectedVy)
+      expect(radial.velocity.z + radial.position.z * 0.5).toBeCloseTo(expectedVz, 14)
+      expect(uniform.velocity.z + uniform.position.z * 0.5).toBeCloseTo(expectedVz, 14)
+
+      const expectedAngular = units.angularVelocity.map((unit) =>
+        fromUnit(unit, THROW.angularSpeedMin, THROW.angularSpeedMax),
+      )
+      expect(radial.angularVelocity.toArray()).toEqual(expectedAngular)
+      expect(uniform.angularVelocity.toArray()).toEqual(expectedAngular)
+    }
+  })
+
+  it('同 seed 的 stratified-ring 与 uniform 复用完全相同的动力学随机计划', () => {
+    const seed = 72000
+    const stratifiedPairs = makeDicePairs()
+    const uniformPairs = makeDicePairs()
+
+    const stratifiedDiagnostics = throwDice(stratifiedPairs, {
+      seed,
+      algorithm: 'stratified-ring',
+    })
+    throwDice(uniformPairs, { seed, algorithm: 'uniform-area-restarts' })
+
+    expect(stratifiedDiagnostics).toMatchObject({
+      placementPath: 'constructive',
+      attempts: 0,
+      restarts: 0,
+      groupAttempts: 1,
+      fallbackLayout: null,
+      randomPlanVersion: 1,
+    })
+    for (let index = 0; index < 6; index++) {
+      const stratified = stratifiedPairs[index].body
+      const uniform = uniformPairs[index].body
+      expect(stratified.quaternion.toArray()).toEqual(uniform.quaternion.toArray())
+      expect(stratified.angularVelocity.toArray()).toEqual(uniform.angularVelocity.toArray())
+      expect(stratified.position.y).toBe(uniform.position.y)
+      expect(stratified.velocity.x + stratified.position.x * 0.5).toBeCloseTo(
+        uniform.velocity.x + uniform.position.x * 0.5,
+        14,
+      )
+      expect(stratified.velocity.y).toBe(uniform.velocity.y)
+      expect(stratified.velocity.z + stratified.position.z * 0.5).toBeCloseTo(
+        uniform.velocity.z + uniform.position.z * 0.5,
+        14,
+      )
+    }
+  })
+
+  it('同一个 height unit 只做区间映射，不额外消费随机数', () => {
+    const unit = 0.25
+    expect(mapThrowHeightUnit(unit, null)).toBeCloseTo(1.3, 14)
+    expect(mapThrowHeightUnit(unit, 'high')).toBeCloseTo(1.4875, 14)
+    expect(mapThrowHeightUnit(unit, 'low')).toBeCloseTo(1.2375, 14)
+  })
 })

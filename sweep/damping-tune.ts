@@ -15,12 +15,12 @@ interface DampingVariant {
 }
 
 const VARIANTS: DampingVariant[] = [
-  { label: 'current (0.30/0.30)', linear: 0.30, angular: 0.30 },
+  { label: 'current (0.30/0.30)', linear: 0.3, angular: 0.3 },
   { label: 'ld=0.35 ad=0.35', linear: 0.35, angular: 0.35 },
-  { label: 'ld=0.40 ad=0.40', linear: 0.40, angular: 0.40 },
+  { label: 'ld=0.40 ad=0.40', linear: 0.4, angular: 0.4 },
   { label: 'ld=0.35 ad=0.45', linear: 0.35, angular: 0.45 },
-  { label: 'ld=0.30 ad=0.45', linear: 0.30, angular: 0.45 },
-  { label: 'ld=0.40 ad=0.50', linear: 0.40, angular: 0.50 },
+  { label: 'ld=0.30 ad=0.45', linear: 0.3, angular: 0.45 },
+  { label: 'ld=0.40 ad=0.50', linear: 0.4, angular: 0.5 },
 ]
 
 console.log(`damping-tune: ${N} seeds × ${VARIANTS.length} 变体 (chamfer)\n`)
@@ -29,9 +29,13 @@ for (let vi = 0; vi < VARIANTS.length; vi++) {
   const v = VARIANTS[vi]
   const t0 = Date.now()
   let tiltDice = 0
-  let tiltRounds = 0
-  let timeoutCount = 0
-  let sleepCount = 0
+  const settlePaths: Record<SettlePath, number> = {
+    'natural-sleep': 0,
+    'stable-window': 0,
+    'pose-stable-window': 0,
+    'cluster-assist': 0,
+    timeout: 0,
+  }
   const times: number[] = []
 
   for (let i = 0; i < N; i++) {
@@ -43,9 +47,7 @@ for (let vi = 0; vi < VARIANTS.length; vi++) {
     })
     times.push(r.settleTime)
     tiltDice += r.tiltCount
-    if (r.tiltCount > 0) tiltRounds++
-    if (r.settlePath === 'timeout') timeoutCount++
-    if (r.settlePath === 'sleep') sleepCount++
+    settlePaths[r.settlePath]++
   }
 
   times.sort((a, b) => a - b)
@@ -55,10 +57,13 @@ for (let vi = 0; vi < VARIANTS.length; vi++) {
 
   console.log(
     `  ${v.label.padEnd(22)} ` +
-    `timeout=${String(timeoutCount).padStart(3)} (${(timeoutCount/N*100).toFixed(0)}%)  ` +
-    `tilt=${String(tiltDice).padStart(2)}  ` +
-    `sleep=${String(sleepCount).padStart(3)}  ` +
-    `avg=${avg.toFixed(2)}s  p95=${p95.toFixed(2)}s  ` +
-    `(${elapsed})`
+      `timeout=${String(settlePaths.timeout).padStart(3)} (${((settlePaths.timeout / N) * 100).toFixed(0)}%)  ` +
+      `tilt=${String(tiltDice).padStart(2)}  ` +
+      `natural-sleep=${String(settlePaths['natural-sleep']).padStart(3)}  ` +
+      `stable-window=${String(settlePaths['stable-window']).padStart(3)}  ` +
+      `pose-stable=${String(settlePaths['pose-stable-window']).padStart(3)}  ` +
+      `cluster-assist=${String(settlePaths['cluster-assist']).padStart(3)}  ` +
+      `avg=${avg.toFixed(2)}s  p95=${p95.toFixed(2)}s  ` +
+      `(${elapsed})`,
   )
 }

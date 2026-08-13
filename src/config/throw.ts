@@ -1,9 +1,20 @@
 import { PHYSICS } from './physics'
 
+/** 初始位置采样算法；字符串是 seed 复现记录的一部分。 */
+export type ThrowPlacementAlgorithm =
+  | 'legacy-v1'
+  | 'radial-rejection'
+  | 'uniform-area-restarts'
+  | 'stratified-ring'
+
+export const DEFAULT_THROW_PLACEMENT_ALGORITHM: ThrowPlacementAlgorithm = 'stratified-ring'
+
 /**
  * 投掷参数集中配置
  */
 export const THROW = {
+  /** 默认上线的初始位置采样算法 */
+  placementAlgorithm: DEFAULT_THROW_PLACEMENT_ALGORITHM,
   /** 初始高度范围 (m) */
   heightMin: 1.2,
   heightMax: 1.6,
@@ -16,6 +27,10 @@ export const THROW = {
   minSeparation: PHYSICS.diceHalfSize * 2 * Math.sqrt(3) + 0.02,
   /** 去重最大重试次数，超出后进入确定性 fallback */
   maxPlacementAttempts: 30,
+  /** 面积均匀算法的整组尝试总数（含首轮，最多产生 4 次 restart） */
+  maxPlacementGroupAttempts: 5,
+  /** 六扇区分层环的半径；相邻骰子的初始水平间距等于此值。 */
+  stratifiedRingRadius: 0.55,
   /** 向下初速度范围 (m/s) */
   downSpeedMin: -2.0,
   downSpeedMax: -1.0,

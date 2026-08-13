@@ -1145,6 +1145,40 @@
   .panel-header {
     flex-wrap: wrap;
   }
+
+  /* 移动端降低大面积背景采样成本；小面积 .btn-icon 仍保留桌面质感。 */
+  .top-bar,
+  .tilt-warning,
+  .result-panel,
+  .panel-card {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .top-bar {
+    background: rgba(67, 27, 20, 0.94);
+  }
+
+  .tilt-warning {
+    background: rgba(51, 27, 21, 0.94);
+  }
+
+  .result-panel {
+    background: rgba(55, 29, 22, 0.95);
+  }
+
+  .result-panel.result-panel-none {
+    background: rgba(49, 27, 22, 0.95);
+  }
+
+  .panel-card {
+    background: rgba(51, 28, 22, 0.94);
+  }
+
+  /* buttonPulse 会逐帧重绘 box-shadow；只保留 ornament 的 transform/opacity 动画。 */
+  .btn-throw.is-rolling {
+    animation: none;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1186,5 +1220,62 @@
 
   .panel-title {
     font-size: 1.38rem;
+  }
+}
+
+/* update: slow 覆盖浏览器可明确暴露的低刷新显示环境。 */
+@media (update: slow) {
+  .top-bar,
+  .tilt-warning,
+  .result-panel,
+  .panel-card {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .top-bar {
+    background: rgba(67, 27, 20, 0.94);
+  }
+
+  .tilt-warning {
+    background: rgba(51, 27, 21, 0.94);
+  }
+
+  .result-panel {
+    background: rgba(55, 29, 22, 0.95);
+  }
+
+  .result-panel.result-panel-none {
+    background: rgba(49, 27, 22, 0.95);
+  }
+
+  .panel-card {
+    background: rgba(51, 28, 22, 0.94);
+  }
+
+  .btn-throw.is-rolling,
+  .btn-throw.is-rolling .btn-throw-ornament,
+  .tilt-warning,
+  .result-panel {
+    animation: none;
+  }
+}
+
+/* 减弱动态偏好只控制运动，不额外牺牲桌面 blur 等静态视觉。 */
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
+
+  .btn-throw.is-rolling,
+  .btn-throw.is-rolling .btn-throw-ornament,
+  .tilt-warning,
+  .result-panel {
+    animation: none;
+  }
+
+  .btn-throw:not(:disabled):hover,
+  .btn-icon:not(:disabled):hover {
+    transform: none;
   }
 }

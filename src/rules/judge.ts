@@ -29,11 +29,35 @@ function buildDescription(name: string, carryScore: number): string {
 }
 
 /**
+ * 校验判奖入口的运行时契约，避免非法组合被静默判成正常奖级。
+ */
+function assertValidDiceValues(diceValues: number[]): void {
+  if (!Array.isArray(diceValues)) {
+    throw new TypeError('博饼判定必须传入骰子点数数组')
+  }
+
+  if (diceValues.length !== 6) {
+    throw new RangeError(`博饼判定必须传入恰好 6 颗骰子，实际收到 ${diceValues.length} 颗`)
+  }
+
+  for (let index = 0; index < diceValues.length; index++) {
+    const value = diceValues[index]
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1 || value > 6) {
+      throw new RangeError(
+        `骰子点数必须是 1 到 6 的有限整数，索引 ${index} 的值为 ${String(value)}`,
+      )
+    }
+  }
+}
+
+/**
  * 博饼奖级判定函数
  * 输入 6 个骰子点数（1-6），输出完整 JudgeResult
  * 按规则表 priority 升序遍历，命中第一个即返回
  */
 export function judge(diceValues: number[]): JudgeResult {
+  assertValidDiceValues(diceValues)
+
   // 排序副本，用于规则匹配
   const sorted = [...diceValues].sort((a, b) => a - b)
 

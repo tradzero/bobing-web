@@ -10,7 +10,6 @@
 import { runTrial, parseArgs, formatDuration, type SettlePath } from './lib/run-trial'
 import { createLogger } from './lib/log'
 import { SETTLE } from '@/config/settle'
-import { bowlInnerHeight } from '@/config/bowl'
 
 // ── CLI 参数 ──
 const args = parseArgs()
@@ -23,7 +22,13 @@ console.log(`tilt-stats: ${NUM_TRIALS} 轮, 日志 → ${log.filePath}`)
 let totalDice = 0
 let tiltCount = 0
 let tiltRounds = 0
-const settlePaths: Record<SettlePath, number> = { sleep: 0, threshold: 0, timeout: 0 }
+const settlePaths: Record<SettlePath, number> = {
+  'natural-sleep': 0,
+  'stable-window': 0,
+  'pose-stable-window': 0,
+  'cluster-assist': 0,
+  timeout: 0,
+}
 const tiltData: Array<{
   seed: number
   dieIdx: number
@@ -62,7 +67,7 @@ for (let trial = 0; trial < NUM_TRIALS; trial++) {
         dieIdx: i,
         confidence: d.confidence,
         angleDeg,
-        r: 0,     // 位置信息需复现获取，此处记 0
+        r: 0, // 位置信息需复现获取，此处记 0
         y: 0,
         wallAngleDeg: 0,
         settlePath: r.settlePath,
@@ -83,7 +88,7 @@ for (let trial = 0; trial < NUM_TRIALS; trial++) {
 
   // 进度
   if ((trial + 1) % 50 === 0) {
-    const pct = ((trial + 1) / NUM_TRIALS * 100).toFixed(0)
+    const pct = (((trial + 1) / NUM_TRIALS) * 100).toFixed(0)
     const elapsed = formatDuration(Date.now() - start)
     console.log(`  ${pct}% (${trial + 1}/${NUM_TRIALS}) ${elapsed}`)
   }
@@ -93,17 +98,25 @@ for (let trial = 0; trial < NUM_TRIALS; trial++) {
 const elapsed = formatDuration(Date.now() - start)
 const summaryLines: string[] = [
   `倾斜统计: ${NUM_TRIALS} 轮 / ${totalDice} 颗骰子 (${elapsed})`,
-  `倾斜骰子数: ${tiltCount} (${(tiltCount / totalDice * 100).toFixed(1)}%)`,
-  `含倾斜的轮数: ${tiltRounds} (${(tiltRounds / NUM_TRIALS * 100).toFixed(1)}%)`,
-  `倾斜阈值: cos(${(Math.acos(SETTLE.tiltThreshold) * 180 / Math.PI).toFixed(1)}°) = ${SETTLE.tiltThreshold}`,
-  `settle 路径: sleep=${settlePaths.sleep} threshold=${settlePaths.threshold} timeout=${settlePaths.timeout}`,
+  `倾斜骰子数: ${tiltCount} (${((tiltCount / totalDice) * 100).toFixed(1)}%)`,
+  `含倾斜的轮数: ${tiltRounds} (${((tiltRounds / NUM_TRIALS) * 100).toFixed(1)}%)`,
+  `倾斜阈值: cos(${((Math.acos(SETTLE.tiltThreshold) * 180) / Math.PI).toFixed(1)}°) = ${SETTLE.tiltThreshold}`,
+  `settle 路径: natural-sleep=${settlePaths['natural-sleep']} stable-window=${settlePaths['stable-window']} pose-stable-window=${settlePaths['pose-stable-window']} cluster-assist=${settlePaths['cluster-assist']} timeout=${settlePaths.timeout}`,
 ]
 
 if (tiltData.length > 0) {
   // settle 路径 × 倾斜交叉
-  const tiltBySleep = tiltData.filter((d) => d.settlePath === 'sleep').length
-  const tiltByThresh = tiltData.filter((d) => d.settlePath === 'threshold').length
-  summaryLines.push(`倾斜 × settle路径: sleep=${tiltBySleep} threshold=${tiltByThresh}`)
+  const tiltByPath: Record<SettlePath, number> = {
+    'natural-sleep': 0,
+    'stable-window': 0,
+    'pose-stable-window': 0,
+    'cluster-assist': 0,
+    timeout: 0,
+  }
+  for (const datum of tiltData) tiltByPath[datum.settlePath]++
+  summaryLines.push(
+    `倾斜 × settle路径: natural-sleep=${tiltByPath['natural-sleep']} stable-window=${tiltByPath['stable-window']} pose-stable-window=${tiltByPath['pose-stable-window']} cluster-assist=${tiltByPath['cluster-assist']} timeout=${tiltByPath.timeout}`,
+  )
 
   // 倾斜角度分布
   const angleBuckets = [42, 45, 50, 55, 60, 70, 80, 90]

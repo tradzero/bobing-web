@@ -19,6 +19,9 @@ function mockEngine(): Engine {
     stop: vi.fn(),
     dispose: vi.fn(),
     beginSettle: vi.fn(),
+    returnToIdle: vi.fn(),
+    invalidate: vi.fn(),
+    getDiagnostics: vi.fn(),
   }
 }
 
@@ -39,7 +42,7 @@ function mockDicePairs(tiltIndices: number[] = [], tiltDeg = 44): DicePair[] {
       // 默认四元数 → +y 朝上 → value=1, confidence≈1.0
       body.quaternion.set(0, 0, 0, 1)
     }
-    return { mesh: {} as any, body }
+    return { mesh: {} as DicePair['mesh'], body }
   })
 }
 

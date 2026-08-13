@@ -4,7 +4,9 @@
  */
 import * as CANNON from 'cannon-es'
 import { createPhysicsWorld, type SolverMode } from '@/physics/world'
-import { createBowlBodies, ESCAPE_Y } from '@/physics/bowl-body'
+import { createBowlBodies } from '@/physics/bowl-body'
+import { applyEscapeGuard } from '@/physics/escape-guard'
+import type { DicePair } from '@/dice/create'
 import { setupContactMaterials, type ContactMaterialOverrides } from '@/physics/materials'
 import { createDiceBody, type DiceBodyOptions, type ShapeMode } from '@/dice/dice-body'
 import { PHYSICS } from '@/config/physics'
@@ -12,9 +14,10 @@ import { SETTLE } from '@/config/settle'
 import { reseed } from '@/utils/random'
 import { throwDice } from '@/dice/throw'
 import { readAllFacesDetailed, type FaceReadResult } from '@/dice/read-face'
-import { checkSettled, createSettleState } from '@/dice/settle'
+import { checkSettled, createSettleState, type SettleReason } from '@/dice/settle'
 
-export type SettlePath = 'sleep' | 'threshold' | 'timeout'
+/** sweep 对外保留旧类型名，实际值与运行时停稳原因完全一致。 */
+export type SettlePath = SettleReason
 
 /**
  * sweep 层保留独立的 chamfer 基线，避免运行时默认回退 box 后影响历史对照脚本。
@@ -135,7 +138,10 @@ export function runTrial(config: TrialConfig): TrialResult {
   ) {
     contactOverrides.diceDice = diceDiceOverrides
   }
-  setupContactMaterials(world, Object.keys(contactOverrides).length > 0 ? contactOverrides : undefined)
+  setupContactMaterials(
+    world,
+    Object.keys(contactOverrides).length > 0 ? contactOverrides : undefined,
+  )
 
   createBowlBodies(world)
   const dicePairs = Array.from({ length: 6 }, () => {
@@ -148,7 +154,7 @@ export function runTrial(config: TrialConfig): TrialResult {
     if (linearDamping !== undefined) body.linearDamping = linearDamping
     if (angularDamping !== undefined) body.angularDamping = angularDamping
     world.addBody(body)
-    return { mesh: {} as any, body }
+    return { mesh: {} as never, body } satisfies DicePair
   })
   throwDice(dicePairs)
   const bodies = dicePairs.map((p) => p.body)
@@ -165,27 +171,22 @@ export function runTrial(config: TrialConfig): TrialResult {
     step(dt)
     t += dt
 
-    // 逃逸反射
+    // 与运行时共用同一逃逸保护，避免 sweep 与真实引擎行为漂移
     for (const { body } of dicePairs) {
-      if (body.position.y > ESCAPE_Y && body.velocity.y > 0) {
-        body.velocity.y = -body.velocity.y * 0.3
-      }
+      applyEscapeGuard(body)
     }
 
     // 自定义帧回调
     if (onFrame) onFrame(i, t, bodies)
 
     // 结算检测
-    if (checkSettled(bodies, t, settleState, world, contactClusterAssistEnabled)) {
+    const settleResult = checkSettled(bodies, t, settleState, world, contactClusterAssistEnabled)
+    if (settleResult) {
       settleFrame = i
+      settlePath = settleResult.reason
       if (bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING)) {
         allSleepTime = t
         allSleepFrame = i
-        settlePath = 'sleep'
-      } else if (t - settleState.startTime >= SETTLE.timeout) {
-        settlePath = 'timeout'
-      } else {
-        settlePath = 'threshold'
       }
       break
     }

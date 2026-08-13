@@ -1,235 +1,393 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { createEngine } from '@/game/engine'
-import type { SceneContext } from '@/scene/setup'
-import type { DicePair } from '@/dice/create'
 import * as THREE from 'three'
+import type { DicePair } from '@/dice/create'
+import type { SettleResult } from '@/dice/settle'
+import { createEngine, type Engine, type EngineDiagnostics } from '@/game/engine'
+import type { SceneContext } from '@/scene/setup'
 
-/**
- * Engine 时序集成测试
- * 验证 engine 作为唯一时钟源的关键语义：
- * - beginSettle 后停稳只触发一次 onSettled
- * - settled 后不重复回调
- * - body → mesh 同步每帧执行
- */
+type MockSceneContext = SceneContext & {
+  renderer: THREE.WebGLRenderer & {
+    render: ReturnType<typeof vi.fn>
+    shadowMap: {
+      autoUpdate: boolean
+      needsUpdate: boolean
+    }
+  }
+}
 
-/** 创建 mock SceneContext（不需要真实 WebGL） */
-function mockSceneCtx(): SceneContext {
-  const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera()
-  // jsdom 无 WebGL，用普通对象替代 renderer
+function mockSceneCtx(): MockSceneContext {
   const renderer = {
     render: vi.fn(),
     setSize: vi.fn(),
     setPixelRatio: vi.fn(),
     dispose: vi.fn(),
     domElement: document.createElement('canvas'),
-  } as unknown as THREE.WebGLRenderer
+    shadowMap: {
+      autoUpdate: true,
+      needsUpdate: false,
+    },
+  } as unknown as MockSceneContext['renderer']
+
   return {
-    scene,
-    camera,
+    scene: new THREE.Scene(),
+    camera: new THREE.PerspectiveCamera(),
     renderer,
     handleResize: vi.fn(),
     dispose: vi.fn(),
   }
 }
 
-/** 创建 mock DicePair，body 已在 sleep 状态 */
-function makeSleepingDicePairs(count = 6): DicePair[] {
+function makeDicePairs(count = 1, sleeping = false): DicePair[] {
   return Array.from({ length: count }, () => {
     const body = new CANNON.Body({ mass: 0.03, allowSleep: true })
     body.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.02, 0.02)))
-    // 直接让 body sleep，模拟已停稳
-    body.sleep()
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.04, 0.04, 0.04),
-      new THREE.MeshBasicMaterial(),
-    )
-    return { body, mesh }
+    if (sleeping) body.sleep()
+
+    return {
+      body,
+      mesh: new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.04), new THREE.MeshBasicMaterial()),
+    }
   })
 }
 
-describe('Engine 时序集成测试', () => {
-  let rafCallbacks: ((timestamp: number) => void)[]
-  let rafId: number
+describe('Engine 按需调度', () => {
+  let pendingFrames: Map<number, FrameRequestCallback>
+  let nextFrameId: number
+  let engines: Engine[]
 
   beforeEach(() => {
-    rafCallbacks = []
-    rafId = 0
-    // mock requestAnimationFrame：收集回调，手动驱动
-    vi.stubGlobal('requestAnimationFrame', (cb: (t: number) => void) => {
-      rafCallbacks.push(cb)
-      return ++rafId
+    pendingFrames = new Map()
+    nextFrameId = 0
+    engines = []
+
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      const id = ++nextFrameId
+      pendingFrames.set(id, callback)
+      return id
     })
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+      pendingFrames.delete(id)
+    })
   })
 
   afterEach(() => {
+    for (const engine of engines) engine.dispose()
     vi.unstubAllGlobals()
   })
 
-  /** 手动驱动帧 tick */
-  function driveFrames(count: number, startMs = 1000, stepMs = 16.67) {
-    for (let i = 0; i < count; i++) {
-      const cbs = rafCallbacks.splice(0)
-      for (const cb of cbs) {
-        cb(startMs + i * stepMs)
-      }
-    }
+  function createFixture(options?: {
+    dicePairs?: DicePair[]
+    worldStep?: (dt: number) => void
+    onSettled?: (result: SettleResult) => void
+    onDiagnostics?: (diagnostics: EngineDiagnostics) => void
+  }) {
+    const sceneCtx = mockSceneCtx()
+    const dicePairs = options?.dicePairs ?? makeDicePairs()
+    const worldStep = options?.worldStep ?? vi.fn()
+    const onSettled = options?.onSettled ?? vi.fn()
+    const engine = createEngine({
+      sceneCtx,
+      world: new CANNON.World(),
+      worldStep,
+      dicePairs,
+      onSettled,
+      onDiagnostics: options?.onDiagnostics,
+    })
+    engines.push(engine)
+    return { engine, sceneCtx, dicePairs, worldStep, onSettled }
   }
 
-  it('beginSettle 后 onSettled 只触发一次', () => {
-    const onSettled = vi.fn()
-    const dicePairs = makeSleepingDicePairs()
-    const sceneCtx = mockSceneCtx()
+  function runNextFrame(timestamp: number): boolean {
+    const next = pendingFrames.entries().next()
+    if (next.done) return false
 
-    const engine = createEngine({
-      sceneCtx,
-      world: new CANNON.World(),
-      worldStep: vi.fn(),
-      dicePairs,
-      onSettled,
+    const [id, callback] = next.value
+    pendingFrames.delete(id)
+    callback(timestamp)
+    return true
+  }
+
+  it('start 只渲染首屏一帧，idle 不推进物理也不常驻 rAF', () => {
+    const { engine, sceneCtx, worldStep, onSettled } = createFixture()
+
+    expect(engine.getDiagnostics()).toEqual({
+      mode: 'stopped',
+      renderCount: 0,
+      physicsStepCount: 0,
+      frameScheduled: false,
     })
 
     engine.start()
-    engine.beginSettle()
-
-    // 驱动足够帧数（首帧为初始化帧，第2帧开始真正执行）
-    driveFrames(10)
-
-    expect(onSettled).toHaveBeenCalledTimes(1)
-  })
-
-  it('未调用 beginSettle 时不触发 onSettled', () => {
-    const onSettled = vi.fn()
-    const dicePairs = makeSleepingDicePairs()
-    const sceneCtx = mockSceneCtx()
-
-    const engine = createEngine({
-      sceneCtx,
-      world: new CANNON.World(),
-      worldStep: vi.fn(),
-      dicePairs,
-      onSettled,
-    })
-
     engine.start()
-    // 不调用 beginSettle
-    driveFrames(10)
+    expect(pendingFrames.size).toBe(1)
+    expect(engine.getDiagnostics().frameScheduled).toBe(true)
 
+    expect(runNextFrame(1000)).toBe(true)
+    expect(worldStep).not.toHaveBeenCalled()
     expect(onSettled).not.toHaveBeenCalled()
+    expect(sceneCtx.renderer.render).toHaveBeenCalledTimes(1)
+    expect(sceneCtx.renderer.shadowMap.autoUpdate).toBe(false)
+    expect(sceneCtx.renderer.shadowMap.needsUpdate).toBe(true)
+    expect(engine.getDiagnostics()).toEqual({
+      mode: 'idle',
+      renderCount: 1,
+      physicsStepCount: 0,
+      frameScheduled: false,
+    })
+
+    expect(runNextFrame(2000)).toBe(false)
+    expect(sceneCtx.renderer.render).toHaveBeenCalledTimes(1)
   })
 
-  it('settled 后连续帧不重复回调', () => {
-    const onSettled = vi.fn()
-    const dicePairs = makeSleepingDicePairs()
-    const sceneCtx = mockSceneCtx()
+  it('诊断订阅只在渲染完成后得到 post-render 快照', () => {
+    const onDiagnostics = vi.fn()
+    const { engine } = createFixture({ onDiagnostics })
 
-    const engine = createEngine({
-      sceneCtx,
-      world: new CANNON.World(),
-      worldStep: vi.fn(),
-      dicePairs,
-      onSettled,
+    engine.start()
+    expect(onDiagnostics).not.toHaveBeenCalled()
+
+    runNextFrame(1000)
+    expect(onDiagnostics).toHaveBeenCalledOnce()
+    expect(onDiagnostics).toHaveBeenLastCalledWith({
+      mode: 'idle',
+      renderCount: 1,
+      physicsStepCount: 0,
+      frameScheduled: false,
     })
+
+    engine.invalidate()
+    expect(onDiagnostics).toHaveBeenCalledOnce()
+    runNextFrame(1016)
+    expect(onDiagnostics).toHaveBeenCalledTimes(2)
+  })
+
+  it('idle invalidate 合并为单帧，并使用 raw body 姿态', () => {
+    const dicePairs = makeDicePairs()
+    const { engine, sceneCtx, worldStep } = createFixture({ dicePairs })
+    const [{ body, mesh }] = dicePairs
+
+    engine.start()
+    runNextFrame(1000)
+
+    body.position.set(3, 4, 5)
+    body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 3)
+    body.interpolatedPosition.set(30, 40, 50)
+    body.interpolatedQuaternion.set(0, 0, 0, 1)
+    const committedPositions: number[][] = []
+    dicePairs[0].syncVisual = vi.fn(() => {
+      committedPositions.push(mesh.position.toArray())
+    })
+
+    engine.invalidate()
+    engine.invalidate()
+    engine.invalidate()
+    expect(pendingFrames.size).toBe(1)
+
+    runNextFrame(1100)
+    expect(worldStep).not.toHaveBeenCalled()
+    expect(sceneCtx.renderer.render).toHaveBeenCalledTimes(2)
+    expect(mesh.position.toArray()).toEqual([3, 4, 5])
+    expect(mesh.quaternion.x).toBeCloseTo(body.quaternion.x, 6)
+    expect(mesh.quaternion.y).toBeCloseTo(body.quaternion.y, 6)
+    expect(mesh.quaternion.z).toBeCloseTo(body.quaternion.z, 6)
+    expect(mesh.quaternion.w).toBeCloseTo(body.quaternion.w, 6)
+    expect(dicePairs[0].syncVisual).toHaveBeenCalledOnce()
+    expect(committedPositions).toEqual([[3, 4, 5]])
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'idle',
+      renderCount: 2,
+      physicsStepCount: 0,
+      frameScheduled: false,
+    })
+  })
+
+  it('每轮第一个 rolling timestamp 只建立基准，避免跨轮大 delta', () => {
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    dicePairs[0].body.angularVelocity.set(0, 1, 0)
+    const worldStep = vi.fn()
+    const { engine } = createFixture({ dicePairs, worldStep })
 
     engine.start()
     engine.beginSettle()
+    expect(engine.getDiagnostics().mode).toBe('rolling')
+    expect(pendingFrames.size).toBe(1)
 
-    // 先驱动触发 settle
-    driveFrames(5)
-    expect(onSettled).toHaveBeenCalledTimes(1)
+    runNextFrame(5000)
+    expect(worldStep).not.toHaveBeenCalled()
+    expect(engine.getDiagnostics().physicsStepCount).toBe(0)
+    expect(pendingFrames.size).toBe(1)
 
-    // 再驱动更多帧，不应重复
-    driveFrames(20, 2000)
-    expect(onSettled).toHaveBeenCalledTimes(1)
-  })
+    runNextFrame(5016.67)
+    expect(worldStep).toHaveBeenCalledTimes(1)
+    expect(worldStep).toHaveBeenLastCalledWith(expect.closeTo(0.01667, 5))
 
-  it('body → mesh 位置同步每帧执行', () => {
-    const dicePairs = makeSleepingDicePairs(2)
-    const sceneCtx = mockSceneCtx()
-
-    // 给 body 设置已知位置
-    dicePairs[0].body.position.set(1, 2, 3)
-    dicePairs[1].body.position.set(4, 5, 6)
-
-    const engine = createEngine({
-      sceneCtx,
-      world: new CANNON.World(),
-      worldStep: vi.fn(),
-      dicePairs,
-      onSettled: vi.fn(),
-    })
-
-    engine.start()
-    // 首帧为初始化帧（跳过物理），第2帧才同步
-    driveFrames(3)
-
-    expect(dicePairs[0].mesh.position.x).toBe(1)
-    expect(dicePairs[0].mesh.position.y).toBe(2)
-    expect(dicePairs[0].mesh.position.z).toBe(3)
-    expect(dicePairs[1].mesh.position.x).toBe(4)
-    expect(dicePairs[1].mesh.position.y).toBe(5)
-    expect(dicePairs[1].mesh.position.z).toBe(6)
-  })
-
-  it('body → mesh 四元数同步每帧执行', () => {
-    const dicePairs = makeSleepingDicePairs(1)
-    const sceneCtx = mockSceneCtx()
-
-    // 绕 Y 轴旋转 90°
-    dicePairs[0].body.quaternion.setFromAxisAngle(
-      new CANNON.Vec3(0, 1, 0),
-      Math.PI / 2,
-    )
-
-    const engine = createEngine({
-      sceneCtx,
-      world: new CANNON.World(),
-      worldStep: vi.fn(),
-      dicePairs,
-      onSettled: vi.fn(),
-    })
-
-    engine.start()
-    driveFrames(3)
-
-    const bq = dicePairs[0].body.quaternion
-    const mq = dicePairs[0].mesh.quaternion
-    expect(mq.x).toBeCloseTo(bq.x, 6)
-    expect(mq.y).toBeCloseTo(bq.y, 6)
-    expect(mq.z).toBeCloseTo(bq.z, 6)
-    expect(mq.w).toBeCloseTo(bq.w, 6)
-  })
-
-  it('连续两轮 beginSettle 各只触发一次 onSettled', () => {
-    const onSettled = vi.fn()
-    const dicePairs = makeSleepingDicePairs()
-    const sceneCtx = mockSceneCtx()
-
-    const engine = createEngine({
-      sceneCtx,
-      world: new CANNON.World(),
-      worldStep: vi.fn(),
-      dicePairs,
-      onSettled,
-    })
-
-    engine.start()
-
-    // 第一轮
+    // 重开一轮时，即使 timestamp 间隔很大，也必须重新建立基准。
     engine.beginSettle()
-    driveFrames(5)
-    expect(onSettled).toHaveBeenCalledTimes(1)
+    runNextFrame(50_000)
+    expect(worldStep).toHaveBeenCalledTimes(1)
 
-    // 第二轮
+    runNextFrame(50_020)
+    expect(worldStep).toHaveBeenCalledTimes(2)
+    expect(worldStep).toHaveBeenLastCalledWith(expect.closeTo(0.02, 5))
+  })
+
+  it('rolling 使用插值姿态，且 invalidate 不会额外安排帧', () => {
+    const dicePairs = makeDicePairs()
+    const [{ body, mesh }] = dicePairs
+    body.velocity.set(1, 0, 0)
+    body.angularVelocity.set(0, 1, 0)
+
+    const interpolatedQuaternion = new CANNON.Quaternion()
+    interpolatedQuaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI / 2)
+    const worldStep = vi.fn(() => {
+      body.position.set(9, 8, 7)
+      body.quaternion.set(0, 0, 0, 1)
+      body.interpolatedPosition.set(1, 2, 3)
+      body.interpolatedQuaternion.copy(interpolatedQuaternion)
+      body.velocity.set(1, 0, 0)
+      body.angularVelocity.set(0, 1, 0)
+    })
+    const committedPositions: number[][] = []
+    dicePairs[0].syncVisual = vi.fn(() => {
+      committedPositions.push(mesh.position.toArray())
+    })
+    const { engine, sceneCtx } = createFixture({ dicePairs, worldStep })
+
+    engine.start()
     engine.beginSettle()
-    driveFrames(5, 2000)
-    expect(onSettled).toHaveBeenCalledTimes(2)
+    engine.invalidate()
+    engine.invalidate()
+    expect(pendingFrames.size).toBe(1)
 
-    // 之后不应再触发
-    driveFrames(10, 3000)
-    expect(onSettled).toHaveBeenCalledTimes(2)
+    runNextFrame(1000)
+    expect(worldStep).not.toHaveBeenCalled()
+    expect(pendingFrames.size).toBe(1)
+
+    runNextFrame(1016.67)
+    expect(worldStep).toHaveBeenCalledTimes(1)
+    expect(mesh.position.toArray()).toEqual([1, 2, 3])
+    expect(mesh.position.toArray()).not.toEqual([9, 8, 7])
+    expect(mesh.quaternion.x).toBeCloseTo(interpolatedQuaternion.x, 6)
+    expect(mesh.quaternion.y).toBeCloseTo(interpolatedQuaternion.y, 6)
+    expect(mesh.quaternion.z).toBeCloseTo(interpolatedQuaternion.z, 6)
+    expect(mesh.quaternion.w).toBeCloseTo(interpolatedQuaternion.w, 6)
+    expect(committedPositions.at(-1)).toEqual([1, 2, 3])
+    expect(sceneCtx.renderer.shadowMap.autoUpdate).toBe(true)
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'rolling',
+      renderCount: 2,
+      physicsStepCount: 1,
+      frameScheduled: true,
+    })
+    expect(pendingFrames.size).toBe(1)
+  })
+
+  it('settle 回调后以最终 raw 姿态渲染，并立即停止连续帧', () => {
+    const dicePairs = makeDicePairs(1, true)
+    const [{ body, mesh }] = dicePairs
+    body.position.set(1, 1, 1)
+    body.interpolatedPosition.set(10, 10, 10)
+
+    const finalQuaternion = new CANNON.Quaternion()
+    finalQuaternion.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.PI / 4)
+    const onSettled = vi.fn(() => {
+      // 模拟 controller 在回调中冻结并校正最终 raw body 姿态。
+      body.position.set(4, 5, 6)
+      body.quaternion.copy(finalQuaternion)
+    })
+    const worldStep = vi.fn(() => {
+      body.interpolatedPosition.set(20, 20, 20)
+      body.interpolatedQuaternion.set(0, 0, 0, 1)
+    })
+    const { engine, sceneCtx } = createFixture({ dicePairs, worldStep, onSettled })
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(1000)
+    runNextFrame(1016.67)
+
+    expect(onSettled).toHaveBeenCalledTimes(1)
+    expect(onSettled).toHaveBeenCalledWith({
+      reason: 'natural-sleep',
+      elapsed: expect.any(Number),
+    })
+    expect(mesh.position.toArray()).toEqual([4, 5, 6])
+    expect(mesh.position.toArray()).not.toEqual([20, 20, 20])
+    expect(mesh.quaternion.x).toBeCloseTo(finalQuaternion.x, 6)
+    expect(mesh.quaternion.y).toBeCloseTo(finalQuaternion.y, 6)
+    expect(mesh.quaternion.z).toBeCloseTo(finalQuaternion.z, 6)
+    expect(mesh.quaternion.w).toBeCloseTo(finalQuaternion.w, 6)
+    expect(sceneCtx.renderer.shadowMap.autoUpdate).toBe(false)
+    expect(sceneCtx.renderer.shadowMap.needsUpdate).toBe(true)
+    expect(engine.getDiagnostics()).toEqual({
+      mode: 'settled',
+      renderCount: 2,
+      physicsStepCount: 1,
+      frameScheduled: false,
+    })
+    expect(pendingFrames.size).toBe(0)
+
+    expect(runNextFrame(2000)).toBe(false)
+    expect(onSettled).toHaveBeenCalledTimes(1)
+    expect(sceneCtx.renderer.render).toHaveBeenCalledTimes(2)
+
+    engine.invalidate()
+    engine.invalidate()
+    expect(pendingFrames.size).toBe(1)
+    runNextFrame(2100)
+    expect(worldStep).toHaveBeenCalledTimes(1)
+    expect(sceneCtx.renderer.render).toHaveBeenCalledTimes(3)
+    expect(engine.getDiagnostics().mode).toBe('settled')
+  })
+
+  it('stop 取消已安排帧，stopped 状态下 invalidate 无效', () => {
+    const { engine, sceneCtx, worldStep } = createFixture()
+
+    engine.start()
+    engine.beginSettle()
+    expect(pendingFrames.size).toBe(1)
+
+    engine.stop()
+    expect(pendingFrames.size).toBe(0)
+    expect(engine.getDiagnostics()).toEqual({
+      mode: 'stopped',
+      renderCount: 0,
+      physicsStepCount: 0,
+      frameScheduled: false,
+    })
+
+    engine.invalidate()
+    expect(pendingFrames.size).toBe(0)
+    expect(runNextFrame(1000)).toBe(false)
+    expect(worldStep).not.toHaveBeenCalled()
+    expect(sceneCtx.renderer.render).not.toHaveBeenCalled()
+  })
+
+  it('returnToIdle 从 settled 语义回到 idle，只安排静态帧', () => {
+    const dicePairs = makeDicePairs(1, true)
+    const { engine, worldStep } = createFixture({ dicePairs })
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(1000)
+    runNextFrame(1016.67)
+    expect(engine.getDiagnostics().mode).toBe('settled')
+
+    engine.returnToIdle()
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'idle',
+      physicsStepCount: 1,
+      frameScheduled: true,
+    })
+    runNextFrame(1100)
+    expect(worldStep).toHaveBeenCalledTimes(1)
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'idle',
+      physicsStepCount: 1,
+      frameScheduled: false,
+    })
   })
 })

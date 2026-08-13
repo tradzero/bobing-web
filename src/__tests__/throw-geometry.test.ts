@@ -3,8 +3,10 @@
  * 不依赖随机流，直接断言 pairwise 间距 ≥ minSeparation + heightBand 标记正确
  */
 import { describe, it, expect } from 'vitest'
-import { ring6Slots, dual33Slots, center15Slots } from '@/dice/throw'
+import { center15Slots, dual33Slots, ring6Slots, throwDice } from '@/dice/throw'
 import { THROW } from '@/config/throw'
+import { createDiceBody } from '@/dice/dice-body'
+import type { DicePair } from '@/dice/create'
 
 const minSep = THROW.minSeparation
 const rBase = minSep * 1.02
@@ -25,6 +27,13 @@ function minPairwiseDist(slots: Array<{ x: number; z: number }>): number {
 
 // 多种 rotation 覆盖，确保任意朝向都满足约束
 const rotations = [0, Math.PI / 6, Math.PI / 3, Math.PI / 2, Math.PI, 1.23, 4.56]
+
+function makeDicePairs(): DicePair[] {
+  return Array.from({ length: 6 }, () => ({
+    mesh: {} as DicePair['mesh'],
+    body: createDiceBody(),
+  }))
+}
 
 describe('ring6Slots 几何约束', () => {
   for (const rot of rotations) {
@@ -83,5 +92,82 @@ describe('center15Slots 几何约束', () => {
     for (let i = 1; i < 6; i++) {
       expect(slots[i].heightBand).toBe('low')
     }
+  })
+})
+
+describe('uniform-area-restarts 诊断计数', () => {
+  it('固定 seed 精确记录每轮失败产生的 attempts 与 restarts', () => {
+    const diagnostics = throwDice(makeDicePairs(), {
+      seed: 1000,
+      algorithm: 'uniform-area-restarts',
+    })
+
+    expect(diagnostics).toMatchObject({
+      algorithm: 'uniform-area-restarts',
+      attempts: 221,
+      restarts: 4,
+      groupAttempts: 5,
+      randomPlanVersion: 1,
+      placementPath: 'rejection',
+      fallbackLayout: null,
+    })
+  })
+
+  it('五轮均失败后才进入 fallback，且不把 fallback 抽签计入 attempts', () => {
+    const diagnostics = throwDice(makeDicePairs(), {
+      seed: 55000,
+      algorithm: 'uniform-area-restarts',
+    })
+
+    expect(diagnostics).toMatchObject({
+      attempts: 280,
+      restarts: 4,
+      groupAttempts: 5,
+      placementPath: 'fallback',
+      fallbackLayout: 'center15',
+    })
+  })
+
+  it('固定 seed 样本始终遵守 5 轮组尝试与候选采样预算', () => {
+    const pairs = makeDicePairs()
+    for (let seed = 0; seed < 100; seed++) {
+      const diagnostics = throwDice(pairs, { seed, algorithm: 'uniform-area-restarts' })
+      expect(diagnostics.restarts).toBe(diagnostics.groupAttempts - 1)
+      expect(diagnostics.restarts).toBeLessThanOrEqual(4)
+      expect(diagnostics.groupAttempts).toBeLessThanOrEqual(THROW.maxPlacementGroupAttempts)
+      expect(diagnostics.attempts).toBeGreaterThanOrEqual(6 * diagnostics.groupAttempts)
+      expect(diagnostics.attempts).toBeLessThanOrEqual(
+        6 * THROW.maxPlacementAttempts * diagnostics.groupAttempts,
+      )
+      if (diagnostics.placementPath === 'fallback') {
+        expect(diagnostics.groupAttempts).toBe(THROW.maxPlacementGroupAttempts)
+      }
+    }
+  })
+})
+
+describe('stratified-ring 构造约束', () => {
+  it('固定 seed 始终形成随机旋转的六扇区环，且诊断不伪装成 rejection', () => {
+    const pairs = makeDicePairs()
+    const diagnostics = throwDice(pairs, { seed: 72000, algorithm: 'stratified-ring' })
+
+    expect(diagnostics).toMatchObject({
+      algorithm: 'stratified-ring',
+      placementPath: 'constructive',
+      attempts: 0,
+      restarts: 0,
+      groupAttempts: 1,
+      fallbackLayout: null,
+    })
+    for (const { body } of pairs) {
+      expect(Math.hypot(body.position.x, body.position.z)).toBeCloseTo(
+        THROW.stratifiedRingRadius,
+        12,
+      )
+    }
+    expect(minPairwiseDist(pairs.map(({ body }) => body.position))).toBeCloseTo(
+      THROW.stratifiedRingRadius,
+      12,
+    )
   })
 })

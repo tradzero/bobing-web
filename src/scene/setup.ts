@@ -1,4 +1,7 @@
 import * as THREE from 'three'
+import { resolveRenderQuality } from '@/config/render'
+
+export type RenderInvalidationCallback = () => void
 
 export interface SceneContext {
   scene: THREE.Scene
@@ -6,6 +9,10 @@ export interface SceneContext {
   renderer: THREE.WebGLRenderer
   /** 同步 canvas 尺寸 / DPR / camera aspect */
   handleResize: () => void
+  /** 注册按需渲染失效回调；保留可选以兼容轻量测试替身。 */
+  setRenderInvalidationCallback?: (callback: RenderInvalidationCallback) => void
+  /** 清除按需渲染失效回调。 */
+  clearRenderInvalidationCallback?: () => void
   dispose: () => void
 }
 
@@ -20,7 +27,7 @@ const MOBILE_PORTRAIT_PRESET = { position: [0, 4.0, 3.2] as [number, number, num
  * 未来加交互视角时，可通过跳过 preset 应用来避免冲掉用户状态
  */
 function getDefaultCameraPreset(w: number, h: number) {
-  return (w <= 768 && h > w) ? MOBILE_PORTRAIT_PRESET : DESKTOP_PRESET
+  return w <= 768 && h > w ? MOBILE_PORTRAIT_PRESET : DESKTOP_PRESET
 }
 
 /**
@@ -34,9 +41,10 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
 
   // 渲染器
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
+  renderer.shadowMap.autoUpdate = false
+  renderer.shadowMap.needsUpdate = true
 
   // 摄像机：俯视 + 轻微倾斜
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
@@ -47,7 +55,6 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
   const dirLight = new THREE.DirectionalLight(0xffeedd, 1.5)
   dirLight.position.set(3, 8, 4)
   dirLight.castShadow = true
-  dirLight.shadow.mapSize.set(1024, 1024)
   dirLight.shadow.normalBias = 0.02
   dirLight.shadow.camera.near = 0.5
   dirLight.shadow.camera.far = 20
@@ -65,19 +72,52 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
   const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x8d6e4c, 0.3)
   scene.add(hemiLight)
 
-  // 环境贴图：用于白瓷碗等材质的反射，基于场景灯光自动生成
-  const pmremGenerator = new THREE.PMREMGenerator(renderer)
-  pmremGenerator.compileEquirectangularShader()
-  scene.environment = pmremGenerator.fromScene(scene, 0, 0.1, 100).texture
-  pmremGenerator.dispose()
+  let renderInvalidationCallback: RenderInvalidationCallback | null = null
+  let lastResize: { width: number; height: number; devicePixelRatio: number } | null = null
+  let shadowMapSize: number | null = null
+
+  const setRenderInvalidationCallback = (callback: RenderInvalidationCallback) => {
+    renderInvalidationCallback = callback
+  }
+
+  const clearRenderInvalidationCallback = () => {
+    renderInvalidationCallback = null
+  }
 
   const handleResize = () => {
     const parent = canvas.parentElement
     if (!parent) return
-    const w = parent.clientWidth
-    const h = parent.clientHeight
-    renderer.setSize(w, h, false)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    const width = parent.clientWidth
+    const height = parent.clientHeight
+    if (width <= 0 || height <= 0) return
+
+    const devicePixelRatio =
+      Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0
+        ? window.devicePixelRatio
+        : 1
+    if (
+      lastResize?.width === width &&
+      lastResize.height === height &&
+      lastResize.devicePixelRatio === devicePixelRatio
+    ) {
+      return
+    }
+    lastResize = { width, height, devicePixelRatio }
+
+    const quality = resolveRenderQuality(width, height, devicePixelRatio)
+    renderer.setPixelRatio(quality.pixelRatio)
+    renderer.setSize(width, height, false)
+
+    if (shadowMapSize !== quality.shadowMapSize) {
+      shadowMapSize = quality.shadowMapSize
+      dirLight.shadow.map?.dispose()
+      dirLight.shadow.map = null
+      dirLight.shadow.mapSize.set(shadowMapSize, shadowMapSize)
+    }
+    renderer.shadowMap.needsUpdate = true
+
+    const w = width
+    const h = height
     camera.aspect = w / h
 
     // 默认视角模式：根据视口尺寸应用摄像机预设
@@ -87,6 +127,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
     camera.fov = preset.fov
     camera.lookAt(0, 0, 0)
     camera.updateProjectionMatrix()
+    renderInvalidationCallback?.()
   }
 
   // 初始 resize
@@ -97,9 +138,18 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
   if (parent) resizeObserver.observe(parent)
 
   const dispose = () => {
+    clearRenderInvalidationCallback()
     resizeObserver.disconnect()
     renderer.dispose()
   }
 
-  return { scene, camera, renderer, handleResize, dispose }
+  return {
+    scene,
+    camera,
+    renderer,
+    handleResize,
+    setRenderInvalidationCallback,
+    clearRenderInvalidationCallback,
+    dispose,
+  }
 }

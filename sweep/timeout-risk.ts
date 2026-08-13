@@ -18,9 +18,21 @@ const BASE_SEED = 50000
 const log = createLogger('timeout-risk')
 console.log(`timeout-risk: ${N} seeds, 日志 → ${log.filePath}`)
 
-const paths: Record<SettlePath, number> = { sleep: 0, threshold: 0, timeout: 0 }
+const paths: Record<SettlePath, number> = {
+  'natural-sleep': 0,
+  'stable-window': 0,
+  'pose-stable-window': 0,
+  'cluster-assist': 0,
+  timeout: 0,
+}
 const settleTimesAll: number[] = []
-const settleTimesByPath: Record<SettlePath, number[]> = { sleep: [], threshold: [], timeout: [] }
+const settleTimesByPath: Record<SettlePath, number[]> = {
+  'natural-sleep': [],
+  'stable-window': [],
+  'pose-stable-window': [],
+  'cluster-assist': [],
+  timeout: [],
+}
 const start = Date.now()
 
 for (let i = 0; i < N; i++) {
@@ -40,7 +52,7 @@ for (let i = 0; i < N; i++) {
 
   // 每 100 轮输出进度
   if ((i + 1) % 100 === 0) {
-    const pct = ((i + 1) / N * 100).toFixed(0)
+    const pct = (((i + 1) / N) * 100).toFixed(0)
     const elapsed = formatDuration(Date.now() - start)
     console.log(`  ${pct}% (${i + 1}/${N}) ${elapsed}`)
   }
@@ -60,14 +72,16 @@ const timeoutRate = paths.timeout / N
 const elapsed = formatDuration(Date.now() - start)
 const summary = [
   `timeout 风险统计 (${N} 轮, ${elapsed})`,
-  `settle 路径: sleep=${paths.sleep} threshold=${paths.threshold} timeout=${paths.timeout}`,
+  `settle 路径: natural-sleep=${paths['natural-sleep']} stable-window=${paths['stable-window']} pose-stable-window=${paths['pose-stable-window']} cluster-assist=${paths['cluster-assist']} timeout=${paths.timeout}`,
   `timeout 率: ${(timeoutRate * 100).toFixed(1)}%`,
   `结算时间: avg=${avg.toFixed(2)}s p50=${p50.toFixed(2)}s p90=${p90.toFixed(2)}s p95=${p95.toFixed(2)}s p99=${p99.toFixed(2)}s`,
-  `>4s: ${over4s} (${(over4s / N * 100).toFixed(1)}%)  >5s: ${over5s} (${(over5s / N * 100).toFixed(1)}%)`,
+  `>4s: ${over4s} (${((over4s / N) * 100).toFixed(1)}%)  >5s: ${over5s} (${((over5s / N) * 100).toFixed(1)}%)`,
 ]
 
 if (settleTimesByPath.timeout.length > 0) {
-  summary.push(`timeout 轮结算时间: ${settleTimesByPath.timeout.map((t) => t.toFixed(2)).join(', ')}`)
+  summary.push(
+    `timeout 轮结算时间: ${settleTimesByPath.timeout.map((t) => t.toFixed(2)).join(', ')}`,
+  )
 }
 
 console.log(`\n${'='.repeat(60)}`)

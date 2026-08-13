@@ -8,7 +8,7 @@
  *
  * 输出: logs/param-sweep-<timestamp>.ndjson + .summary.txt
  */
-import { DEFAULT_SWEEP_CHAMFER_RATIO, runTrial, parseArgs, formatDuration, type SettlePath } from './lib/run-trial'
+import { DEFAULT_SWEEP_CHAMFER_RATIO, runTrial, parseArgs, formatDuration } from './lib/run-trial'
 import { createLogger } from './lib/log'
 import type { ShapeMode } from '@/dice/dice-body'
 
@@ -21,12 +21,18 @@ interface Variant {
 }
 
 const ALL_VARIANTS: Variant[] = [
-  { label: 'box baseline (f=0.30 r=0.25)', friction: 0.30, restitution: 0.25, shapeMode: 'box' },
-  { label: 'chamfer baseline (f=0.30 r=0.25)', friction: 0.30, restitution: 0.25, shapeMode: 'chamfer', chamferRatio: DEFAULT_SWEEP_CHAMFER_RATIO },
+  { label: 'box baseline (f=0.30 r=0.25)', friction: 0.3, restitution: 0.25, shapeMode: 'box' },
+  {
+    label: 'chamfer baseline (f=0.30 r=0.25)',
+    friction: 0.3,
+    restitution: 0.25,
+    shapeMode: 'chamfer',
+    chamferRatio: DEFAULT_SWEEP_CHAMFER_RATIO,
+  },
   { label: 'f=0.22 only', friction: 0.22, restitution: 0.25 },
-  { label: 'r=0.20 only', friction: 0.30, restitution: 0.20 },
-  { label: 'f=0.27 r=0.20', friction: 0.27, restitution: 0.20 },
-  { label: 'f=0.25 r=0.20', friction: 0.25, restitution: 0.20 },
+  { label: 'r=0.20 only', friction: 0.3, restitution: 0.2 },
+  { label: 'f=0.27 r=0.20', friction: 0.27, restitution: 0.2 },
+  { label: 'f=0.25 r=0.20', friction: 0.25, restitution: 0.2 },
 ]
 
 const SPECIAL_SEEDS = [
@@ -44,9 +50,7 @@ const SPECIAL_SEEDS = [
 const args = parseArgs()
 const N = parseInt(args['seeds'] ?? '500', 10)
 const BASE_SEED = 50000
-const variantFilter = args['variant']
-  ? args['variant'].split(',').map(Number)
-  : undefined
+const variantFilter = args['variant'] ? args['variant'].split(',').map(Number) : undefined
 const variants = variantFilter
   ? ALL_VARIANTS.filter((_, i) => variantFilter.includes(i))
   : ALL_VARIANTS

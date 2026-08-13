@@ -16,12 +16,23 @@ import { GameViewport } from '@/ui/components/GameViewport'
 // 追踪 engine 创建 / dispose 调用
 const engineCreateCalls: number[] = []
 const engineDisposeCalls: number[] = []
+const diceSetCreateCalls: number[] = []
+const diceSetDisposeCalls: number[] = []
+type DiagnosticSnapshot = {
+  mode: 'idle' | 'rolling' | 'settled' | 'stopped'
+  renderCount: number
+  physicsStepCount: number
+  frameScheduled: boolean
+}
+const diagnosticPublishers: Array<(diagnostics: DiagnosticSnapshot) => void> = []
 let callCounter = 0
+let diceSetCallCounter = 0
 
 vi.mock('@/scene/setup', () => ({
   createScene: () => {
     const mockScene = {
       add: vi.fn(),
+      remove: vi.fn(),
       traverse: vi.fn(),
       background: null,
     }
@@ -33,6 +44,15 @@ vi.mock('@/scene/setup', () => ({
         dispose: vi.fn(),
         setSize: vi.fn(),
         setPixelRatio: vi.fn(),
+        getDrawingBufferSize: vi.fn((target: { set: (x: number, y: number) => unknown }) =>
+          target.set(1280, 720),
+        ),
+        getPixelRatio: vi.fn(() => 1.5),
+        info: {
+          render: { calls: 6, triangles: 1_234 },
+          memory: { geometries: 4, textures: 9 },
+          programs: [{}, {}],
+        },
         shadowMap: { enabled: false },
       },
       handleResize: vi.fn(),
@@ -69,32 +89,47 @@ vi.mock('@/physics/bowl-body', () => ({
   ESCAPE_Y: 0.9,
 }))
 
-// Mock 骰子创建：返回带有必要属性的 body + mesh
+// Mock 骰子创建：保留 DiceSet 的共享 object3d / dispose 所有权契约。
 vi.mock('@/dice/create', () => ({
-  createDiceSet: () =>
-    Array.from({ length: 6 }, () => ({
-      mesh: {
-        position: { set: vi.fn() },
-        quaternion: { set: vi.fn() },
+  createDiceSet: () => {
+    const id = ++diceSetCallCounter
+    diceSetCreateCalls.push(id)
+    return {
+      object3d: { id },
+      pairs: Array.from({ length: 6 }, () => ({
+        mesh: {
+          position: { set: vi.fn() },
+          quaternion: { set: vi.fn() },
+        },
+        body: {
+          position: { set: vi.fn(), copy: vi.fn(), x: 0, y: 0.3, z: 0 },
+          previousPosition: { copy: vi.fn() },
+          interpolatedPosition: { copy: vi.fn() },
+          velocity: { set: vi.fn(), y: 0 },
+          angularVelocity: { set: vi.fn() },
+          quaternion: { set: vi.fn(), x: 0, y: 0, z: 0, w: 1 },
+          previousQuaternion: { copy: vi.fn() },
+          interpolatedQuaternion: { copy: vi.fn() },
+          force: { set: vi.fn() },
+          torque: { set: vi.fn() },
+          aabbNeedsUpdate: false,
+          wakeUp: vi.fn(),
+          sleep: vi.fn(),
+          sleepState: 0,
+        },
+      })),
+      dispose: () => {
+        diceSetDisposeCalls.push(id)
       },
-      body: {
-        position: { set: vi.fn(), copy: vi.fn(), x: 0, y: 0.3, z: 0 },
-        previousPosition: { copy: vi.fn() },
-        velocity: { set: vi.fn(), y: 0 },
-        angularVelocity: { set: vi.fn() },
-        quaternion: { set: vi.fn(), x: 0, y: 0, z: 0, w: 1 },
-        aabbNeedsUpdate: false,
-        wakeUp: vi.fn(),
-        sleep: vi.fn(),
-        sleepState: 0,
-      },
-    })),
+    }
+  },
 }))
 
 vi.mock('@/game/engine', () => ({
-  createEngine: () => {
+  createEngine: (options: { onDiagnostics?: (diagnostics: DiagnosticSnapshot) => void }) => {
     const id = ++callCounter
     engineCreateCalls.push(id)
+    if (options.onDiagnostics) diagnosticPublishers.push(options.onDiagnostics)
     return {
       start: vi.fn(),
       stop: vi.fn(),
@@ -102,14 +137,21 @@ vi.mock('@/game/engine', () => ({
         engineDisposeCalls.push(id)
       },
       beginSettle: vi.fn(),
+      returnToIdle: vi.fn(),
+      invalidate: vi.fn(),
+      getDiagnostics: vi.fn(),
     }
   },
 }))
 
 beforeEach(() => {
   callCounter = 0
+  diceSetCallCounter = 0
   engineCreateCalls.length = 0
   engineDisposeCalls.length = 0
+  diceSetCreateCalls.length = 0
+  diceSetDisposeCalls.length = 0
+  diagnosticPublishers.length = 0
 })
 
 describe('StrictMode 重挂载', () => {
@@ -172,10 +214,58 @@ describe('StrictMode 重挂载', () => {
 
     // 每个 create 的 engine 都应该被 dispose
     for (const id of engineCreateCalls) {
-      expect(
-        engineDisposeCalls.includes(id),
-        `engine #${id} created but not disposed`,
-      ).toBe(true)
+      expect(engineDisposeCalls.includes(id), `engine #${id} created but not disposed`).toBe(true)
     }
+
+    for (const id of diceSetCreateCalls) {
+      expect(diceSetDisposeCalls.includes(id), `dice set #${id} created but not disposed`).toBe(
+        true,
+      )
+    }
+  })
+
+  it('开发态 dataset 明确报告主 pass 与 GPU 资源计数', () => {
+    const { container, unmount } = render(<GameViewport />)
+    const publish = diagnosticPublishers.at(-1)
+    expect(publish).toBeDefined()
+
+    publish?.({
+      mode: 'idle',
+      renderCount: 1,
+      physicsStepCount: 0,
+      frameScheduled: false,
+    })
+
+    const canvas = container.querySelector('canvas')
+    const diagnostics = JSON.parse(canvas?.dataset.diceDiagnostics ?? '{}')
+    expect(diagnostics).toMatchObject({
+      schemaVersion: 2,
+      revision: 1,
+      sampleKind: 'post-render',
+      roll: {
+        seed: null,
+        throwAlgorithmVersion: 3,
+        placementAlgorithm: null,
+        placementAttempts: null,
+        placementRestarts: null,
+        placementGroupAttempts: null,
+        randomPlanVersion: null,
+        placementPath: null,
+        fallbackLayout: null,
+        settleAlgorithmVersion: 4,
+        settleReason: null,
+        settleElapsed: null,
+      },
+    })
+    expect(diagnostics.render).toMatchObject({
+      mainPassCalls: 6,
+      mainPassTriangles: 1_234,
+      geometries: 4,
+      textures: 9,
+      programs: 2,
+    })
+    expect(diagnostics.render.calls).toBeUndefined()
+
+    unmount()
   })
 })

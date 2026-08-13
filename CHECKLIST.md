@@ -8,7 +8,7 @@
 - [x] 0.4 [实现] 配置 ESLint + Prettier（含 React/TS 规则集）
 - [x] 0.5 [实现] 配置 Vitest（vitest.config.ts，默认 environment: 'jsdom'；纯函数测试文件可用注释覆盖为 node 环境）
 - [x] 0.6 [实现] 配置 tsconfig.json 路径别名（如 `@/` → `src/`）
-- [x] 0.7 [实现] 创建目录结构骨架（config/、game/、scene/、physics/、dice/、rules/、ui/components/、ui/styles/、audio/、utils/、__tests__/）
+- [x] 0.7 [实现] 创建目录结构骨架（config/、game/、scene/、physics/、dice/、rules/、ui/components/、ui/styles/、audio/、utils/、**tests**/）
 - [x] 0.8 [验收] 验证 `pnpm dev` 能正常启动空白页面
 - [x] 0.9 [验收] `pnpm build` 通过，无编译错误
 
@@ -36,10 +36,16 @@
 - [x] 1B.1 [实现] 实现 `scene/setup.ts`：创建 Scene、WebGLRenderer、PerspectiveCamera
 - [x] 1B.2 [实现] 设置摄像机为固定俯视 + 轻微倾斜视角，不可交互调节
 - [x] 1B.3 [实现] 添加主光源（暖色调 DirectionalLight）+ 环境光（AmbientLight）
-- [x] 1B.4 [实现] 实现 canvas resize 监听：同步 renderer 尺寸、pixel ratio、camera aspect
+- [x] 1B.4 [实现] 实现 canvas resize 监听：仅在 CSS 尺寸或设备 DPR 实际变化时，同步 renderer 尺寸、预算化 pixel ratio、camera preset/aspect 与阴影档位
 - [x] 1B.5 [实现] 实现 `scene/table.ts`：圆桌桌面 mesh（圆柱几何体 + 木纹色基础材质）
 - [x] 1B.6 [实现] 实现 `scene/bowl.ts`：海碗可视模型（Lathe 几何体或组合几何体，白瓷材质）
 - [x] 1B.7 [验收] 验证页面能稳定渲染桌面 + 海碗静态场景
+- [x] 1B.8 [实现] 新建 `config/render.ts`：DPR 限制为 1.0～1.5，以 3,500,000 drawing-buffer 像素为目标预算；保留最低 1x 的极端大视口例外
+- [x] 1B.9 [实现] 渲染质量分档：正常档使用 1024 阴影贴图，像素预算受限档降为 512；切档时释放旧 shadow map 并请求重建
+- [x] 1B.10 [实现] 静态场景关闭阴影自动更新并按需刷新；rolling 期间恢复逐帧阴影更新
+- [x] 1B.11 [测试] 覆盖 DPR 上限、drawing-buffer 像素预算、1024/512 阴影档位、重复 resize 去重与 resize 失效通知
+- [x] 1B.12 [实现] 删除低价值 PMREM 路径：生成阶段桌面/海碗/骰子尚未加入 scene，且旧实现只保留 texture、丢失 render target 所有权；当前保持 `scene.environment = null`
+- [x] 1B.13 [测试] 场景 setup 测试锁定不构造 PMREMGenerator、environment 为空，并覆盖正常 dispose
 
 ### 1C cannon-es 物理世界
 
@@ -55,31 +61,39 @@
 
 ### 1D 骰子创建
 
-- [x] 1D.1 [实现] 实现 `utils/random.ts`：可注入随机数源接口（默认 Math.random，测试可替换为固定种子）
+- [x] 1D.1 [实现] 实现 `utils/random.ts`：默认使用时间种子 mulberry32，支持固定 seed、测试源注入和带 salt 的可复现子流
 - [x] 1D.2 [实现] 实现 `config/throw.ts`：集中定义投掷参数（速度范围、角速度范围、初始高度范围）
 - [x] 1D.3 [实现] 实现 `config/settle.ts`：集中定义停稳参数（速度阈值、角速度阈值、持续时间、超时上限）
-- [x] 1D.4 [实现] 实现骰子面纹理生成器（Canvas 2D 绘制）：6 个面分别绘制 1～6 点
+- [x] 1D.4 [实现] 实现骰子面纹理生成器（Canvas 2D 绘制）：将 1～6 点绘制到带 gutter 的 3×2 atlas
 - [x] 1D.5 [实现] 四点面使用红色绘制，其余面使用黑色
-- [x] 1D.6 [实现] 纹理生成模块预留接口：支持后续替换为静态贴图加载（参数化纹理来源）
-- [x] 1D.7 [实现] 实现 `dice/create.ts`：创建单颗骰子 mesh（BoxGeometry + 6 面独立材质）
+- [x] 1D.6 [实现] 纹理生成模块预留 `createAtlas()` 接口：支持后续替换为相同布局的静态 color/bump/roughness atlas
+- [x] 1D.7 [实现] 实现 `dice/create.ts` 单颗兼容接口：创建独立骰子 Mesh（RoundedBoxGeometry + 单材质 atlas）与 body
 - [x] 1D.8 [实现] 创建骰子 cannon-es Body（Box shape），关联质量、阻尼参数
 - [x] 1D.9 [实现] 为每颗骰子 body 设置 allowSleep=true、sleepSpeedLimit、sleepTimeLimit（参数来自 config/physics.ts）
-- [x] 1D.10 [实现] 实现批量创建 6 颗骰子的工厂函数
-- [x] 1D.11 [实现] 建立 mesh ↔ body 映射关系，用于渲染同步
+- [x] 1D.10 [实现] 实现 `createDiceSet()`：运行时使用单材质 atlas InstancedMesh，并创建 6 个独立 Cannon body 与轻量 Object3D 姿态代理
+- [x] 1D.11 [实现] 建立 proxy ↔ body ↔ instanceIndex 映射：Engine 写入 raw/interpolated pose 后由 `syncVisual()` 更新对应 instance matrix
 - [x] 1D.12 [验收] 验证 6 颗骰子能在场景中正确渲染，材质和点数清晰可辨
+- [x] 1D.13 [实现] 新建 `physics/body-transform.ts`：支持 raw/interpolated pose 复制，并在 teleport 后同步 previous/interpolated position 与 quaternion
+- [x] 1D.14 [实现] DiceSet 独占 instance buffer、geometry、material、texture，不在每轮投掷重建且不跨 StrictMode 重挂载缓存；提供幂等 `dispose()` 显式释放
+- [x] 1D.15 [测试] 覆盖单实例/6 body-proxy、单材质 atlas UV/法线/点数映射、instance matrix 同步、DynamicDrawUsage、dispose 幂等及新集合不复用已释放贴图
 
 ### 1E 投掷逻辑
 
-- [x] 1E.1 [实现] 实现 `dice/throw.ts`：为每颗骰子设置随机初始位置（碗上方散布），随机数源使用 `utils/random.ts`
+- [x] 1E.1 [实现] 实现 `dice/throw.ts`：批量设置骰子初始布局与动力学状态，随机数源使用 `utils/random.ts`
 - [x] 1E.2 [实现] 设置随机初始旋转（四元数随机化）
 - [x] 1E.3 [实现] 设置受控随机线速度（向碗中心偏移 + 向下分量）
 - [x] 1E.4 [实现] 设置受控随机角速度
 - [x] 1E.5 [实现] 唤醒所有骰子 body（清除 sleep 状态）
 - [x] 1E.6 [验收] 验证投掷后骰子能自然落入碗中，不飞出画面，不高速穿透
+- [x] 1E.7 [实现] 投掷写完最终 position/quaternion（含 fallback 高度覆写）后同步 Cannon 插值状态，避免首个渲染帧从上一轮 pose 插值
+- [x] 1E.8 [实现] 投掷 v3 默认使用 `stratified-ring`：6 槽等角分层环，随机整体旋转与骰子-槽位分配，构造路径不使用 fallback
+- [x] 1E.9 [实现] 按 seed 派生独立 layout/dynamics 子流，固定 random-plan 版本与每骰动力学随机消费顺序
+- [x] 1E.10 [实现] `legacy-v1` 与 `uniform-area-restarts` 保留为命名 A/B 历史/布局对照，不作为运行时默认
+- [x] 1E.11 [测试] 锁定 6 槽间距、旋转/打乱、子流隔离、固定 seed 不变量与真实 `throwDice()` 路径诊断
 
 ### 1F 停稳检测
 
-- [x] 1F.1 [实现] 实现 `dice/settle.ts`：停稳检测纯函数 `checkSettled()`，接受骰子状态，返回 boolean（不自持轮询）
+- [x] 1F.1 [实现] 实现 `dice/settle.ts`：停稳检测函数 `checkSettled()`，接受骰子状态，返回结构化 `SettleResult | null`（不自持轮询）
 - [x] 1F.2 [实现] 实现 sleep 状态检测路径：全部 6 颗骰子 body 进入 sleep 则判定停稳
 - [x] 1F.3 [实现] 实现速度阈值检测路径：连续满足 config/settle.ts 中定义的持续时间，所有骰子线速度和角速度均低于配置阈值
 - [x] 1F.4 [实现] 实现超时兜底：超过 config/settle.ts 中定义的超时上限后，进入超时兜底结算路径（具体策略在实现时确定，不预设为"强制置零速度"）
@@ -89,6 +103,10 @@
 - [x] 1F.8 [测试] 单测：超时兜底触发
 - [x] 1F.9 [测试] 单测：接近阈值反复抖动但不应提前结算
 - [x] 1F.10 [验收] 验证全部测试通过
+- [x] 1F.11 [实现] 停稳 v4 输出 `natural-sleep / stable-window / pose-stable-window / cluster-assist / timeout` 五种可观测原因
+- [x] 1F.12 [实现] 只读 pose-stable 窗口要求 0.75s 内逐骰位移 ≤ 2mm、四元数角距 ≤ 0.015rad 且读面不变；不以瞬时速度噪声预筛，不修改 body
+- [x] 1F.13 [实现] contact-cluster assist 运行时默认关闭，仅 historical variant 显式开启以复现旧行为
+- [x] 1F.14 [测试] 锁定 pose detector 显式开关、刚体不变性、位移/角距/读面打断以及 seed 1673000 与自然延续结果一致
 
 ### 1G 点数读取
 
@@ -105,14 +123,14 @@
 - [x] 1H.1 [实现] 实现 `game/store.ts`：Zustand store 定义（phase、round、diceValues、currentResult: JudgeResult | null、history、prizeRecord、soundEnabled、playerId）
 - [x] 1H.2 [实现] store 预留 playerId 字段（默认 null，多人阶段启用）
 - [x] 1H.3 [实现] store actions 为纯状态设置器：setPhase、setResult、resetState、toggleSound（无业务逻辑）
-- [x] 1H.4 [实现] 实现 `game/engine.ts`：唯一 rAF 循环，每帧顺序执行 world.step → body→mesh 同步 → settle 检测 → render
-- [x] 1H.5 [实现] engine 暴露 start()、stop()、dispose() 方法
-- [x] 1H.6 [实现] engine 停稳检测回调：当 settle 返回 true 时通知 controller
+- [x] 1H.4 [实现] 实现 `game/engine.ts` 按需唯一 rAF 调度器：显式 `idle / rolling / settled / stopped`；只有 rolling 连续调度，idle/settled 仅启动或失效时单帧，stopped 不调度
+- [x] 1H.5 [实现] engine 暴露 start()、stop()、dispose()、beginSettle()、returnToIdle()、invalidate() 与只读 diagnostics；静态失效请求按 rafId 合并
+- [x] 1H.6 [实现] rolling 帧使用固定步长推进 physics，未停稳时以 Cannon interpolated pose 渲染；停稳回调完成后以 raw body pose 渲染最终帧
 - [x] 1H.7 [实现] 实现 `game/controller.ts`：GameController 类（唯一业务入口）
-- [x] 1H.8 [实现] 实现三态状态机：idle → rolling → result，result 可直接 throw() 进入 rolling（不需回 idle）
+- [x] 1H.8 [实现] 实现 UI 四态状态机：idle → rolling → result/tilt-confirm，result 可直接 throw() 进入 rolling，tilt-confirm 可接受或重掷
 - [x] 1H.9 [实现] controller.throw()：拒绝 rolling 阶段调用，允许 idle 和 result 阶段调用
 - [x] 1H.10 [实现] controller.onSettled()：调用 read-face → judge → store.setResult()
-- [x] 1H.11 [实现] controller.reset()：拒绝 rolling 阶段调用；非 rolling 时清空历史、记录、轮次，骰子回到初始位置
+- [x] 1H.11 [实现] controller.reset()：拒绝 rolling 阶段调用；非 rolling 时清空历史、记录、轮次，将骰子放回已同步且休眠的碗底静态姿态，并让引擎回到 idle 后按需渲染一帧
 - [x] 1H.12 [实现] controller.toggleSound()：统一的音效开关入口
 - [x] 1H.13 [测试] 编写编排层集成测试：phase 变化是否正确
 - [x] 1H.14 [测试] 集成测试：rolling 中二次点击 throw() 被拒绝
@@ -122,6 +140,12 @@
 - [x] 1H.18 [测试] 集成测试：rolling 中调用 reset() 被拒绝
 - [x] 1H.19 [测试] 集成测试：sound toggle 不影响主流程
 - [x] 1H.20 [验收] 验证全部测试通过
+- [x] 1H.21 [测试] Engine 调度测试：idle/settled 不常驻 rAF，rolling 独占连续 rAF，stop/dispose 取消待执行帧
+- [x] 1H.22 [测试] Engine 姿态测试：rolling 读取 interpolated pose，结算帧读取 controller 回调后的 raw pose
+- [x] 1H.23 [实现] 开发态 diagnostics 区分 `mainPassCalls / mainPassTriangles` 主 pass 口径，并发布 CSS/drawing-buffer 尺寸、DPR、`renderer.info.memory` 的 geometries/textures、programs 数量与 Engine 调度计数
+- [x] 1H.24 [测试] 锁定 diagnostics 字段命名与来源，避免将主 pass 数据误写成包含 shadow pass 的总 calls/triangles
+- [x] 1H.25 [实现] diagnostics 使用版本化 `post-render` 快照，只在真实 render 后发布；e2e 可一次性注入 nextSeed，并记录实际投掷路径、fallback layout、停稳原因和模拟耗时
+- [x] 1H.26 [测试] 锁定 post-render revision、一次性 seed 消费和 idle/settled 静态零帧语义
 
 ### 1I 阶段一集成验证
 
@@ -132,6 +156,15 @@
 - [x] 1I.5 [验收] 奖级判定与点数组合匹配（人工核对）
 - [x] 1I.6 [验收] 全部单测通过：`pnpm test`
 - [x] 1I.7 [验收] `pnpm build` 通过，无编译错误
+- [x] 1I.8 [验收] `pnpm test:e2e` 在桌面/移动项目完成真实固定 seed 单轮、结果提交、reset 与移动布局验收
+- [x] 1I.9 [验收] `pnpm bench:browser` 锁定三阶段渲染结构、DPR/像素预算与静态零帧，并保留 JSON/截图 artifact；帧时仅记录不设跨硬件硬门槛
+- [x] 1I.10 [实现] `physics/roll-runner.ts` 复用正式 throw/world/escape/settle/read-face 行为链，统一单 seed 复现、批量验收与 A/B 诊断
+- [x] 1I.11 [实现] variant schema v2 固定 historical、placement-control、placement-candidate、natural-control 与 current 的投掷/assist/pose 组合
+- [x] 1I.12 [测试] `pnpm test:physics:ab` 落地：按 seed 交替 A/B、B/A，分离 watch/batch cohort，并对每个非自然结果运行最多 20s 的同 seed natural continuation
+- [x] 1I.13 [验收] `pnpm test:acceptance` 默认 200 seeds；assist/fallback 预算均为 0，pose-stable 预算上限 2%
+- [x] 1I.14 [基线] 本机 2000 固定逻辑 seed：1990 natural / 10 pose，timeout、NaN、wall、guard、assist、fallback 均为 0，p95=3.3s、p99=4.8s、max=8.2s、max penetration=0.081546；10 个非自然结果的 20s continuation 均无 face/tilt/judge/safety 差异；不作为浏览器 FPS 或跨机器结论
+- [x] 1I.15 [A/B] 默认 200 seed 拆为 19 watch / 181 batch；current 的 batch fallback 与 assist 均为 0，最大穿透下降 0.016682m，p95 改善 0.1167s、p99 回退 0.25s且未越预算
+- [ ] 1I.16 [产品/验收] timeout 必须进入明确的异常、重试或救援 UI，不得按正常奖级提交
 
 ---
 
@@ -143,9 +176,9 @@
 - [x] 2A.2 [实现] 实现 GameControllerContext + `useGameController()` hook：controller 实例未就绪时 hook 抛出明确错误
 - [x] 2A.3 [实现] 创建 `config/ui.ts`：集中定义 UI 常量（HISTORY_MAX_LENGTH = 5、INITIAL_ROUND = 1）；触摸目标尺寸单一来源于 CSS variables.css --touch-min
 - [x] 2A.4 [实现] 实现 `App.tsx`：GameViewport 作为容器，overlay 组件（ThrowButton、ResultPanel 等）作为 GameViewport 的 children 渲染
-- [x] 2A.5 [实现] 在 GameViewport 挂载时初始化 scene/setup、physics/world、dice/create、game/engine、game/controller
-- [x] 2A.6 [实现] 在 GameViewport 卸载时完整销毁：engine.dispose()、renderer.dispose()、物理世界清理、事件监听移除
-- [x] 2A.7 [测试] StrictMode/HMR 自动化冒烟测试：挂载一次、卸载一次、再次挂载不产生双实例、不残留 rAF 和事件监听
+- [x] 2A.5 [实现] 在 GameViewport 挂载时初始化 scene/setup、physics/world、DiceSet、game/engine、game/controller；scene 只加入 DiceSet 的 InstancedMesh，6 个 body 分别加入物理世界，并将 resize 失效回调绑定到 `engine.invalidate()`
+- [x] 2A.6 [实现] GameViewport 卸载时先解绑 resize 失效回调并销毁 engine，再从 scene 移除 DiceSet、显式幂等 dispose 其共享资源，最后销毁其余 scene/renderer/物理世界与事件监听
+- [x] 2A.7 [测试] StrictMode/HMR 自动化冒烟测试：重挂载不产生双实例、不残留 canvas/rAF/事件监听，每个 DiceSet create 均与一次 dispose 配对
 - [x] 2A.8 [验收] 验证 Vite HMR 后 3D 场景正常重建
 
 ### 2B 核心 UI 组件
@@ -177,13 +210,17 @@
 - [x] 2C.6 [实现] 整体布局：桌面端 canvas 居中 + 右侧/底部 UI 面板
 - [x] 2C.7 [实现] 移动端布局：canvas 上半 + UI 下半，按钮足够大（≥44px touch target）
 - [x] 2C.8 [实现] CSS 媒体查询断点处理（桌面/平板/手机）
+- [x] 2C.9 [实现] `max-width: 768px` 关闭顶栏、倾斜提示、结果面板和卡片等大面积 `backdrop-filter`，用高不透明度实色背景补偿；保留小面积图标按钮的桌面质感
+- [x] 2C.10 [实现] 移动端 rolling 按钮禁用会逐帧重绘 box-shadow 的 `buttonPulse`，保留 transform/opacity ornament 动效，不全局移除阴影
+- [x] 2C.11 [实现] `(update: slow)` 下复用大面积模糊回退并关闭动态效果；`prefers-reduced-motion: reduce` 单独关闭动画、按钮过渡和 hover 位移，不牺牲桌面静态 blur
+- [x] 2C.12 [测试] CSS 契约测试锁定桌面 backdrop/rolling 规则仍存在、移动/slow 的 blur 与实色背景降级，以及 reduced-motion 的纯运动降级
 
 ### 2D 阶段二集成验证
 
 - [x] 2D.1 [验收] 桌面端完整操作流程：掷骰 → 翻滚 → 结果展示 → 再次掷骰 → 累计记录更新
 - [x] 2D.2 [验收] 移动端同上流程验证（Chrome DevTools 模拟 + 真机）
 - [x] 2D.3 [验收] 重置功能验证：非 rolling 时清空记录、轮次归 1、骰子复位；rolling 时重置按钮处于禁用状态
-- [x] 2D.4 [验收] 连续 20 轮操作：按钮状态始终正确（掷骰中掷骰按钮和重置按钮均禁用、结束后恢复）
+- [ ] 2D.4 [验收] 真实浏览器连续 20 轮操作：按钮状态始终正确，无重复结算或资源泄漏
 - [x] 2D.5 [验收] 历史记录正确显示最近 HISTORY_MAX_LENGTH 轮（默认 5）
 - [x] 2D.6 [验收] 奖级记录累加正确
 - [x] 2D.7 [验收] 全部单测通过：`pnpm test`
@@ -228,7 +265,7 @@
 > 注：视觉 mesh 先接受近似对齐，不要求与物理截角凸包完全同构。RoundedBoxGeometry 是连续圆角而非截面三角形，作为第一版视觉对齐可接受，后续按需升级。
 
 - [x] 3.1 [实现] `create.ts` 中将 `BoxGeometry` 替换为 `RoundedBoxGeometry`，radius 参数对齐 `PHYSICS.diceHalfSize * PHYSICS.diceChamferRatio`
-- [x] 3.2 [验收] 确认 RoundedBoxGeometry 保留 6 个 material groups（materialIndex 0-5），现有 6 面材质映射无需改动
+- [x] 3.2 [验收] 确认 RoundedBoxGeometry 原始 6 个连续面区间的方向顺序，将各面 UV 映射到单张 3×2 atlas 后合并为一个 materialIndex 0 draw group
 - [x] 3.3 [验收] 目视检查：四点红面和边框在倒角处无明显畸变
 
 ### Step 4：性能基准
@@ -263,10 +300,12 @@
 ## 阶段 1++：碗底弹跳修复（P0 补强 — 倒角凸包与离散 Heightfield 接触拓扑切换）
 
 > **根因**：倒角凸包在离散 Heightfield 上发生接触拓扑切换，表现为两类同源异常：
+>
 > - 阶段 A（动态弹跳期）：主问题骰子在动态旋转中与离散碗底发生接触拓扑切换，出现可见大幅二次弹跳
 > - 阶段 B（尾段微振荡期）：接近静止后 ConvexPolyhedron 与 Heightfield 局部边缘效应导致角速度短促突增，反复打破 stable 窗口
 >
 > **执行约束**：
+>
 > - 阶段 1 含 box 对照基线（用于判断修复后是否接近 box 稳定性）
 > - 阶段 2 拆材质后须插入等价性回归门（参数不变，指标不漂移）
 > - 阶段 4 HF 分辨率对比须同时记性能门槛

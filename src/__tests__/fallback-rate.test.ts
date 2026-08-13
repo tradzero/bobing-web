@@ -1,63 +1,102 @@
 /**
- * 验证 fallback 触发率
+ * 固定 seed 比较三种位置采样器的 fallback 率。
+ * legacy-v1 的精确计数同时作为旧共享随机流/几何消费顺序的复现门禁。
  */
-import { describe, it, expect } from 'vitest'
-import { reseed, random } from '@/utils/random'
-import { THROW } from '@/config/throw'
+import { afterEach, describe, expect, it } from 'vitest'
+import { resetRandom, reseed } from '@/utils/random'
+import { createDiceBody } from '@/dice/dice-body'
+import type { DicePair } from '@/dice/create'
+import { throwDice, type FallbackLayout, type ThrowPlacementAlgorithm } from '@/dice/throw'
+
+interface RateResult {
+  fallbackCount: number
+  rejectionCount: number
+  fallbackLayoutCounts: Record<FallbackLayout, number>
+}
+
+function makeDicePairs(): DicePair[] {
+  return Array.from({ length: 6 }, () => ({
+    mesh: {} as DicePair['mesh'],
+    body: createDiceBody(),
+  }))
+}
+
+function measureFallbackRate(algorithm: ThrowPlacementAlgorithm, trials: number): RateResult {
+  const dicePairs = makeDicePairs()
+  const result: RateResult = {
+    fallbackCount: 0,
+    rejectionCount: 0,
+    fallbackLayoutCounts: { ring6: 0, dual33: 0, center15: 0 },
+  }
+
+  for (let trial = 0; trial < trials; trial++) {
+    const seed = trial * 1000
+    // legacy-v1 的契约仍是 reseed() 后消费共享随机流。
+    if (algorithm === 'legacy-v1') reseed(seed)
+    const diagnostics = throwDice(dicePairs, { seed, algorithm })
+    expect(diagnostics.algorithm).toBe(algorithm)
+    if (diagnostics.placementPath === 'fallback') {
+      result.fallbackCount++
+      result.fallbackLayoutCounts[diagnostics.fallbackLayout]++
+    } else {
+      result.rejectionCount++
+      expect(diagnostics.fallbackLayout).toBeNull()
+    }
+  }
+  return result
+}
 
 describe('fallback 触发率', () => {
-  it('1000 次投掷中 fallback 比例', () => {
-    const { spreadRadius, minSeparation, maxPlacementAttempts } = THROW
-    const minSepSq = minSeparation * minSeparation
-    const COUNT = 6
-    const TRIALS = 1000
-    let fallbackCount = 0
+  afterEach(() => {
+    resetRandom()
+  })
 
-    for (let trial = 0; trial < TRIALS; trial++) {
-      reseed(trial * 1000)
+  it('legacy-v1 固定 1000 seeds 精确复现旧基线', () => {
+    const result = measureFallbackRate('legacy-v1', 1000)
 
-      const placed: Array<{ x: number; z: number }> = []
-      let useFallback = false
+    expect(result.fallbackCount).toBe(592)
+    expect(result.rejectionCount).toBe(408)
+    expect(result.fallbackLayoutCounts).toEqual({ ring6: 228, dual33: 250, center15: 114 })
+  })
 
-      for (let i = 0; i < COUNT; i++) {
-        let accepted = false
-        for (let attempt = 0; attempt < maxPlacementAttempts; attempt++) {
-          const angle = random() * Math.PI * 2
-          const r = random() * spreadRadius
-          const cx = Math.cos(angle) * r
-          const cz = Math.sin(angle) * r
+  it('uniform-area-restarts 将固定 1000 seeds 的 fallback 压到 5% 以下', () => {
+    const result = measureFallbackRate('uniform-area-restarts', 1000)
 
-          let tooClose = false
-          for (const p of placed) {
-            const dx = cx - p.x
-            const dz = cz - p.z
-            if (dx * dx + dz * dz < minSepSq) {
-              tooClose = true
-              break
-            }
-          }
-          if (!tooClose) {
-            placed.push({ x: cx, z: cz })
-            accepted = true
-            break
-          }
-        }
-        if (!accepted) {
-          useFallback = true
-          break
-        }
-      }
+    expect(result.fallbackCount + result.rejectionCount).toBe(1000)
+    expect(result.fallbackCount).toBeGreaterThan(0)
+    expect(result.fallbackCount).toBeLessThanOrEqual(50)
+    // 相对旧基线至少降低 90%，避免仅靠放宽绝对预算过门禁。
+    expect(result.fallbackCount).toBeLessThanOrEqual(Math.floor(592 * 0.1))
+    expect(result.fallbackLayoutCounts.ring6).toBeGreaterThan(0)
+    expect(result.fallbackLayoutCounts.dual33).toBeGreaterThan(0)
+    expect(result.fallbackLayoutCounts.center15).toBeGreaterThan(0)
+  })
 
-      if (useFallback) fallbackCount++
-    }
+  it('radial-rejection 可单独选择且仍保留一轮采样基线', () => {
+    const result = measureFallbackRate('radial-rejection', 1000)
 
-    const rate = fallbackCount / TRIALS * 100
-    console.log(`\nFallback 触发率: ${fallbackCount}/${TRIALS} = ${rate.toFixed(1)}%`)
-    console.log(`minSeparation: ${minSeparation.toFixed(4)}`)
-    console.log(`spreadRadius: ${spreadRadius}`)
-    console.log(`面积占用比: ${(6 * Math.PI * (minSeparation/2)**2 / (Math.PI * spreadRadius**2) * 100).toFixed(1)}%`)
+    expect(result.fallbackCount + result.rejectionCount).toBe(1000)
+    expect(result.fallbackCount).toBeGreaterThan(400)
+    expect(result.fallbackCount).toBeLessThan(750)
+  })
 
-    // 不做断言，只收集数据
-    expect(true).toBe(true)
+  it('stratified-ring 是构造式主路径，固定样本不触发 fallback', () => {
+    const result = measureFallbackRate('stratified-ring', 1000)
+
+    expect(result).toEqual({
+      fallbackCount: 0,
+      rejectionCount: 1000,
+      fallbackLayoutCounts: { ring6: 0, dual33: 0, center15: 0 },
+    })
+  })
+
+  it('未指定算法时使用 stratified-ring 默认值', () => {
+    const pairs = makeDicePairs()
+    reseed(123456)
+
+    const diagnostics = throwDice(pairs)
+
+    expect(diagnostics.algorithm).toBe('stratified-ring')
+    expect(diagnostics.placementPath).toBe('constructive')
   })
 })
