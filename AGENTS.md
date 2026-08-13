@@ -283,6 +283,8 @@ floor diagnostics 同时记录 `initialContactObservedDiceCount / armedDiceCount
 
 不能把 `maxSubSteps` 从 8 裸降为 4 当作性能修复：它会在慢帧下丢弃更多积压模拟时间，seed 25042 已暴露 cadence 分叉风险。后续若继续优化物理追帧，目标应是显式 accumulator 并逐 Cannon 子步执行 guard、roll safety 与 settle 检测，再以同 seed 不同帧序列验证轨迹、结算和安全，而不是只改一个上限。
 
+当前已落地的 headless cadence foundation v1 只用于验证调度候选：`reference-exact / exact-cap6 / exact-cap4` 必须复用同一个 headless lifecycle 和 exact-step session；versioned cadence 覆盖 60/30Hz、确定性 jitter、单次/持续 100ms 与 visibility suspend。每帧和总量都必须满足 wall/accepted/discarded/executed/queue 守恒；中途结算的 backlog 必须记为 terminal abandoned，持续过载必须返回独立 `timing-overload` 且不得生成可提交的正常 roll。当前生产 Engine 尚未接入这一调度，200-seed comparison/CLI 与浏览器 timing experiment 也尚未完成，不得把基础单测写成生产优化已交付。
+
 当前已存在但尚未接入生产的 `game/fixed-step-accumulator.ts` 只是一层纯实验基础：它显式分类 accepted/paused/discarded wall time、逐步消费 backlog，并在高水位锁存 overload。它的单元测试通过不等于 production Engine 已修复 Cannon 批处理语义；接入前仍必须完成 exact-step cap6/cap4、多 cadence、异常状态和浏览器门禁。
 
 最终 tier-aware 策略的 schema v5 浏览器门禁已经重跑：`test:e2e` 4/4、`bench:browser` 桌面/移动 2/2 通过。桌面 `reduced` 档 idle/settled 为 3,498,014 pixels、DPR `1.445028`，rolling 为 1,676,160 pixels、DPR 1；移动 `full` 档 idle/rolling 均为 562,185 pixels、DPR 1.5，settled 因 CSS 布局变化为 414,765 pixels、DPR 仍为 1.5。rolling shadow 请求与真实渲染帧一致，桌面 17/17、移动 19/19。`test:e2e:soak` 桌面/移动各 20 轮 2/2 通过：桌面 77.181s，17 natural / 3 stable，单轮最长 8.346s，`maxRadius=0.6567970953m`、`maxContactPenetration=0.0548978013m`；移动 55.144s，20 natural，单轮最长 3.299s，`maxRadius=0.6555080668m`、`maxContactPenetration=0.0536350029m`。两端 boundary/wall/guard/non-finite/页面错误均为 0，canvas/geometry/texture/program 每轮保持 `1/8/6/10`。此前全视口 rolling 1x 与 schema v4 的结果只作历史 checkpoint，本次 wall time 也只能作为同环境观察，不能外推为稳定性能门禁。

@@ -188,7 +188,8 @@
 - [x] 1I.32 [验收] clean checkpoint `6901f4d90e7557f2bdcf2081abffb37952c2f6f5` 已完成 schema v6 / render A/B artifact schema v2 长浏览器门禁 4/4；四组均 start clean、end unchanged、behaviorViolation=0、schedulerSensitive=0。普通 `bench:browser` / soak 仍沿用此前 schema v5 checkpoint 证据，未在本次重跑
 - [x] 1I.33 [实验基础] 新增未接入生产的 fixed-step accumulator v1：显式记录 accepted/paused/discarded wall time、逐步消费 backlog、cap4 跨帧追赶、插值余量与锁存 overload；单元测试锁定守恒和 early-stop，不改变当前 Engine 调度
 - [x] 1I.34 [实验基础] `PhysicsWorld.stepExact()`、previous→raw 显式插值和共享 `roll-step-session` 已落地；session 具有 stepnumber delta=1 硬契约、非破坏 snapshot、可选 floor/stable 扩展与通用阶段计时接缝
-- [ ] 1I.35 [后续] 用 fixed-step accumulator + shared session 构建 cap6/cap4 cadence A/B，再接仅 e2e 可开启的 Engine timing experiment、visibility suspend 与独立 timing-overload 错误；通过 watch+batch 与浏览器门禁前不得替换生产调度
+- [x] 1I.35 [实验基础] versioned headless cadence runner 已覆盖 steady60/30、deterministic jitter、单次 100ms、visibility suspend 与持续 100ms；reference/cap6/cap4 复用同一 lifecycle/session，逐帧门禁时间守恒、terminal abandoned backlog 与 overload，4 个 watch seed 的正常 cadence 结果完全一致
+- [ ] 1I.36 [后续] 增加 watch+200 batch 的 cadence comparison/CLI 与 canonical final-body state，再接仅 e2e 可开启的 Engine timing experiment、visibility suspend 与独立 timing-overload 错误；通过批量与浏览器门禁前不得替换生产调度
 
 ---
 
