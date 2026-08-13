@@ -19,10 +19,16 @@ import {
 import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '../src/dice/throw.ts'
 import { SETTLE_ALGORITHM_VERSION } from '../src/dice/settle.ts'
 import { ESCAPE_GUARD_VERSION } from '../src/physics/escape-guard.ts'
+import {
+  FLOOR_RELAUNCH_CLEARANCE_THRESHOLD,
+  FLOOR_RELAUNCH_SUPPORT_CLEARANCE_TOLERANCE,
+  FLOOR_RELAUNCH_TRACKER_VERSION,
+  FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
+} from '../src/physics/floor-relaunch.ts'
 import { compareRollContinuation, summarizeRollResults } from '../src/physics/roll-comparison.ts'
 import { PHYSICS_VARIANTS, PHYSICS_VARIANT_SCHEMA_VERSION } from '../src/config/physics-variants.ts'
 
-const PHYSICS_ACCEPTANCE_SCHEMA_VERSION = 2
+const PHYSICS_ACCEPTANCE_SCHEMA_VERSION = 3
 
 const BASELINE_BUDGETS = {
   /** 以下是防回退预算，不是物理重构的最终目标。 */
@@ -117,6 +123,13 @@ function createRunMetadata(options: CliOptions) {
       throwRandomPlan: THROW_RANDOM_PLAN_VERSION,
       settle: SETTLE_ALGORITHM_VERSION,
       escapeGuard: ESCAPE_GUARD_VERSION,
+      floorRelaunch: FLOOR_RELAUNCH_TRACKER_VERSION,
+    },
+    floorRelaunch: {
+      version: FLOOR_RELAUNCH_TRACKER_VERSION,
+      supportClearanceTolerance: FLOOR_RELAUNCH_SUPPORT_CLEARANCE_TOLERANCE,
+      clearanceThreshold: FLOOR_RELAUNCH_CLEARANCE_THRESHOLD,
+      orderedWorldYRiseThreshold: FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
     },
     variant: PHYSICS_VARIANTS.current,
     physics: PHYSICS,
@@ -187,6 +200,54 @@ function summarize(results: RollRunResult[]) {
       ...results.map(({ maxStableWindowAngularDrift }) => maxStableWindowAngularDrift),
     ),
     longestStableWindow: Math.max(...results.map(({ longestStableWindow }) => longestStableWindow)),
+    floorRelaunch: {
+      version: FLOOR_RELAUNCH_TRACKER_VERSION,
+      unavailableSeeds: results
+        .filter(({ floorRelaunch }) => !floorRelaunch.available)
+        .map(({ seed }) => seed),
+      relaunchEventCount: results.reduce(
+        (sum, { floorRelaunch }) => sum + floorRelaunch.relaunchEventCount,
+        0,
+      ),
+      relaunchFailureSeeds: results
+        .filter(({ floorRelaunch }) => floorRelaunch.relaunchEventCount > 0)
+        .map(({ seed }) => seed),
+      failureSeeds: results
+        .filter(
+          ({ floorRelaunch }) => !floorRelaunch.available || floorRelaunch.relaunchEventCount > 0,
+        )
+        .map(({ seed }) => seed),
+      initialContactObservedDiceCount: results.reduce(
+        (sum, { floorRelaunch }) => sum + floorRelaunch.initialContactObservedDiceCount,
+        0,
+      ),
+      armedDiceCount: results.reduce(
+        (sum, { floorRelaunch }) => sum + floorRelaunch.armedDiceCount,
+        0,
+      ),
+      secondaryEpisodeCount: results.reduce(
+        (sum, { floorRelaunch }) => sum + floorRelaunch.secondaryEpisodeCount,
+        0,
+      ),
+      floorOnlySecondaryEpisodeCount: results.reduce(
+        (sum, { floorRelaunch }) => sum + floorRelaunch.floorOnlySecondaryEpisodeCount,
+        0,
+      ),
+      maxFloorOnlySecondaryClearance: Math.max(
+        ...results.map(({ floorRelaunch }) => floorRelaunch.maxFloorOnlySecondaryClearance),
+      ),
+      maxFloorOnlySecondaryOrderedWorldYRise: Math.max(
+        ...results.map(({ floorRelaunch }) => floorRelaunch.maxFloorOnlySecondaryOrderedWorldYRise),
+      ),
+      maxPreExternalSecondaryClearance: Math.max(
+        ...results.map(({ floorRelaunch }) => floorRelaunch.maxPreExternalSecondaryClearance),
+      ),
+      maxPreExternalSecondaryOrderedWorldYRise: Math.max(
+        ...results.map(
+          ({ floorRelaunch }) => floorRelaunch.maxPreExternalSecondaryOrderedWorldYRise,
+        ),
+      ),
+    },
     faceCounts: distribution.faceCounts,
     faceCountsByDie: distribution.faceCountsByDie,
     sumCounts: distribution.sumCounts,
@@ -253,6 +314,12 @@ const continuationSummary = {
   safetyFailureSeeds: continuationChecks
     .filter(({ comparison }) => comparison.safetyFailures.length > 0)
     .map(({ seed }) => seed),
+  floorRelaunchFailureSeeds: continuationChecks
+    .filter(
+      ({ continuation: { floorRelaunch } }) =>
+        !floorRelaunch.available || floorRelaunch.relaunchEventCount > 0,
+    )
+    .map(({ seed }) => seed),
 }
 
 if (options.json || options.seed !== undefined) {
@@ -278,12 +345,20 @@ if (options.json || options.seed !== undefined) {
 }
 
 const failures = results.filter(
-  ({ nanDetected, wallCenterCrossings, escapeGuardInterventionCount, settleReason }) =>
+  ({
+    nanDetected,
+    wallCenterCrossings,
+    escapeGuardInterventionCount,
+    settleReason,
+    floorRelaunch,
+  }) =>
     nanDetected ||
     wallCenterCrossings > 0 ||
     escapeGuardInterventionCount > 0 ||
     settleReason === 'timeout' ||
-    settleReason === 'frame-budget-exhausted',
+    settleReason === 'frame-budget-exhausted' ||
+    !floorRelaunch.available ||
+    floorRelaunch.relaunchEventCount > 0,
 )
 if (failures.length > 0) {
   console.error(
@@ -295,11 +370,13 @@ if (failures.length > 0) {
 }
 
 const continuationFailures = continuationChecks.filter(
-  ({ comparison }) =>
+  ({ comparison, continuation: { floorRelaunch } }) =>
     comparison.faceDiff ||
     comparison.tiltDiff ||
     comparison.prizeDiff ||
-    comparison.safetyFailures.length > 0,
+    comparison.safetyFailures.length > 0 ||
+    !floorRelaunch.available ||
+    floorRelaunch.relaunchEventCount > 0,
 )
 if (continuationFailures.length > 0) {
   console.error(

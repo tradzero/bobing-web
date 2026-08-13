@@ -254,9 +254,13 @@ sweep 通常会向 `logs/` 写 NDJSON 与 summary。它们多数是诊断工具�
 | `pnpm test:acceptance`            | 200 seeds 验收；assist/fallback 预算均为 0，pose-stable 上限 2%，硬失败或其他基线预算回退时返回非零退出码 |
 | `pnpm test:physics:ab`            | 交替 A/B、B/A 执行命名 preset，分开 watch/batch cohort，并校验非自然结算的 natural continuation           |
 
-统一 runner 复用运行时的 `throwDice`、物理世界、逃逸保护和 `checkSettled`，不得在测试中复制一份近似实现。验收输出必须包含 commit、Node 版本、算法版本与关键配置，确保 seed 有复现上下文。NaN、越墙、逃逸保护介入、timeout 和帧预算耗尽属于硬失败；默认验收同时要求 assist/fallback 为 0、pose-stable 比例不超过 2%，其他倾斜、穿透和结算长尾使用当前基线预算防止回退。
+统一 runner 复用运行时的 `throwDice`、物理世界、逃逸保护和 `checkSettled`，不得在测试中复制一份近似实现。当前单轮 diagnostics schema 为 v2，物理验收报告 schema 为 v3；输出必须包含 commit、Node 版本、算法版本与关键配置，确保 seed 有复现上下文。NaN、越墙、逃逸保护介入、timeout、帧预算耗尽以及 floor-relaunch tracker 不可用或命中事件都属于硬失败；默认验收同时要求 assist/fallback 为 0、pose-stable 比例不超过 2%，其他倾斜、穿透和结算长尾使用当前基线预算防止回退。
 
-`test:physics:ab` 的 watch cohort 专门保留历史失败 seed，batch cohort 才用于分布和回退预算，避免 watch 过采样污染总体结论。两侧所有非 `natural-sleep` 结果都必须以相同 seed 和投掷算法关闭 assist/pose detector 继续至多 20 秒，对照逐骰面值、倾斜分类、完整奖级与轨迹安全。
+`test:physics:ab` 的 watch cohort 专门保留历史失败 seed，batch cohort 才用于分布和回退预算，避免 watch 过采样污染总体结论。两侧所有非 `natural-sleep` 结果都必须以相同 seed 和投掷算法关闭 assist/pose detector 继续至多 20 秒，对照逐骰面值、倾斜分类、完整奖级与轨迹安全。当前 A/B 报告 schema 为 v4，runtime 与 continuation 都硬门禁 floor-relaunch tracker 不可用或命中事件。
+
+统一 `runRoll()` 每个 Cannon 物理步运行 floor-relaunch tracker v1。每颗骰子先要有至少 2 个连续步骤的真实碗底接触，再有至少 6 个连续步骤的无外部接触支撑（顶点距碗底不超过 0.5mm 也视为支撑），之后的二次离地才进入候选；候选至少持续 2 步，并且 clearance 与按时间顺序计算的 world-Y 抬升都严格大于 5mm 才算事件。条件在首次外部接触前满足便锁存，之后发生的接触不能抹掉事件。sampler 要求碗底 body 只有一个 Heightfield shape，且该 shape 的 offset 为零、orientation 为单位四元数；不满足时必须报告 unavailable。
+
+floor diagnostics 同时记录 `initialContactObservedDiceCount / armedDiceCount` 覆盖量以及 secondary episode 的 floor-only / pre-external 最大值，但 coverage 只用于解释样本，不设比例硬门禁，不能把 0 事件误读成 1200 颗骰子都完整进入检测 armed 状态。当前 200-seed（1200 颗骰子）中，1190 颗观察到所需的真实初始 contact、1158 颗 armed，共 54 个 secondary episode、其中 2 个全程 floor-only，relaunch event 为 0；最大 floor-only clearance / ordered rise 为 2.761mm / 0，最大 pre-external clearance / ordered rise 为 7.795mm / 0。pre-external clearance 单独超过 5mm 不构成事件，必须与 ordered rise 同时严格超过 5mm。旧 seed 171042、25042、146042 的无序高度极差告警已经证明是误报，不能恢复为事件门禁。
 
 ### 已落地：浏览器流程与结构性能门禁
 
@@ -266,7 +270,7 @@ sweep 通常会向 `logs/` 写 NDJSON 与 summary。它们多数是诊断工具�
 | `pnpm test:e2e:soak` | 桌面/移动各连续 20 轮版本化 seed；逐轮门禁提交、历史、逐步安全包络、静态调度和 WebGL 资源不增长                |
 | `pnpm bench:browser` | 对 idle/rolling/settled 的 calls、triangles、资源数、DPR/像素预算和静态调度设硬门槛，并输出 JSON/截图 artifact |
 
-这些命令会先用 `vite build --mode e2e` 构建隔离产物，再由 Playwright 自动启动并停止严格端口的 preview server。浏览器诊断当前使用 schema v3，必须是带 `schemaVersion / revision / sampleKind: post-render` 的渲染后快照；`?nextSeed=<整数>` 与带版本的 `nextSeeds` 队列只在开发/e2e 模式生效，强制 timeout outcome 则仅在隔离的 e2e 构建生效。soak 必须逐物理步检查最大半径、真实内壁边界、非有限状态、接触穿透与 escape-guard 介入，不能只看最终位置。当前结构预算集中在 `e2e/helpers/diagnostics.ts`，不要把受机器、浏览器调度和软件渲染影响的 rAF 帧时设为通用硬门槛；它只写入 artifact 供同环境 A/B 对比。
+这些命令会先用 `vite build --mode e2e` 构建隔离产物，再由 Playwright 自动启动并停止严格端口的 preview server。浏览器诊断当前使用 schema v4，必须是带 `schemaVersion / revision / sampleKind: post-render` 的渲染后快照；`?nextSeed=<整数>` 与带版本的 `nextSeeds` 队列只在开发/e2e 模式生效，强制 timeout outcome 则仅在隔离的 e2e 构建生效。`bench:browser` 还显式使用 `?perfProfile=1&perfProfileVersion=1` 开启固定容量的 rolling CPU profile v1，记录 rAF 原始/截断间隔、Cannon 实际 substep 数以及 world step、guard、roll safety、settle、transform sync、renderer submit、diagnostics publish 和整帧 CPU 阶段；`rendererSubmitCpuMs` 只表示 `renderer.render()` 的同步 CPU submit，不是 GPU 时间。profile 只硬门禁字段完整、数值有限、样本存在和每帧 substeps ≤ 8，所有毫秒分布只写 artifact，不设跨机器阈值。soak 必须逐物理步检查最大半径、真实内壁边界、非有限状态、接触穿透与 escape-guard 介入，不能只看最终位置。当前结构预算集中在 `e2e/helpers/diagnostics.ts`。
 
 当前完整浏览器验收已确认：`test:e2e:soak` 桌面/移动各 20 轮均通过，最大接触穿透分别为 0.054898m / 0.053635m，观测到的最大半径上限为 0.656797m（小于 1m containment radius），boundary crossing、escape guard、非有限状态、资源增长和页面错误均为 0；`test:e2e` 4/4、`bench:browser` 2/2 通过。后续仍应保留实际 artifact，不能仅因命令存在沿用这一结论。
 

@@ -18,7 +18,7 @@
     "test:e2e:soak": "playwright test e2e/soak.spec.ts",
     "prebench:browser": "pnpm run build:e2e",
     "bench:browser": "playwright test e2e/browser-bench.spec.ts",
-    "test:physics": "vitest run src/__tests__/physics-acceptance.test.ts src/__tests__/physics-smoke.test.ts src/__tests__/dice-escape.test.ts src/__tests__/freeze-consistency.test.ts src/__tests__/contact-cluster-assist.test.ts src/__tests__/settle.test.ts",
+    "test:physics": "vitest run src/__tests__/physics-acceptance.test.ts src/__tests__/floor-relaunch.test.ts src/__tests__/physics-smoke.test.ts src/__tests__/dice-escape.test.ts src/__tests__/freeze-consistency.test.ts src/__tests__/contact-cluster-assist.test.ts src/__tests__/settle.test.ts",
     "test:seed": "vite-node scripts/physics-acceptance.ts",
     "test:acceptance": "vite-node scripts/physics-acceptance.ts --seeds=200",
     "test:physics:ab": "vite-node scripts/physics-ab.ts",

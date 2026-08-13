@@ -11,7 +11,7 @@
 - 已完成移动端真实上下布局，不再使用可拖拽底部浮层
 - 已完成桌面程序化木纹占位与海碗程序化青花占位
 - 当前 THROW v3 默认投掷为 `stratified-ring`（六槽、随机整体旋转与槽位分配）；SETTLE v4 中 contact-cluster assist 默认关闭
-- 已落地统一物理 runner、命名 variant A/B、单 seed 复现、200-seed 验收、浏览器结构性能门禁与连续 20 轮 soak；当前桌面/移动完整验收均通过
+- 已落地统一物理 runner、命名 variant A/B、单 seed 复现、200-seed 验收、floor-relaunch 事件门禁、浏览器结构/CPU profile 门禁与连续 20 轮 soak；当前桌面/移动完整验收均通过
 - 当前运行时场景只接入桌面、海碗和骰子；灯笼、月饼等摆件不在当前推进范围内
 - 后续视觉方向优先是桌布方案与正式海碗纹样素材，而不是重做桌体或继续扩展桌面摆件
 
@@ -25,7 +25,7 @@
 - 投掷 layout/dynamics 使用独立可复现随机子流；普通运行由时间种子 mulberry32 驱动，不使用 `Math.random`
 - 奖级规则数据驱动，支持状元子级优先级与带数规则
 - React + Zustand DOM overlay UI，业务写入集中在 GameController
-- 开发/e2e 使用 schema v3 post-render diagnostics，记录引擎调度、投掷版本/路径、渲染结构与逐步物理安全包络
+- 开发/e2e 使用 schema v4 post-render diagnostics，记录引擎调度、投掷版本/路径、渲染结构与逐步物理安全包络；隔离 bench 可显式启用 rolling CPU profile v1
 
 ## 技术栈
 
@@ -68,7 +68,7 @@ http://127.0.0.1:5173
 | `pnpm test:physics:ab`            | 交替运行命名 A/B preset、watch/batch cohort 与 natural continuation |
 | `pnpm test:e2e`                   | 运行 Playwright 桌面/移动端真实流程门禁                             |
 | `pnpm test:e2e:soak`              | 桌面/移动各连续 20 轮，检查安全包络、状态提交与 WebGL 资源稳定      |
-| `pnpm bench:browser`              | 门禁浏览器渲染结构、DPR/像素预算与静态零帧，保留 JSON/截图 artifact |
+| `pnpm bench:browser`              | 门禁渲染结构与 profile 完整性/substeps，毫秒仅写 JSON/截图 artifact |
 | `pnpm sweep:parallel:core`        | 并发执行 sleep / timeout / tilt 三类核心 sweep                      |
 
 ## 文档索引
@@ -112,7 +112,9 @@ http://127.0.0.1:5173
 - 真实物理烟雾、逃逸防护、冻结一致性
 - 接触簇辅助的历史显式 variant 与默认禁用契约
 
-`test:acceptance` 的当前默认预算要求 assist/fallback 均为 0、pose-stable 不超过 2%。`test:physics:ab` 将历史问题 seed 与批量 seed 分成 watch/batch cohort，并对每个非自然结算运行最多 20 秒的同 seed 自然延续对照。完整口径与当前逻辑基线见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
+`test:acceptance` 当前输出 acceptance report schema v3 / roll diagnostics schema v2，默认预算要求 assist/fallback 均为 0、pose-stable 不超过 2%，并将 floor-relaunch tracker v1 不可用或命中事件设为硬失败。tracker 要求先建立 2 个真实 floor-contact 步与 6 个 clean-support 步，再对至少 2 步的二次离地同时检查 clearance 和 ordered world-Y rise 严格大于 5mm；sampler 要求碗底只有一个无 shape offset/orientation 的 Heightfield。当前 200 seeds / 1200 颗骰子中 initial contact observed=1190、armed=1158，secondary episode=54、floor-only=2、event=0；最大 floor-only clearance/ordered rise=2.761mm/0，最大 pre-external clearance/ordered rise=7.795mm/0。coverage 与最大值只记录、不硬门禁，7.795mm clearance 单项超过阈值也不构成事件；两项必须同时超过 5mm。旧 seed 171042、25042、146042 的无序高度极差属于误报回归。`test:physics:ab` 使用 report schema v4，将历史问题 seed 与批量 seed 分成 watch/batch cohort，对 runtime/continuation 同样门禁 tracker，并对每个非自然结算运行最多 20 秒的同 seed 自然延续对照。完整口径与当前逻辑基线见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
+
+`bench:browser` 只在隔离 e2e URL 显式使用 `perfProfile=1&perfProfileVersion=1` 时启用固定容量的 rolling CPU profile v1，记录 rAF 原始/截断间隔、Cannon 实际 substep，以及 world step、guard、roll safety、settle、transform sync、renderer submit、diagnostics publish 和 tick total 的 count/p50/p95/max。renderer 指标仅为同步 CPU submit，不代表 GPU；门禁只要求字段完整、数值有限、样本存在和每帧 substeps ≤ 8，毫秒数据只进入 artifact，不设置跨机器阈值。
 
 当前浏览器验收结果：`test:e2e:soak` 桌面/移动各 20 轮均通过，最大接触穿透为 0.054898m / 0.053635m，观测到的最大半径上限为 0.656797m（小于 1m containment radius），boundary crossing、escape guard、非有限状态、资源增长和页面错误均为 0；`test:e2e` 4/4、`bench:browser` 2/2 通过。完整结果仍应以每次运行生成的 artifact 为准。
 

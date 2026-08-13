@@ -9,7 +9,7 @@ export const E2E_NEXT_SEED = 42
  * 所有 browser bench 只消费此常量，渲染结构改变时避免散落修改断言。
  */
 export const BROWSER_BUDGETS = {
-  diagnosticsSchemaVersion: 3,
+  diagnosticsSchemaVersion: 4,
   mainPassCalls: 8,
   mainPassTriangles: 41_288,
   geometries: 8,
@@ -55,6 +55,29 @@ export interface DiceRuntimeDiagnostics {
       maxContactPenetration: number
       escapeGuardInterventionCount: number
       nonFiniteBodyStateDetected: boolean
+    }
+    performanceProfile?: {
+      version: number
+      sampleKind: 'rolling-cpu'
+      rendererTimingKind: 'cpu-submit'
+      capacity: number
+      totalFrameCount: number
+      retainedFrameCount: number
+      currentFrameExcluded: boolean
+      metrics: Record<
+        | 'rafRawDeltaMs'
+        | 'rafClampedDeltaMs'
+        | 'cannonStepnumberDelta'
+        | 'worldStepCpuMs'
+        | 'guardCpuMs'
+        | 'rollSafetyCpuMs'
+        | 'settleCpuMs'
+        | 'transformSyncCpuMs'
+        | 'rendererSubmitCpuMs'
+        | 'diagnosticsPublishCpuMs'
+        | 'tickTotalCpuMs',
+        { count: number; p50: number | null; p95: number | null; max: number | null }
+      >
     }
   }
   roll: {

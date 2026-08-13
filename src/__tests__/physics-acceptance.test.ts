@@ -15,22 +15,56 @@ const WATCH_SEEDS = [
   2718281, 1776219009201, 1776310976115, 1776311021115,
 ]
 
+const LEGACY_BOUNCE_FALSE_POSITIVE_SEEDS = [171_042, 25_042, 146_042] as const
+
 describe('真实物理验收', () => {
-  it.each(WATCH_SEEDS)('seed %s: 无 NaN、无越墙、无 timeout', { timeout: 30_000 }, (seed) => {
+  it.each(WATCH_SEEDS)(
+    'seed %s: 无 NaN、无越墙、无 timeout、无碗底异常二次弹跳',
+    { timeout: 30_000 },
+    (seed) => {
+      const result = runRoll({ seed })
+      const reproduce = `pnpm test:seed -- --seed=${seed}`
+
+      expect(result.nanDetected, reproduce).toBe(false)
+      expect(result.wallCenterCrossings, reproduce).toBe(0)
+      expect(result.maxRadius, reproduce).toBeLessThan(WALL_RADIUS)
+      expect(result.escapeGuardInterventionCount, reproduce).toBe(0)
+      expect(result.assistInterventionCount, reproduce).toBe(0)
+      expect(result.settleReason, reproduce).not.toBe('cluster-assist')
+      expect(result.settleReason, reproduce).not.toBe('timeout')
+      expect(result.settleReason, reproduce).not.toBe('frame-budget-exhausted')
+      expect(result.settleFrame, reproduce).toBeGreaterThan(0)
+      expect(result.settleTime, reproduce).toBeLessThan(SETTLE.timeout)
+      expect(result.floorRelaunch.available, reproduce).toBe(true)
+      expect(result.floorRelaunch.unavailableReason, reproduce).toBeNull()
+      expect(result.floorRelaunch.relaunchEventCount, reproduce).toBe(0)
+      expect(result.finalFaces).toHaveLength(6)
+    },
+  )
+
+  it.each(LEGACY_BOUNCE_FALSE_POSITIVE_SEEDS)(
+    'seed %s: 旧 frame100 Y 极差是误报，新事件级门禁为 0',
+    { timeout: 30_000 },
+    (seed) => {
+      const result = runRoll({ seed })
+      const reproduce = `pnpm test:seed -- --seed=${seed}`
+
+      expect(result.floorRelaunch.available, reproduce).toBe(true)
+      expect(result.floorRelaunch.legacyUnorderedPost100WorldYRange, reproduce).toBeGreaterThan(
+        0.01,
+      )
+      expect(result.floorRelaunch.relaunchEventCount, reproduce).toBe(0)
+    },
+  )
+
+  it('seed 41042: 首次正常落碗反弹不计为异常二次弹跳', { timeout: 30_000 }, () => {
+    const seed = 41_042
     const result = runRoll({ seed })
     const reproduce = `pnpm test:seed -- --seed=${seed}`
 
-    expect(result.nanDetected, reproduce).toBe(false)
-    expect(result.wallCenterCrossings, reproduce).toBe(0)
-    expect(result.maxRadius, reproduce).toBeLessThan(WALL_RADIUS)
-    expect(result.escapeGuardInterventionCount, reproduce).toBe(0)
-    expect(result.assistInterventionCount, reproduce).toBe(0)
-    expect(result.settleReason, reproduce).not.toBe('cluster-assist')
-    expect(result.settleReason, reproduce).not.toBe('timeout')
-    expect(result.settleReason, reproduce).not.toBe('frame-budget-exhausted')
-    expect(result.settleFrame, reproduce).toBeGreaterThan(0)
-    expect(result.settleTime, reproduce).toBeLessThan(SETTLE.timeout)
-    expect(result.finalFaces).toHaveLength(6)
+    expect(result.floorRelaunch.available, reproduce).toBe(true)
+    expect(result.floorRelaunch.unavailableReason, reproduce).toBeNull()
+    expect(result.floorRelaunch.relaunchEventCount, reproduce).toBe(0)
   })
 
   it('默认路径不使用人工 Assist，历史 variant 仍可显式复现', () => {

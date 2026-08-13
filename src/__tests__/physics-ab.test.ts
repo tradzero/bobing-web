@@ -14,6 +14,25 @@ import {
 } from '@/physics/roll-comparison'
 import type { RollRunOptions, RollRunResult } from '@/physics/roll-runner'
 
+function noFloorRelaunch() {
+  return {
+    version: 1 as const,
+    available: true,
+    unavailableReason: null,
+    initialContactObservedDiceCount: 6,
+    armedDiceCount: 6,
+    secondaryEpisodeCount: 0,
+    floorOnlySecondaryEpisodeCount: 0,
+    relaunchEventCount: 0,
+    maxFloorOnlySecondaryClearance: 0,
+    maxFloorOnlySecondaryOrderedWorldYRise: 0,
+    maxPreExternalSecondaryClearance: 0,
+    maxPreExternalSecondaryOrderedWorldYRise: 0,
+    legacyUnorderedPost100WorldYRange: 0,
+    events: [],
+  }
+}
+
 function makeResult(seed: number, overrides: Partial<RollRunResult> = {}): RollRunResult {
   return {
     seed,
@@ -51,6 +70,7 @@ function makeResult(seed: number, overrides: Partial<RollRunResult> = {}): RollR
     maxStableWindowPositionDrift: 0,
     maxStableWindowAngularDrift: 0,
     longestStableWindow: 0.5,
+    floorRelaunch: noFloorRelaunch(),
     ...overrides,
   }
 }
@@ -340,6 +360,8 @@ describe('physics A/B 执行与汇总', () => {
       fallbackRate: 0.5,
       assistedRollCount: 1,
       assistInterventionCount: 1,
+      floorRelaunchUnavailableCount: 0,
+      floorRelaunchEventCount: 0,
       settleSeconds: { p50: 3, p95: 3, p99: 3, max: 3 },
       settleFrames: { p50: 180, p95: 180, p99: 180, max: 180 },
       faceCounts: { '1': 2, '2': 2, '3': 2, '4': 2, '5': 2, '6': 2 },
@@ -402,6 +424,19 @@ describe('physics A/B 硬门禁', () => {
       makePair(2, {}, { escapeGuardInterventionCount: 1 }),
       makePair(3, { settleReason: 'timeout' }, {}),
       makePair(4, {}, { settleReason: 'frame-budget-exhausted', settleFrame: -1 }),
+      makePair(
+        5,
+        {
+          floorRelaunch: {
+            ...noFloorRelaunch(),
+            available: false,
+            unavailableReason: 'unsupported shape',
+          },
+        },
+        {
+          floorRelaunch: { ...noFloorRelaunch(), relaunchEventCount: 1 },
+        },
+      ),
     ]
     const report = evaluatePhysicsAbPairs(
       pairs,
@@ -417,10 +452,12 @@ describe('physics A/B 硬门禁', () => {
         'candidate-escape-guard',
         'baseline-timeout',
         'candidate-frame-budget',
+        'baseline-floor-relaunch-unavailable',
+        'candidate-floor-relaunch',
       ]),
     )
     expect(report.summary.passed).toBe(false)
-    expect(report.failureSeeds).toEqual([1, 2, 3, 4])
+    expect(report.failureSeeds).toEqual([1, 2, 3, 4, 5])
   })
 
   it('candidate 强制要求 assist=0、fallback<=5% 与 penetration 上限', () => {
@@ -556,11 +593,17 @@ describe('physics A/B 硬门禁', () => {
       nanDetected: true,
       wallCenterCrossings: 1,
       escapeGuardInterventionCount: 1,
+      floorRelaunch: { ...noFloorRelaunch(), relaunchEventCount: 1 },
     })
     // seed 4 故意缺少 candidateContinuation，验证不能绕过真实性门禁。
     pairs[4].candidateContinuation = makeResult(5, {
       settleReason: 'continuation-budget-exhausted',
       settleFrame: -1,
+      floorRelaunch: {
+        ...noFloorRelaunch(),
+        available: false,
+        unavailableReason: 'unsupported shape',
+      },
     })
 
     const report = evaluatePhysicsAbPairs(
@@ -579,6 +622,8 @@ describe('physics A/B 硬门禁', () => {
         'candidate-continuation-nan',
         'candidate-continuation-wall-crossing',
         'candidate-continuation-escape-guard',
+        'candidate-continuation-floor-relaunch-unavailable',
+        'candidate-continuation-floor-relaunch',
       ]),
     )
     expect(report.summary.continuations.candidate).toMatchObject({
@@ -590,14 +635,16 @@ describe('physics A/B 硬门禁', () => {
       tiltDiff: { count: 1, seeds: [2] },
       prizeDiff: { count: 1, seeds: [1] },
       safety: {
-        count: 1,
-        seeds: [3],
+        count: 2,
+        seeds: [3, 5],
         nanSeeds: [3],
         wallCrossingSeeds: [3],
         escapeGuardSeeds: [3],
+        floorRelaunchUnavailableSeeds: [5],
+        floorRelaunchSeeds: [3],
       },
     })
-    expect(report.failureSeeds).toEqual([1, 2, 3, 4])
+    expect(report.failureSeeds).toEqual([1, 2, 3, 4, 5])
     expect(report.summary.passed).toBe(false)
   })
 })

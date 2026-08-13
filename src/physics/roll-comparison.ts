@@ -8,7 +8,7 @@ import {
 import { SETTLE } from '@/config/settle'
 import type { RollRunOptions, RollRunResult } from './roll-runner'
 
-export const PHYSICS_AB_SCHEMA_VERSION = 3
+export const PHYSICS_AB_SCHEMA_VERSION = 4
 
 export interface PhysicsAbBudgets {
   candidateFallbackRate: number
@@ -218,6 +218,14 @@ export interface RollSummary {
   ambiguousDiceRate: number
   conservativeBoundaryCrossingSeeds: number
   faceChangedDuringStableWindowSeeds: number
+  floorRelaunchUnavailableCount: number
+  floorRelaunchEventCount: number
+  floorInitialContactObservedDiceCount: number
+  floorArmedDiceCount: number
+  maxFloorOnlySecondaryClearance: number
+  maxFloorOnlySecondaryOrderedWorldYRise: number
+  maxPreExternalSecondaryClearance: number
+  maxPreExternalSecondaryOrderedWorldYRise: number
   maxRadius: number
   maxContactPenetration: number
   settleSeconds: { p50: number; p95: number; p99: number; max: number }
@@ -279,6 +287,8 @@ export interface PhysicsAbContinuationSummary {
     nanSeeds: number[]
     wallCrossingSeeds: number[]
     escapeGuardSeeds: number[]
+    floorRelaunchUnavailableSeeds: number[]
+    floorRelaunchSeeds: number[]
   }
 }
 
@@ -377,6 +387,8 @@ function continuationSafetyFailureCodes(result: RollRunResult): string[] {
   if (result.nanDetected) failures.push('nan')
   if (result.wallCenterCrossings > 0) failures.push('wall-crossing')
   if (result.escapeGuardInterventionCount > 0) failures.push('escape-guard')
+  if (!result.floorRelaunch.available) failures.push('floor-relaunch-unavailable')
+  if (result.floorRelaunch.relaunchEventCount > 0) failures.push('floor-relaunch')
   return failures
 }
 
@@ -452,6 +464,14 @@ function summarizeContinuations(
       escapeGuardSeeds: safetyEntries
         .filter(({ comparison }) => comparison.safetyFailures.includes('escape-guard'))
         .map(({ seed }) => seed),
+      floorRelaunchUnavailableSeeds: safetyEntries
+        .filter(({ comparison }) =>
+          comparison.safetyFailures.includes('floor-relaunch-unavailable'),
+        )
+        .map(({ seed }) => seed),
+      floorRelaunchSeeds: safetyEntries
+        .filter(({ comparison }) => comparison.safetyFailures.includes('floor-relaunch'))
+        .map(({ seed }) => seed),
     },
   }
 }
@@ -461,6 +481,8 @@ function safetyFailureCodes(result: RollRunResult): string[] {
   if (result.nanDetected) failures.push('nan')
   if (result.wallCenterCrossings > 0) failures.push('wall-crossing')
   if (result.escapeGuardInterventionCount > 0) failures.push('escape-guard')
+  if (!result.floorRelaunch.available) failures.push('floor-relaunch-unavailable')
+  if (result.floorRelaunch.relaunchEventCount > 0) failures.push('floor-relaunch')
   if (result.settleReason === 'timeout') failures.push('timeout')
   if (result.settleReason === 'frame-budget-exhausted' || result.settleFrame <= 0) {
     failures.push('frame-budget')
@@ -528,6 +550,32 @@ export function summarizeRollResults(results: readonly RollRunResult[]): RollSum
     ambiguousDiceRate: ambiguousDiceCount / (results.length * 6),
     conservativeBoundaryCrossingSeeds,
     faceChangedDuringStableWindowSeeds,
+    floorRelaunchUnavailableCount: results.filter(({ floorRelaunch }) => !floorRelaunch.available)
+      .length,
+    floorRelaunchEventCount: results.reduce(
+      (sum, { floorRelaunch }) => sum + floorRelaunch.relaunchEventCount,
+      0,
+    ),
+    floorInitialContactObservedDiceCount: results.reduce(
+      (sum, { floorRelaunch }) => sum + floorRelaunch.initialContactObservedDiceCount,
+      0,
+    ),
+    floorArmedDiceCount: results.reduce(
+      (sum, { floorRelaunch }) => sum + floorRelaunch.armedDiceCount,
+      0,
+    ),
+    maxFloorOnlySecondaryClearance: Math.max(
+      ...results.map(({ floorRelaunch }) => floorRelaunch.maxFloorOnlySecondaryClearance),
+    ),
+    maxFloorOnlySecondaryOrderedWorldYRise: Math.max(
+      ...results.map(({ floorRelaunch }) => floorRelaunch.maxFloorOnlySecondaryOrderedWorldYRise),
+    ),
+    maxPreExternalSecondaryClearance: Math.max(
+      ...results.map(({ floorRelaunch }) => floorRelaunch.maxPreExternalSecondaryClearance),
+    ),
+    maxPreExternalSecondaryOrderedWorldYRise: Math.max(
+      ...results.map(({ floorRelaunch }) => floorRelaunch.maxPreExternalSecondaryOrderedWorldYRise),
+    ),
     maxRadius: Math.max(...results.map(({ maxRadius }) => maxRadius)),
     maxContactPenetration: Math.max(
       ...results.map(({ maxContactPenetration }) => maxContactPenetration),
@@ -760,6 +808,16 @@ export function evaluatePhysicsAbPairs(
       code: 'candidate-continuation-escape-guard',
       label: 'natural continuation 触发逃逸保护',
       metric: seedMetric(continuations.candidate.safety.escapeGuardSeeds),
+    },
+    {
+      code: 'candidate-continuation-floor-relaunch-unavailable',
+      label: 'natural continuation 缺少碗底二次发射诊断',
+      metric: seedMetric(continuations.candidate.safety.floorRelaunchUnavailableSeeds),
+    },
+    {
+      code: 'candidate-continuation-floor-relaunch',
+      label: 'natural continuation 出现碗底异常二次发射',
+      metric: seedMetric(continuations.candidate.safety.floorRelaunchSeeds),
     },
   ]
   for (const { code, label, metric } of candidateContinuationFailures) {

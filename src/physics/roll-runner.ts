@@ -15,9 +15,15 @@ import {
   sampleRollFrameDiagnostics,
   type RollFrameDiagnostics,
 } from './roll-diagnostics'
+import {
+  createBoxFloorFrameSampler,
+  createFloorRelaunchTracker,
+  unavailableFloorRelaunchDiagnostics,
+  type FloorRelaunchDiagnostics,
+} from './floor-relaunch'
 
 /** 结构化验收报告 schema；字段语义发生不兼容变化时必须递增。 */
-export const ROLL_DIAGNOSTICS_SCHEMA_VERSION = 1
+export const ROLL_DIAGNOSTICS_SCHEMA_VERSION = 2
 
 export interface RollRunOptions {
   seed: number
@@ -51,6 +57,7 @@ export interface RollRunResult extends RollFrameDiagnostics {
   maxStableWindowPositionDrift: number
   maxStableWindowAngularDrift: number
   longestStableWindow: number
+  floorRelaunch: FloorRelaunchDiagnostics
 }
 
 interface StableWindowTracker {
@@ -86,7 +93,7 @@ export function runRoll(options: RollRunOptions): RollRunResult {
 
   try {
     setupContactMaterials(world)
-    createBowlBodies(world)
+    const bowlBodies = createBowlBodies(world)
 
     const dicePairs = Array.from({ length: 6 }, () => {
       const body = createDiceBody()
@@ -100,6 +107,10 @@ export function runRoll(options: RollRunOptions): RollRunResult {
     })
     const settleState = createSettleState(0)
     const diagnostics = createRollFrameDiagnostics()
+    const floorFrameSampler = createBoxFloorFrameSampler(bodies, bowlBodies.bottom)
+    const floorRelaunchTracker = floorFrameSampler.available
+      ? createFloorRelaunchTracker(bodies.length)
+      : null
 
     let settleReason: RollRunResult['settleReason'] =
       settlementPolicy === 'runtime' ? 'frame-budget-exhausted' : 'continuation-budget-exhausted'
@@ -119,6 +130,9 @@ export function runRoll(options: RollRunOptions): RollRunResult {
       const currentTime = frame * PHYSICS.fixedTimeStep
 
       sampleRollFrameDiagnostics(diagnostics, bodies, world)
+      if (floorRelaunchTracker) {
+        floorRelaunchTracker.sample(floorFrameSampler.sample(world.contacts))
+      }
       for (const body of bodies) {
         if (applyEscapeGuard(body)) escapeGuardInterventionCount++
       }
@@ -195,6 +209,11 @@ export function runRoll(options: RollRunOptions): RollRunResult {
     const finalMaxAngularSpeed = Math.max(
       ...bodies.map(({ angularVelocity }) => angularVelocity.length()),
     )
+    const floorRelaunch = floorRelaunchTracker
+      ? floorRelaunchTracker.finish()
+      : unavailableFloorRelaunchDiagnostics(
+          floorFrameSampler.unavailableReason ?? 'unsupported floor/body shape',
+        )
 
     return {
       seed,
@@ -218,6 +237,7 @@ export function runRoll(options: RollRunOptions): RollRunResult {
       maxStableWindowPositionDrift,
       maxStableWindowAngularDrift,
       longestStableWindow,
+      floorRelaunch,
     }
   } finally {
     dispose()

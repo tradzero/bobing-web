@@ -142,10 +142,11 @@
 - [x] 1H.20 [验收] 验证全部测试通过
 - [x] 1H.21 [测试] Engine 调度测试：idle/settled 不常驻 rAF，rolling 独占连续 rAF，stop/dispose 取消待执行帧
 - [x] 1H.22 [测试] Engine 姿态测试：rolling 读取 interpolated pose，结算帧读取 controller 回调后的 raw pose
-- [x] 1H.23 [实现] diagnostics schema v3 区分 `mainPassCalls / mainPassTriangles` 主 pass 口径，并发布 CSS/drawing-buffer、DPR、renderer 资源、Engine 调度与逐步 rollSafety 计数
+- [x] 1H.23 [实现] diagnostics schema v4 区分 `mainPassCalls / mainPassTriangles` 主 pass 口径，并发布 CSS/drawing-buffer、DPR、renderer 资源、Engine 调度与逐步 rollSafety 计数
 - [x] 1H.24 [测试] 锁定 diagnostics 字段命名与来源，避免将主 pass 数据误写成包含 shadow pass 的总 calls/triangles
 - [x] 1H.25 [实现] diagnostics 使用版本化 `post-render` 快照，只在真实 render 后发布；开发/e2e 支持 nextSeed 与版本化 nextSeeds 队列，隔离 e2e 另支持一次性强制 timeout outcome
-- [x] 1H.26 [测试] 锁定 schema v3 post-render revision、seed/队列消费、timeout seam 和 idle/settled 静态零帧语义
+- [x] 1H.26 [测试] 锁定 schema v4 post-render revision、seed/队列消费、timeout seam 和 idle/settled 静态零帧语义
+- [x] 1H.27 [实现/测试] 隔离 e2e 仅在 `perfProfile=1&perfProfileVersion=1` 时启用 rolling CPU profile v1；固定容量记录 rAF 原始/截断间隔、Cannon 实际 substep 与各 CPU 阶段，renderer 明确为 cpu-submit，生产和普通 e2e 零计时采样
 
 ### 1I 阶段一集成验证
 
@@ -157,7 +158,7 @@
 - [x] 1I.6 [验收] 全部单测通过：`pnpm test`
 - [x] 1I.7 [验收] `pnpm build` 通过，无编译错误
 - [x] 1I.8 [验收] `pnpm test:e2e` 在桌面/移动项目完成真实固定 seed 正常结算、timeout 不提交/同轮恢复、reset、静态零帧与移动布局验收；当前 4/4 通过
-- [x] 1I.9 [验收] `pnpm bench:browser` 锁定三阶段渲染结构、DPR/像素预算与静态零帧，并保留 JSON/截图 artifact；帧时仅记录不设跨硬件硬门槛；当前 2/2 通过
+- [x] 1I.9 [验收] `pnpm bench:browser` 锁定三阶段渲染结构、DPR/像素预算与静态零帧，并保留 JSON/截图 artifact；profile 只硬门禁字段完整、有限值、样本存在与每帧 substeps ≤ 8，毫秒分布仅记录不设跨硬件硬门槛；当前 2/2 通过
 - [x] 1I.10 [实现] `physics/roll-runner.ts` 复用正式 throw/world/escape/settle/read-face 行为链，统一单 seed 复现、批量验收与 A/B 诊断
 - [x] 1I.11 [实现] variant schema v2 固定 historical、placement-control、placement-candidate、natural-control 与 current 的投掷/assist/pose 组合
 - [x] 1I.12 [测试] `pnpm test:physics:ab` 落地：按 seed 交替 A/B、B/A，分离 watch/batch cohort，并对每个非自然结果运行最多 20s 的同 seed natural continuation
@@ -166,6 +167,9 @@
 - [x] 1I.15 [A/B] 默认 200 seed 拆为 19 watch / 181 batch；current 的 batch fallback 与 assist 均为 0，最大穿透下降 0.016682m，p95 改善 0.1167s、p99 回退 0.25s且未越预算
 - [x] 1I.16 [产品/验收] timeout 进入显式 error 与 RollErrorPanel；不读面、不判奖、不播放中奖音、不推进 round/history/prizeRecord，可同轮重新掷骰或重置
 - [x] 1I.17 [实现] `test:e2e:soak`、版本化 20-seed 队列、逐步安全/状态/静态调度/WebGL 资源断言与逐轮 JSON artifact 已落地；不以命令存在替代 1I.2 的最终运行验收
+- [x] 1I.18 [实现/测试] floor-relaunch tracker v1 接入统一 `runRoll()`：0.5mm 支撑容差，先满足 2 步真实 floor contact 与 6 步 clean support，再对至少 2 步的二次离地同时门禁 clearance > 5mm 和 ordered world-Y rise > 5mm；首次外部接触前满足即锁存；sampler 对单一、无 shape offset/orientation 的 Box 与 Heightfield 契约 fail closed
+- [x] 1I.19 [门禁] acceptance report schema v3 / roll diagnostics schema v2 将 tracker unavailable/event 设为硬失败；A/B report schema v4 对 runtime 与 continuation 使用同一门禁
+- [x] 1I.20 [基线] 当前 200 seeds / 1200 颗骰子中 initial contact observed=1190、armed=1158，secondary episode=54、floor-only=2、event=0；最大 floor-only clearance/ordered rise=2.761mm/0，最大 pre-external clearance/ordered rise=7.795mm/0；coverage 与最大值只记录不硬门禁，事件要求两项同时 >5mm；171042、25042、146042 的旧无序高度极差已确认为误报回归
 
 ---
 
@@ -230,9 +234,9 @@
 
 ---
 
-## 阶段 1+：碰撞体倒角优化（P0 补强 — 减少棱角互锁导致的倾斜停稳）
+## 阶段 1+：碰撞体倒角优化（历史实验，已由当前 Box 运行时取代）
 
-> 目标：将骰子碰撞体从 `CANNON.Box`（8v/6f 锐棱）替换为棱倒角凸包 `ConvexPolyhedron`（24v/26f），减少骰子棱边互锁导致的 tilt。
+> **归档状态**：本阶段记录曾将骰子碰撞体从 `CANNON.Box`（8v/6f 锐棱）替换为倒角凸包 `ConvexPolyhedron`（24v/14f）的实验过程。历史勾选只表示当时完成过对应实现或验证，不代表 chamfer 仍是当前运行时方案。当前物理碰撞体采用 Box；`ConvexPolyhedron` 仅保留为显式 sweep / 对照能力。
 
 ### Step 0：提取 physics-only 骰子 body 工厂
 
@@ -248,7 +252,7 @@
 
 - [x] 1.1 [实现] 新建 `src/dice/chamfer.ts`，导出 `createChamferedCubeHull(halfSize, chamfer): { vertices: number[][], faces: number[][] }`
 - [x] 1.2 [实现] 几何定义：截角立方体（vertex truncation）— 24 顶点（每原始顶点切出 3 个新顶点）、14 面（8 三角形 + 6 八边形），满足欧拉关系 V-E+F = 24-36+14 = 2；所有面顶点逆时针 winding（从外侧看）
-- [x] 1.3 [实现] 在 `config/physics.ts` 新增 `diceChamferRatio: 0.15`（倒角比例，0=Box 回退）
+- [x] 1.3 [历史实现] 当时在 `config/physics.ts` 新增 `diceChamferRatio: 0.15`；当前值为 0，运行时使用 Box
 - [x] 1.4 [测试] `chamfer.test.ts`：顶点数 = 24，面数 = 14
 - [x] 1.5 [测试] 所有面法线朝外（面积加权法线与质心→面心向量同向）
 - [x] 1.6 [测试] 包围盒 ≤ 原 Box（每轴最大坐标 ≤ halfSize）
@@ -258,15 +262,15 @@
 ### Step 2：碰撞体替换
 
 - [x] 2.1 [实现] `dice-body.ts` 中 `createDiceBody()` 新增 chamfer 分支：当 `shapeMode='chamfer'` 时调用 `createChamferedCubeHull()` 构建 `ConvexPolyhedron` 并 addShape
-- [x] 2.2 [实现] 默认 shapeMode 改为 `'chamfer'`（`diceChamferRatio > 0` 时自动选择）
+- [x] 2.2 [历史实现] 当时通过 `diceChamferRatio > 0` 将默认 shapeMode 切换为 `'chamfer'`；当前 ratio 为 0，默认使用 `'box'`
 - [x] 2.3 [测试] 点数读取不受影响：复用 `read-face.test.ts` 24 个合法朝向 + 扰动样本全部通过
 - [x] 2.4 [测试] 全量测试通过，无回归
 
 ### Step 3：视觉网格对齐
 
-> 注：视觉 mesh 先接受近似对齐，不要求与物理截角凸包完全同构。RoundedBoxGeometry 是连续圆角而非截面三角形，作为第一版视觉对齐可接受，后续按需升级。
+> 历史实验曾让视觉圆角近似物理倒角。当前视觉与物理解耦：mesh 使用 `RoundedBoxGeometry` 保留圆润外观，物理 body 使用 Box，不要求两者同构。
 
-- [x] 3.1 [实现] `create.ts` 中将 `BoxGeometry` 替换为 `RoundedBoxGeometry`，radius 参数对齐 `PHYSICS.diceHalfSize * PHYSICS.diceChamferRatio`
+- [x] 3.1 [历史实现] `create.ts` 中将 `BoxGeometry` 替换为 `RoundedBoxGeometry`；当前 radius 使用独立的 `diceVisualChamferRatio`，不再与物理 `diceChamferRatio` 对齐
 - [x] 3.2 [验收] 确认 RoundedBoxGeometry 原始 6 个连续面区间的方向顺序，将各面 UV 映射到单张 3×2 atlas 后合并为一个 materialIndex 0 draw group
 - [x] 3.3 [验收] 目视检查：四点红面和边框在倒角处无明显畸变
 
@@ -300,19 +304,21 @@
 
 ---
 
-## 阶段 1++：碗底弹跳修复（P0 补强 — 倒角凸包与离散 Heightfield 接触拓扑切换）
+## 阶段 1++：碗底弹跳历史实验（旧 chamfer 路线，已由当前 Box 运行时取代）
 
-> **根因**：倒角凸包在离散 Heightfield 上发生接触拓扑切换，表现为两类同源异常：
+> **归档状态**：本阶段针对旧 chamfer 运行时设计。当前生产运行时已选择 Box，因此以下 chamfer / restitution / Heightfield 参数实验不再是活跃实施计划；未勾选项表示历史上没有完成，不能视为已验收。PF.3 的自动事件门禁已由统一 runner 补齐，但原要求中的真实浏览器连续 20 轮目视验收仍保持开放。
+>
+> **历史假设**：倒角凸包在离散 Heightfield 上发生接触拓扑切换，表现为两类同源异常：
 >
 > - 阶段 A（动态弹跳期）：主问题骰子在动态旋转中与离散碗底发生接触拓扑切换，出现可见大幅二次弹跳
 > - 阶段 B（尾段微振荡期）：接近静止后 ConvexPolyhedron 与 Heightfield 局部边缘效应导致角速度短促突增，反复打破 stable 窗口
 >
-> **执行约束**：
+> **当时的执行约束**：
 >
 > - 阶段 1 含 box 对照基线（用于判断修复后是否接近 box 稳定性）
 > - 阶段 2 拆材质后须插入等价性回归门（参数不变，指标不漂移）
 > - 阶段 4 HF 分辨率对比须同时记性能门槛
-> - 阶段 5 chamferRatio=0 仅作对照项，不作为默认候选修复
+> - 阶段 5 当时仅把 chamferRatio=0 作为对照项；后续证据驱动的运行时决策已改为 Box
 >
 > **暂不前置**：solver iterations 增加、低速段主动衰减角速度、velocity clamp、diceDice restitution 大幅下调
 
@@ -330,32 +336,33 @@
 - [x] P2.3 [实现] `bowl-body.ts`：碗底 body 改用 `bowlFloorMaterial`，挡墙 body 改用 `bowlWallMaterial`
 - [x] P2.4 [实现] `config/physics.ts`：`contact.diceBowl` 拆为 `contact.diceFloor` + `contact.diceWall`，初始值相同
 - [x] P2.5 [测试] 全量测试通过，无回归
-- [ ] P2.6 [验收] **等价性回归门**：重跑阶段 1 基线，确认所有指标无明显漂移（拆材质本身不改变行为）
+- [ ] P2.6 [历史未执行，已归档] **等价性回归门**：重跑阶段 1 基线，确认所有指标无明显漂移（拆材质本身不改变行为）
 
 ### Phase 3：碗底 restitution sweep
 
 - [x] P3.1 [实现] 新建 `sweep/floor-restitution-sweep.ts`：仅改碗底 restitution（0.15 / 0.08 / 0.05 / 0.02），墙面保持 0.15
-- [ ] P3.2 [验收] 同时检验：二次弹跳是否减少、首次落碗弹性感是否过死、墙面回弹是否保持原设定
-- [ ] P3.3 [验收] 选定最佳碗底 restitution 值并写入 `config/physics.ts`
+- [ ] P3.2 [历史未执行，已归档] 同时检验：二次弹跳是否减少、首次落碗弹性感是否过死、墙面回弹是否保持原设定
+- [ ] P3.3 [历史未执行，已归档] 选定最佳碗底 restitution 值并写入 `config/physics.ts`
 
 ### Phase 4：Heightfield 分辨率对比
 
 - [x] P4.1 [实现] 新建 `sweep/hf-resolution-sweep.ts`：对比 51 / 81 / 101 三档
-- [ ] P4.2 [验收] 检验：阶段 B stable broken 次数、阶段 A 最大二次抬升、性能成本（物理步进耗时、首轮总耗时）
-- [ ] P4.3 [验收] 选定最佳 HF_GRID_SIZE 并更新 `bowl-body.ts`
+- [ ] P4.2 [历史未执行，已归档] 检验：阶段 B stable broken 次数、阶段 A 最大二次抬升、性能成本（物理步进耗时、首轮总耗时）
+- [ ] P4.3 [历史未执行，已归档] 选定最佳 HF_GRID_SIZE 并更新 `bowl-body.ts`
 
 ### Phase 5：chamferRatio sweep（如需）
 
 - [x] P5.1 [实现] 新建 `sweep/chamfer-sweep.ts`：对比 0.15 / 0.12 / 0.10 / 0（box 对照，不作为候选修复）
-- [ ] P5.2 [验收] 确认前四阶段修复是否已足够，chamferRatio=0 仅回答"是否只能靠退回 box 解决"
-- [ ] P5.3 [验收] 如需调整 chamferRatio，更新 `config/physics.ts` 并重跑全量测试
+- [ ] P5.2 [历史未执行，已归档] 确认前四阶段修复是否已足够；该计划当时仅将 chamferRatio=0 作为 Box 对照
+- [ ] P5.3 [历史未执行，已归档] 如需调整 chamferRatio，更新 `config/physics.ts` 并重跑全量测试
 
 ### 收尾
 
 - [x] PF.1 [验收] 全量测试通过（`pnpm test`）
 - [x] PF.2 [验收] `pnpm build` 通过
-- [ ] PF.3 [验收] 连续 20 轮投掷无碗底异常弹跳
-- [ ] PF.4 [验收] 更新 `ARCHITECTURE.md` 碗碰撞体方案章节
+- [x] PF.3a [自动门禁] floor-relaunch tracker v1 已接入统一 runner、acceptance 与 A/B；当前 200-seed 固定逻辑样本事件为 0，coverage 另行记录且不设比例硬门禁
+- [ ] PF.3b [目视验收] 真实浏览器连续 20 轮投掷无碗底异常弹跳
+- [x] PF.4 [验收] 更新 `ARCHITECTURE.md` 碗碰撞体方案章节，明确当前 Box 物理碰撞体与独立 RoundedBox 视觉几何
 
 ---
 

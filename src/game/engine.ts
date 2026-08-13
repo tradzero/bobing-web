@@ -12,6 +12,11 @@ import {
 } from '@/physics/roll-diagnostics'
 import { soundManager } from '@/audio/sound'
 import type { SceneContext } from '@/scene/setup'
+import {
+  createRollingCpuProfileAccumulator,
+  type RollingCpuFrameSample,
+  type RollingCpuProfileSnapshot,
+} from './performance-profile'
 
 export type EngineMode = 'idle' | 'rolling' | 'settled' | 'stopped'
 
@@ -31,6 +36,8 @@ export interface EngineDiagnostics {
     escapeGuardInterventionCount: number
     nonFiniteBodyStateDetected: boolean
   }
+  /** 仅显式 e2e perf-profile 模式存在；字段同时包含 rAF 间隔、Cannon 子步数与主线程 CPU 耗时。 */
+  performanceProfile?: RollingCpuProfileSnapshot
 }
 
 export interface EngineOptions {
@@ -41,6 +48,11 @@ export interface EngineOptions {
   onSettled: (result: SettleResult) => void
   /** 可选只读诊断订阅，用于开发环境/浏览器验收，不参与状态决策。 */
   onDiagnostics?: (diagnostics: EngineDiagnostics) => void
+  /** 仅供隔离 e2e 性能采样；普通开发与生产不得传入。 */
+  performanceProfile?: {
+    now: () => number
+    capacity?: number
+  }
 }
 
 /** 引擎公共控制接口。测试替身也必须覆盖生命周期与诊断契约。 */
@@ -71,7 +83,8 @@ type ShadowMapControls = {
  * - 结算帧：先回调业务层冻结/提交，再同步 raw body 姿态渲染最后一帧。
  */
 export function createEngine(opts: EngineOptions): Engine {
-  const { sceneCtx, world, worldStep, dicePairs, onSettled, onDiagnostics } = opts
+  const { sceneCtx, world, worldStep, dicePairs, onSettled, onDiagnostics, performanceProfile } =
+    opts
   const { scene, camera, renderer } = sceneCtx
   const bodies = dicePairs.map((pair) => pair.body)
 
@@ -86,6 +99,11 @@ export function createEngine(opts: EngineOptions): Engine {
   let rollFrameDiagnostics = createRollFrameDiagnostics()
   let rollEscapeGuardInterventionCount = 0
   const rollSafetyEnabled = onDiagnostics !== undefined
+  const rollingCpuProfile = performanceProfile
+    ? createRollingCpuProfileAccumulator(performanceProfile.capacity)
+    : null
+  const profileNow = performanceProfile?.now
+  let profileFrameInProgress = false
 
   for (const body of bodies) {
     body.addEventListener('collide', soundManager.handleCollision)
@@ -164,6 +182,70 @@ export function createEngine(opts: EngineOptions): Engine {
     onDiagnostics?.(getDiagnostics())
   }
 
+  function measureCpu(action: () => void): number {
+    const startedAt = profileNow!()
+    action()
+    return profileNow!() - startedAt
+  }
+
+  function recordProfiledRollingFrame(rawDeltaMs: number, clampedDeltaMs: number): void {
+    const tickStartedAt = profileNow!()
+    const sample: RollingCpuFrameSample = {
+      rafRawDeltaMs: rawDeltaMs,
+      rafClampedDeltaMs: clampedDeltaMs,
+      cannonStepnumberDelta: 0,
+      worldStepCpuMs: 0,
+      guardCpuMs: 0,
+      rollSafetyCpuMs: 0,
+      settleCpuMs: 0,
+      transformSyncCpuMs: 0,
+      rendererSubmitCpuMs: 0,
+      diagnosticsPublishCpuMs: 0,
+      tickTotalCpuMs: 0,
+    }
+
+    const stepnumberBefore = world.stepnumber
+    sample.worldStepCpuMs = measureCpu(() => worldStep(clampedDeltaMs / 1000))
+    sample.cannonStepnumberDelta = world.stepnumber - stepnumberBefore
+    physicsStepCount++
+
+    sample.guardCpuMs = measureCpu(() => {
+      for (const body of bodies) {
+        if (applyEscapeGuard(body) && rollSafetyEnabled) rollEscapeGuardInterventionCount++
+      }
+    })
+    sample.rollSafetyCpuMs = measureCpu(observeRollSafety)
+
+    let settleResult: SettleResult | null = null
+    sample.settleCpuMs = measureCpu(() => {
+      settleResult = settleState ? checkSettled(bodies, rollingElapsed, settleState, world) : null
+    })
+
+    if (settleResult) {
+      mode = 'settled'
+      settleState = null
+      previousRollingTimestamp = null
+      onSettled(settleResult)
+      prepareStaticShadows()
+      sample.transformSyncCpuMs = measureCpu(syncRawBodies)
+      sample.rendererSubmitCpuMs = measureCpu(() => renderer.render(scene, camera))
+      renderCount++
+    } else {
+      prepareRollingShadows()
+      sample.transformSyncCpuMs = measureCpu(syncInterpolatedBodies)
+      sample.rendererSubmitCpuMs = measureCpu(() => renderer.render(scene, camera))
+      renderCount++
+      scheduleFrame()
+    }
+
+    // 此时当前帧尚未 record，发布出去的快照会明确标记为 excluded。
+    profileFrameInProgress = true
+    sample.diagnosticsPublishCpuMs = measureCpu(notifyPostRenderDiagnostics)
+    sample.tickTotalCpuMs = profileNow!() - tickStartedAt
+    rollingCpuProfile!.record(sample)
+    profileFrameInProgress = false
+  }
+
   function tick(timestamp: number): void {
     // 当前回调已被消费；只有本帧末尾明确需要继续时才重新安排。
     rafId = null
@@ -186,9 +268,15 @@ export function createEngine(opts: EngineOptions): Engine {
       return
     }
 
-    const dt = Math.min(Math.max((timestamp - previousRollingTimestamp) / 1000, 0), 0.1)
+    const rawDeltaMs = timestamp - previousRollingTimestamp
+    const dt = Math.min(Math.max(rawDeltaMs / 1000, 0), 0.1)
     previousRollingTimestamp = timestamp
     rollingElapsed += dt
+
+    if (rollingCpuProfile) {
+      recordProfiledRollingFrame(rawDeltaMs, dt * 1000)
+      return
+    }
 
     worldStep(dt)
     physicsStepCount++
@@ -243,6 +331,7 @@ export function createEngine(opts: EngineOptions): Engine {
     previousRollingTimestamp = null
     settleState = createSettleState(0)
     resetRollSafety()
+    rollingCpuProfile?.reset()
     observeInitialRollSafety()
 
     // throwDice 已更新 raw body；先初始化插值字段，避免首个基准帧显示上一轮姿态。
@@ -260,6 +349,7 @@ export function createEngine(opts: EngineOptions): Engine {
     previousRollingTimestamp = null
     settleState = null
     resetRollSafety()
+    rollingCpuProfile?.reset()
     prepareStaticShadows()
     scheduleFrame()
   }
@@ -270,7 +360,7 @@ export function createEngine(opts: EngineOptions): Engine {
   }
 
   function getDiagnostics(): EngineDiagnostics {
-    return {
+    const diagnostics: EngineDiagnostics = {
       mode,
       renderCount,
       physicsStepCount,
@@ -286,6 +376,10 @@ export function createEngine(opts: EngineOptions): Engine {
         nonFiniteBodyStateDetected: rollFrameDiagnostics.nanDetected,
       },
     }
+    if (rollingCpuProfile) {
+      diagnostics.performanceProfile = rollingCpuProfile.snapshot(profileFrameInProgress)
+    }
+    return diagnostics
   }
 
   function dispose(): void {

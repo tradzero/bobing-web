@@ -32,7 +32,7 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
   let completed = false
 
   try {
-    await page.goto(`/?nextSeed=${E2E_NEXT_SEED}`)
+    await page.goto(`/?nextSeed=${E2E_NEXT_SEED}&perfProfile=1&perfProfileVersion=1`)
     await expect(page.getByRole('button', { name: '掷骰' })).toBeVisible()
     artifact.environment = await readBrowserMetadata(page)
 
@@ -72,6 +72,40 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
     expect(settled.roll.seed).toBe(E2E_NEXT_SEED)
     expect(settled.roll.placementPath).toMatch(/^(rejection|constructive|fallback)$/)
     expect(settled.roll.settleReason).not.toBeNull()
+    const profile = settled.engine.performanceProfile
+    expect(profile, 'rolling CPU profile must be present in explicit profile mode').toBeDefined()
+    expect(profile).toMatchObject({
+      version: 1,
+      sampleKind: 'rolling-cpu',
+      rendererTimingKind: 'cpu-submit',
+    })
+    expect(typeof profile!.currentFrameExcluded).toBe('boolean')
+    expect(profile!.totalFrameCount).toBeGreaterThan(0)
+    expect(profile!.retainedFrameCount).toBeGreaterThan(0)
+    expect(Object.keys(profile!.metrics).sort()).toEqual(
+      [
+        'rafRawDeltaMs',
+        'rafClampedDeltaMs',
+        'cannonStepnumberDelta',
+        'worldStepCpuMs',
+        'guardCpuMs',
+        'rollSafetyCpuMs',
+        'settleCpuMs',
+        'transformSyncCpuMs',
+        'rendererSubmitCpuMs',
+        'diagnosticsPublishCpuMs',
+        'tickTotalCpuMs',
+      ].sort(),
+    )
+    for (const [metric, distribution] of Object.entries(profile!.metrics)) {
+      expect(distribution.count, `${metric} sample count`).toBe(profile!.retainedFrameCount)
+      expect(Number.isFinite(distribution.p50), `${metric} p50 must be finite`).toBe(true)
+      expect(Number.isFinite(distribution.p95), `${metric} p95 must be finite`).toBe(true)
+      expect(Number.isFinite(distribution.max), `${metric} max must be finite`).toBe(true)
+    }
+    expect(profile!.metrics.cannonStepnumberDelta.max).toBeGreaterThanOrEqual(0)
+    expect(Number.isInteger(profile!.metrics.cannonStepnumberDelta.max)).toBe(true)
+    expect(profile!.metrics.cannonStepnumberDelta.max).toBeLessThanOrEqual(8)
     await expectNoStaticFrames(page, settled)
 
     expect(issues.pageErrors, 'uncaught page errors').toEqual([])

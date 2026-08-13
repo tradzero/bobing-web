@@ -15,10 +15,11 @@ import { SETTLE } from '@/config/settle'
 import { GameControllerContext } from './GameControllerContext'
 import { GameStoreContext } from './GameStoreContext'
 
-const DIAGNOSTICS_SCHEMA_VERSION = 3
+const DIAGNOSTICS_SCHEMA_VERSION = 4
 const DIAGNOSTICS_ENABLED = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
 const E2E_SEED_PLAN_VERSION = '1'
 const E2E_SETTLEMENT_OVERRIDE_VERSION = '1'
+const E2E_PERFORMANCE_PROFILE_VERSION = '1'
 
 interface GameViewportProps {
   children?: ReactNode
@@ -78,6 +79,13 @@ function readNextSettlementOverride(): 'timeout' | undefined {
   const params = new URLSearchParams(window.location.search)
   if (params.get('settlementOverrideVersion') !== E2E_SETTLEMENT_OVERRIDE_VERSION) return undefined
   return params.get('forceNextSettlement') === 'timeout' ? 'timeout' : undefined
+}
+
+function readPerformanceProfile(): { now: () => number } | undefined {
+  if (import.meta.env.MODE !== 'e2e') return undefined
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('perfProfileVersion') !== E2E_PERFORMANCE_PROFILE_VERSION) return undefined
+  return params.get('perfProfile') === '1' ? { now: () => performance.now() } : undefined
 }
 
 /** 递归释放 scene 中所有 geometry / material / texture */
@@ -214,6 +222,7 @@ export function GameViewport({ children }: GameViewportProps) {
         ctrl.onSettled(result)
       },
       onDiagnostics: DIAGNOSTICS_ENABLED ? publishDiagnostics : undefined,
+      performanceProfile: readPerformanceProfile(),
     })
 
     // 注入 engine（解决循环依赖）

@@ -10,6 +10,12 @@ import {
 import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '../src/dice/throw.ts'
 import { SETTLE_ALGORITHM_VERSION } from '../src/dice/settle.ts'
 import { ESCAPE_GUARD_VERSION } from '../src/physics/escape-guard.ts'
+import {
+  FLOOR_RELAUNCH_CLEARANCE_THRESHOLD,
+  FLOOR_RELAUNCH_SUPPORT_CLEARANCE_TOLERANCE,
+  FLOOR_RELAUNCH_TRACKER_VERSION,
+  FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
+} from '../src/physics/floor-relaunch.ts'
 import { ROLL_DIAGNOSTICS_SCHEMA_VERSION, runRoll } from '../src/physics/roll-runner.ts'
 import {
   PHYSICS_AB_SCHEMA_VERSION,
@@ -121,6 +127,12 @@ function main(): void {
         throwRandomPlan: THROW_RANDOM_PLAN_VERSION,
         settle: SETTLE_ALGORITHM_VERSION,
         escapeGuard: ESCAPE_GUARD_VERSION,
+        floorRelaunch: FLOOR_RELAUNCH_TRACKER_VERSION,
+      },
+      floorRelaunch: {
+        supportClearanceTolerance: FLOOR_RELAUNCH_SUPPORT_CLEARANCE_TOLERANCE,
+        clearanceThreshold: FLOOR_RELAUNCH_CLEARANCE_THRESHOLD,
+        orderedWorldYRiseThreshold: FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
       },
       executionPattern: 'AB/BA alternating by seed',
       requested: options,
@@ -143,6 +155,7 @@ function main(): void {
     node: output.metadata.node,
     cannonEs: output.metadata.cannonEs,
     algorithms: output.metadata.algorithms,
+    floorRelaunch: output.metadata.floorRelaunch,
     executionPattern: output.metadata.executionPattern,
     requested: output.metadata.requested,
     variants: output.metadata.variants,

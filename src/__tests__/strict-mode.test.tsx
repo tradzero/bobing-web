@@ -25,6 +25,7 @@ type DiagnosticSnapshot = {
   frameScheduled: boolean
 }
 const diagnosticPublishers: Array<(diagnostics: DiagnosticSnapshot) => void> = []
+const enginePerformanceProfiles: unknown[] = []
 let callCounter = 0
 let diceSetCallCounter = 0
 
@@ -126,10 +127,14 @@ vi.mock('@/dice/create', () => ({
 }))
 
 vi.mock('@/game/engine', () => ({
-  createEngine: (options: { onDiagnostics?: (diagnostics: DiagnosticSnapshot) => void }) => {
+  createEngine: (options: {
+    onDiagnostics?: (diagnostics: DiagnosticSnapshot) => void
+    performanceProfile?: unknown
+  }) => {
     const id = ++callCounter
     engineCreateCalls.push(id)
     if (options.onDiagnostics) diagnosticPublishers.push(options.onDiagnostics)
+    enginePerformanceProfiles.push(options.performanceProfile)
     return {
       start: vi.fn(),
       stop: vi.fn(),
@@ -152,6 +157,7 @@ beforeEach(() => {
   diceSetCreateCalls.length = 0
   diceSetDisposeCalls.length = 0
   diagnosticPublishers.length = 0
+  enginePerformanceProfiles.length = 0
 })
 
 describe('StrictMode 重挂载', () => {
@@ -239,7 +245,7 @@ describe('StrictMode 重挂载', () => {
     const canvas = container.querySelector('canvas')
     const diagnostics = JSON.parse(canvas?.dataset.diceDiagnostics ?? '{}')
     expect(diagnostics).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
       revision: 1,
       sampleKind: 'post-render',
       roll: {
@@ -265,6 +271,8 @@ describe('StrictMode 重挂载', () => {
       programs: 2,
     })
     expect(diagnostics.render.calls).toBeUndefined()
+    expect(diagnostics.engine.performanceProfile).toBeUndefined()
+    expect(enginePerformanceProfiles.every((profile) => profile === undefined)).toBe(true)
 
     unmount()
   })

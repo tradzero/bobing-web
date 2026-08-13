@@ -23,6 +23,7 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
   })
   idle = await waitForStaticQuiescence(page, idle)
   expect(idle.engine.physicsStepCount).toBe(0)
+  expect(idle.engine.performanceProfile).toBeUndefined()
   await expectNoStaticFrames(page, idle)
 
   if (testInfo.project.name.startsWith('mobile')) {
@@ -82,6 +83,7 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
   })
   expect(settled.roll.seed).toBe(E2E_NEXT_SEED)
   expect(settled.roll.settleReason).not.toBeNull()
+  expect(settled.engine.performanceProfile).toBeUndefined()
   await expectNoStaticFrames(page, settled)
 
   await page.getByRole('button', { name: '重置游戏' }).click()

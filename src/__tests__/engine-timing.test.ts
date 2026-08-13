@@ -5,6 +5,10 @@ import * as THREE from 'three'
 import type { DicePair } from '@/dice/create'
 import type { SettleResult } from '@/dice/settle'
 import { createEngine, type Engine, type EngineDiagnostics } from '@/game/engine'
+import {
+  ROLLING_CPU_PROFILE_METRICS,
+  type RollingCpuProfileSnapshot,
+} from '@/game/performance-profile'
 import type { SceneContext } from '@/scene/setup'
 import { CONSERVATIVE_DICE_CENTER_RADIUS, WALL_INNER_RADIUS } from '@/physics/roll-diagnostics'
 
@@ -91,25 +95,131 @@ describe('Engine 按需调度', () => {
 
   function createFixture(options?: {
     dicePairs?: DicePair[]
+    world?: CANNON.World
     worldStep?: (dt: number) => void
     onSettled?: (result: SettleResult) => void
     onDiagnostics?: (diagnostics: EngineDiagnostics) => void
+    performanceProfile?: { now: () => number; capacity?: number }
   }) {
     const sceneCtx = mockSceneCtx()
     const dicePairs = options?.dicePairs ?? makeDicePairs()
     const worldStep = options?.worldStep ?? vi.fn()
     const onSettled = options?.onSettled ?? vi.fn()
+    const world = options?.world ?? new CANNON.World()
     const engine = createEngine({
       sceneCtx,
-      world: new CANNON.World(),
+      world,
       worldStep,
       dicePairs,
       onSettled,
       onDiagnostics: options?.onDiagnostics,
+      performanceProfile: options?.performanceProfile,
     })
     engines.push(engine)
     return { engine, sceneCtx, dicePairs, worldStep, onSettled }
   }
+
+  it('未显式启用 profile 时 rolling 不读取 performance.now', () => {
+    const now = vi.spyOn(performance, 'now')
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    const { engine } = createFixture({ dicePairs })
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(1000)
+    runNextFrame(1016.67)
+
+    expect(now).not.toHaveBeenCalled()
+  })
+
+  it('profile 记录真实 stepnumber delta，并明确 post-render 快照排除当前 publish 帧', () => {
+    const world = new CANNON.World()
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    let clock = 0
+    const now = vi.fn(() => {
+      clock += 0.25
+      return clock
+    })
+    const published: RollingCpuProfileSnapshot[] = []
+    const { engine } = createFixture({
+      world,
+      dicePairs,
+      worldStep: (dt) => world.step(1 / 60, dt, 8),
+      onDiagnostics: (diagnostics) => {
+        if (diagnostics.performanceProfile) published.push(diagnostics.performanceProfile)
+      },
+      performanceProfile: { now, capacity: 4 },
+    })
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(1000)
+    runNextFrame(1050)
+
+    const duringPublish = published.at(-1)
+    expect(duringPublish).toMatchObject({
+      totalFrameCount: 0,
+      retainedFrameCount: 0,
+      currentFrameExcluded: true,
+    })
+
+    const afterPublish = engine.getDiagnostics().performanceProfile
+    expect(afterPublish).toMatchObject({
+      totalFrameCount: 1,
+      retainedFrameCount: 1,
+      currentFrameExcluded: false,
+      rendererTimingKind: 'cpu-submit',
+    })
+    expect(afterPublish?.metrics.cannonStepnumberDelta).toEqual({
+      count: 1,
+      p50: 3,
+      p95: 3,
+      max: 3,
+    })
+    for (const metric of ROLLING_CPU_PROFILE_METRICS) {
+      const distribution = afterPublish?.metrics[metric]
+      expect(distribution?.count).toBe(1)
+      expect(distribution?.p50).toSatisfy(Number.isFinite)
+      expect(distribution?.p95).toSatisfy(Number.isFinite)
+      expect(distribution?.max).toSatisfy(Number.isFinite)
+    }
+    expect(now).toHaveBeenCalled()
+  })
+
+  it('启用 profile 不改变同一 rolling 轨迹的调度与结算结果', () => {
+    const run = (profiled: boolean) => {
+      const dicePairs = makeDicePairs(1, true)
+      const onSettled = vi.fn()
+      let clock = 0
+      const { engine, sceneCtx } = createFixture({
+        dicePairs,
+        onSettled,
+        performanceProfile: profiled
+          ? {
+              now: () => {
+                clock += 0.1
+                return clock
+              },
+            }
+          : undefined,
+      })
+      engine.start()
+      engine.beginSettle()
+      runNextFrame(1000)
+      runNextFrame(1016.67)
+      const diagnostics = { ...engine.getDiagnostics() }
+      delete diagnostics.performanceProfile
+      return {
+        diagnostics,
+        renderCalls: sceneCtx.renderer.render.mock.calls.length,
+        settleResult: onSettled.mock.calls[0]?.[0],
+      }
+    }
+
+    expect(run(true)).toEqual(run(false))
+  })
 
   function runNextFrame(timestamp: number): boolean {
     const next = pendingFrames.entries().next()
