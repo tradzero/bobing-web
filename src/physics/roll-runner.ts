@@ -2,6 +2,11 @@ import { createPhysicsWorld } from './world'
 import { createBowlBodies } from './bowl-body'
 import { setupContactMaterials } from './materials'
 import { createDiceBody } from '@/dice/dice-body'
+import {
+  captureCanonicalBodyState,
+  cloneCanonicalBodyState,
+  type CanonicalBodyStateDiagnostics,
+} from '@/dice/canonical-body-state'
 import { readAllFacesDetailed, type FaceReadResult } from '@/dice/read-face'
 import type { SettleReason, SettleResult } from '@/dice/settle'
 import {
@@ -24,7 +29,7 @@ import {
 } from './roll-step-session'
 
 /** 结构化验收报告 schema；字段语义发生不兼容变化时必须递增。 */
-export const ROLL_DIAGNOSTICS_SCHEMA_VERSION = 3
+export const ROLL_DIAGNOSTICS_SCHEMA_VERSION = 4
 
 export interface HeadlessRollSimulationOptions {
   seed: number
@@ -58,6 +63,8 @@ export interface RollRunResult extends RollFrameDiagnostics {
   sleepWakeCount: number
   throwDiagnostics: ThrowDiagnostics
   finalFaces: FaceReadResult[]
+  /** finish 后按 canonical dice body 顺序捕获的完整 Float64 终态。 */
+  finalState: CanonicalBodyStateDiagnostics
   finalRadius: number
   finalMaxSpeed: number
   finalMaxAngularSpeed: number
@@ -149,7 +156,9 @@ export function createHeadlessRollSimulation(
 
     function finishRoll(termination: HeadlessRollTermination): RollRunResult {
       requireActive()
-      if (finalRoll) return finalRoll
+      if (finalRoll) {
+        return { ...finalRoll, finalState: cloneCanonicalBodyState(finalRoll.finalState) }
+      }
       if (finalization === 'diagnostics') {
         throw new Error('headless roll simulation 已按非结算诊断结束，不能再生成 RollRunResult')
       }
@@ -182,6 +191,9 @@ export function createHeadlessRollSimulation(
         throw new Error('headless roll settled termination 与 session 状态不一致')
       }
 
+      finalDiagnostics = stepSession.finish()
+      // finalize 完成后才捕获终态；capture 只读且返回与 Cannon body 脱离的 Float64 快照。
+      const finalState = captureCanonicalBodyState(bodies)
       const finalFaces = readAllFacesDetailed(bodies)
       const finalRadius = Math.max(
         ...bodies.map(({ position }) => Math.hypot(position.x, position.z)),
@@ -190,7 +202,6 @@ export function createHeadlessRollSimulation(
       const finalMaxAngularSpeed = Math.max(
         ...bodies.map(({ angularVelocity }) => angularVelocity.length()),
       )
-      finalDiagnostics = stepSession.finish()
       finalization = 'roll'
       finalRoll = {
         seed,
@@ -198,13 +209,14 @@ export function createHeadlessRollSimulation(
         ...termination,
         throwDiagnostics,
         finalFaces,
+        finalState,
         finalRadius,
         finalMaxSpeed,
         finalMaxAngularSpeed,
         ambiguousDiceCount: finalFaces.filter(({ confidence }) => confidence < SETTLE.tiltThreshold)
           .length,
       }
-      return finalRoll
+      return { ...finalRoll, finalState: cloneCanonicalBodyState(finalState) }
     }
 
     return {

@@ -254,7 +254,7 @@ sweep 通常会向 `logs/` 写 NDJSON 与 summary。它们多数是诊断工具�
 | `pnpm test:acceptance`            | 200 seeds 验收；assist/fallback 预算均为 0，pose-stable 上限 2%，硬失败或其他基线预算回退时返回非零退出码 |
 | `pnpm test:physics:ab`            | 交替 A/B、B/A 执行命名 preset，分开 watch/batch cohort，并校验非自然结算的 natural continuation           |
 
-统一 runner 复用运行时的 `throwDice`、物理世界、逃逸保护和 `checkSettled`，不得在测试中复制一份近似实现。当前单轮 diagnostics schema 为 v3，物理验收报告 schema 为 v3；输出必须包含 commit、Node 版本、算法版本与关键配置，确保 seed 有复现上下文。`runRoll()` 已通过共享 exact-step session 逐个执行 `world.step(fixed)`，每步按固定顺序采样未介入安全事实、floor tracker、escape guard 与 settle，并以 `simulationStep / simulationTime` 记录真实模拟进度；当前浏览器 Engine 仍保持旧 batched 调度，不能把 headless session 验证误写成生产调度已切换。NaN、越墙、逃逸保护介入、timeout、帧预算耗尽以及 floor-relaunch tracker 不可用或命中事件都属于硬失败；默认验收同时要求 assist/fallback 为 0、pose-stable 比例不超过 2%，其他倾斜、穿透和结算长尾使用当前基线预算防止回退。
+统一 runner 复用运行时的 `throwDice`、物理世界、逃逸保护和 `checkSettled`，不得在测试中复制一份近似实现。当前单轮 diagnostics schema 为 v4，物理验收报告 schema 为 v3；输出必须包含 commit、Node 版本、算法版本与关键配置，确保 seed 有复现上下文。`runRoll()` 已通过共享 exact-step session 逐个执行 `world.step(fixed)`，每步按固定顺序采样未介入安全事实、floor tracker、escape guard 与 settle，并以 `simulationStep / simulationTime` 记录真实模拟进度；终态同时记录 canonical 6-body position/quaternion/velocity/angularVelocity 的完整数组与 Float64 位级签名。当前浏览器 Engine 仍保持旧 batched 调度，不能把 headless session 验证误写成生产调度已切换。NaN、越墙、逃逸保护介入、timeout、帧预算耗尽以及 floor-relaunch tracker 不可用或命中事件都属于硬失败；默认验收同时要求 assist/fallback 为 0、pose-stable 比例不超过 2%，其他倾斜、穿透和结算长尾使用当前基线预算防止回退。
 
 `test:physics:ab` 的 watch cohort 专门保留历史失败 seed，batch cohort 才用于分布和回退预算，避免 watch 过采样污染总体结论。两侧所有非 `natural-sleep` 结果都必须以相同 seed 和投掷算法关闭 assist/pose detector 继续至多 20 秒，对照逐骰面值、倾斜分类、完整奖级与轨迹安全。当前 A/B 报告 schema 为 v4，runtime 与 continuation 都硬门禁 floor-relaunch tracker 不可用或命中事件。
 

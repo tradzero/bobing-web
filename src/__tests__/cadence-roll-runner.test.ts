@@ -178,17 +178,23 @@ describe('headless roll lifecycle seam', () => {
         }),
       ).toThrow('settled termination 与 session 状态不一致')
 
-      expect(
-        simulation.finishRoll({
-          settleReason: canonicalReason,
-          settleTime: terminalSnapshot.simulationTime,
-          settleFrame: terminalSnapshot.simulationStep,
-        }),
-      ).toMatchObject({
+      const canonicalTermination = {
+        settleReason: canonicalReason,
+        settleTime: terminalSnapshot.simulationTime,
+        settleFrame: terminalSnapshot.simulationStep,
+      } as const
+      const finished = simulation.finishRoll(canonicalTermination)
+      expect(finished).toMatchObject({
         settleReason: canonicalReason,
         settleTime: terminalSnapshot.simulationTime,
         settleFrame: terminalSnapshot.simulationStep,
       })
+
+      const canonicalFinalX = finished.finalState.bodies[0].position[0]
+      Reflect.set(finished.finalState.bodies[0].position, 0, canonicalFinalX + 1)
+      expect(simulation.finishRoll(canonicalTermination).finalState.bodies[0].position[0]).toBe(
+        canonicalFinalX,
+      )
     } finally {
       simulation.dispose()
     }
@@ -218,6 +224,15 @@ describe('headless cadence roll runner', () => {
       assistInterventionCount: 0,
     })
     expect(faceValues(reference)).toEqual([2, 1, 2, 1, 4, 5])
+    expect(reference.roll.finalState).toMatchObject({
+      version: 1,
+      floatEncoding: 'ieee754-float64-be',
+      hashAlgorithm: 'fnv1a64',
+      hash: 'ca710327c6d45df3',
+      bodies: expect.arrayContaining([expect.any(Object)]),
+    })
+    expect(reference.roll.finalState.bodies).toHaveLength(6)
+    expect(reference.roll.finalState.hash).not.toBe(reference.initialState.hash)
     expect(reference.conservation.passed).toBe(true)
   })
 
@@ -241,6 +256,9 @@ describe('headless cadence roll runner', () => {
           expect(candidate.initialState, `${context} initial-state`).toEqual(reference.initialState)
           // 同一 exact-step 行为链应逐字段相等；这同时覆盖安全包络、settle 原因与步数。
           expect(candidate.roll, `${context} roll`).toEqual(reference.roll)
+          expect(candidate.roll.finalState, `${context} final-state`).toEqual(
+            reference.roll.finalState,
+          )
           expect(judge(faceValues(candidate)), `${context} judge`).toEqual(
             judge(faceValues(reference)),
           )

@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { captureThrowInitialState } from '@/dice/throw-initial-state'
+import { captureCanonicalBodyState, cloneCanonicalBodyState } from '@/dice/canonical-body-state'
+import { captureThrowInitialState, cloneThrowInitialState } from '@/dice/throw-initial-state'
 
 function makeBody(offset: number): CANNON.Body {
   const body = new CANNON.Body({ mass: 1 })
@@ -39,6 +40,7 @@ describe('throw initial state diagnostics', () => {
     const second = captureThrowInitialState(bodies)
 
     expect(first).toEqual(second)
+    expect(first).toEqual(captureCanonicalBodyState(bodies))
     expect(first).toMatchObject({
       version: 1,
       floatEncoding: 'ieee754-float64-be',
@@ -59,5 +61,21 @@ describe('throw initial state diagnostics', () => {
     secondBody.velocity.x += Number.EPSILON
     expect(captureThrowInitialState([firstBody, secondBody]).hash).not.toBe(original.hash)
     expect(original.bodies[1].velocity[0]).toBe(-1)
+  })
+
+  it('canonical 与旧 initial clone 都深复制 tuple，不与输入 snapshot 或 body 共享', () => {
+    const body = makeBody(0)
+    const canonical = captureCanonicalBodyState([body])
+    const canonicalClone = cloneCanonicalBodyState(canonical)
+    const initialClone = cloneThrowInitialState(canonical)
+    const originalX = body.position.x
+
+    Reflect.set(canonicalClone.bodies[0].position, 0, originalX + 1)
+    Reflect.set(initialClone.bodies[0].velocity, 0, 99)
+
+    expect(canonical.bodies[0].position[0]).toBe(originalX)
+    expect(canonical.bodies[0].velocity[0]).toBe(-1)
+    expect(body.position.x).toBe(originalX)
+    expect(body.velocity.x).toBe(-1)
   })
 })

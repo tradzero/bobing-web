@@ -33,6 +33,21 @@ function noFloorRelaunch() {
   }
 }
 
+function finalStateFixture() {
+  return {
+    version: 1 as const,
+    floatEncoding: 'ieee754-float64-be' as const,
+    hashAlgorithm: 'fnv1a64' as const,
+    hash: '0000000000000000',
+    bodies: Array.from({ length: 6 }, (_, index) => ({
+      position: [index, 0, 0] as const,
+      quaternion: [0, 0, 0, 1] as const,
+      velocity: [0, 0, 0] as const,
+      angularVelocity: [0, 0, 0] as const,
+    })),
+  }
+}
+
 function makeResult(seed: number, overrides: Partial<RollRunResult> = {}): RollRunResult {
   return {
     seed,
@@ -64,6 +79,7 @@ function makeResult(seed: number, overrides: Partial<RollRunResult> = {}): RollR
       fallbackLayout: null,
     },
     finalFaces: [1, 2, 3, 4, 5, 6].map((value) => ({ value, confidence: 1 })),
+    finalState: finalStateFixture(),
     finalRadius: 0.6,
     finalMaxSpeed: 0,
     finalMaxAngularSpeed: 0,

@@ -172,7 +172,7 @@
 - [x] 1I.16 [产品/验收] timeout 进入显式 error 与 RollErrorPanel；不读面、不判奖、不播放中奖音、不推进 round/history/prizeRecord，可同轮重新掷骰或重置
 - [x] 1I.17 [实现] `test:e2e:soak`、版本化 20-seed 队列、逐步安全/状态/静态调度/WebGL 资源断言与逐轮 JSON artifact 已落地；不以命令存在替代 1I.2 的最终运行验收
 - [x] 1I.18 [实现/测试] floor-relaunch tracker v1 接入统一 `runRoll()`：0.5mm 支撑容差，先满足 2 步真实 floor contact 与 6 步 clean support，再对至少 2 步的二次离地同时门禁 clearance > 5mm 和 ordered world-Y rise > 5mm；首次外部接触前满足即锁存；sampler 对单一、无 shape offset/orientation 的 Box 与 Heightfield 契约 fail closed
-- [x] 1I.19 [门禁] acceptance report schema v3 / roll diagnostics schema v3 将 tracker unavailable/event 设为硬失败；A/B report schema v4 对 runtime 与 continuation 使用同一门禁
+- [x] 1I.19 [门禁] acceptance report schema v3 / roll diagnostics schema v4 将 tracker unavailable/event 设为硬失败；A/B report schema v4 对 runtime 与 continuation 使用同一门禁
 - [x] 1I.20 [基线] 当前 200 seeds / 1200 颗骰子中 initial contact observed=1190、armed=1158，secondary episode=54、floor-only=2、event=0；最大 floor-only clearance/ordered rise=2.761mm/0，最大 pre-external clearance/ordered rise=7.795mm/0；coverage 与最大值只记录不硬门禁，事件要求两项同时 >5mm；171042、25042、146042 的旧无序高度极差已确认为误报回归
 - [x] 1I.21 [实现] `pnpm bench:browser:render-ab` 使用 5 个固定 seed、双方 warm-up 和逐 seed ABBA/BAAB，每个 project/comparison 共 20 measured rolls；投掷路径、稳定结果、物理安全、context/页面错误及静态零帧硬门禁，毫秒只记录；artifact 持久化至 `artifacts/render-ab/<project>-<comparison>.json`
 - [x] 1I.22 [A/B] clean durable SwiftShader rolling DPR：desktop ratio=`0.7864364941630467`、5/5 改善、noise=`0.06133911408891464`、判据通过；mobile ratio=`0.6095156450921579`、5/5 改善、noise=`0.14689147459021826`、判据通过；生产仍只在 reduced 档采用 rolling 1x，full 档保持基础 DPR，static 恢复基础 DPR
@@ -189,7 +189,8 @@
 - [x] 1I.33 [实验基础] 新增未接入生产的 fixed-step accumulator v1：显式记录 accepted/paused/discarded wall time、逐步消费 backlog、cap4 跨帧追赶、插值余量与锁存 overload；单元测试锁定守恒和 early-stop，不改变当前 Engine 调度
 - [x] 1I.34 [实验基础] `PhysicsWorld.stepExact()`、previous→raw 显式插值和共享 `roll-step-session` 已落地；session 具有 stepnumber delta=1 硬契约、非破坏 snapshot、可选 floor/stable 扩展与通用阶段计时接缝
 - [x] 1I.35 [实验基础] versioned headless cadence runner 已覆盖 steady60/30、deterministic jitter、单次 100ms、visibility suspend 与持续 100ms；reference/cap6/cap4 复用同一 lifecycle/session，逐帧门禁时间守恒、terminal abandoned backlog 与 overload，4 个 watch seed 的正常 cadence 结果完全一致
-- [ ] 1I.36 [后续] 增加 watch+200 batch 的 cadence comparison/CLI 与 canonical final-body state，再接仅 e2e 可开启的 Engine timing experiment、visibility suspend 与独立 timing-overload 错误；通过批量与浏览器门禁前不得替换生产调度
+- [x] 1I.36 [诊断] canonical body-state v1 泛化初始/终态位级签名；roll diagnostics v4 在 finish 后记录 6-body 完整终态，seed 25042 final hash=`ca710327c6d45df3`，cadence 候选显式对比 initialState、finalState 与完整 RollRunResult
+- [ ] 1I.37 [后续] 增加 watch+200 batch 的 cadence comparison/CLI，再接仅 e2e 可开启的 Engine timing experiment、visibility suspend 与独立 timing-overload 错误；通过批量与浏览器门禁前不得替换生产调度
 
 ---
 

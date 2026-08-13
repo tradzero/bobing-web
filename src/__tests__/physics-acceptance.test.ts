@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { runRoll } from '@/physics/roll-runner'
+import { ROLL_DIAGNOSTICS_SCHEMA_VERSION, runRoll } from '@/physics/roll-runner'
 import { WALL_RADIUS } from '@/physics/bowl-body'
 import { SETTLE } from '@/config/settle'
 import { PHYSICS } from '@/config/physics'
@@ -62,6 +62,7 @@ describe('真实物理验收', () => {
     const reproduce = 'pnpm test:seed -- --seed=25042'
     const result = runRoll({ seed })
 
+    expect(ROLL_DIAGNOSTICS_SCHEMA_VERSION, reproduce).toBe(4)
     expect(result.settleReason, reproduce).toBe('natural-sleep')
     expect(result.settleFrame, reproduce).toBe(460)
     expect(result.simulationStep, reproduce).toBe(result.settleFrame)
@@ -78,6 +79,8 @@ describe('真实物理验收', () => {
     expect(result.assistInterventionCount, reproduce).toBe(0)
     expect(result.floorRelaunch.available, reproduce).toBe(true)
     expect(result.floorRelaunch.relaunchEventCount, reproduce).toBe(0)
+    expect(result.finalState.hash, reproduce).toBe('ca710327c6d45df3')
+    expect(result.finalState.bodies, reproduce).toHaveLength(6)
   })
 
   it('seed 41042: 首次正常落碗反弹不计为异常二次弹跳', { timeout: 30_000 }, () => {
