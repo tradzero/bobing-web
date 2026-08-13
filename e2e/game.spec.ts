@@ -7,7 +7,49 @@ import {
   waitForPostRender,
   waitForSettlementUi,
   waitForStaticQuiescence,
+  type DiceRuntimeDiagnostics,
 } from './helpers/diagnostics'
+
+function expectDefaultExactScheduler(diagnostics: DiceRuntimeDiagnostics): void {
+  expect(diagnostics.physicsSchedulerExperiment).toEqual({
+    version: 1,
+    explicit: false,
+    variant: 'exact-cap6',
+    kind: 'exact-accumulator',
+    maxStepsPerFrame: 6,
+  })
+  expect(diagnostics.engine.physicsTiming).toMatchObject({
+    preset: 'exact-cap6',
+    kind: 'exact-accumulator',
+    maxStepsPerFrame: 6,
+    overload: { active: false, highWaterMs: 250 },
+  })
+}
+
+function expectSettledExactTiming(diagnostics: DiceRuntimeDiagnostics): void {
+  expectDefaultExactScheduler(diagnostics)
+  const timing = diagnostics.engine.physicsTiming
+  expect(timing.simulationStep).toBeGreaterThan(0)
+  expect(timing.totalExecutedSteps).toBe(timing.simulationStep)
+  expect(timing.simulationTime).toBeCloseTo(
+    timing.totalExecutedSteps * (timing.fixedStepMs / 1000),
+    9,
+  )
+  expect(timing.totalRawWallDeltaMs).toBeCloseTo(
+    timing.totalAcceptedWallDeltaMs + timing.totalDiscardedWallDeltaMs,
+    8,
+  )
+  expect(timing.totalPausedWallDeltaMs).toBe(0)
+  expect(timing.terminalAbandoned).toMatchObject({ reason: 'settled' })
+  expect(timing.queuedMs).toBe(timing.terminalAbandoned!.queuedMs)
+  expect(timing.queuedWholeSteps).toBe(timing.terminalAbandoned!.queuedWholeSteps)
+  expect(timing.interpolationAlpha).toBe(timing.terminalAbandoned!.interpolationAlpha)
+  expect(timing.totalAcceptedWallDeltaMs).toBeCloseTo(
+    timing.totalExecutedSteps * timing.fixedStepMs + timing.terminalAbandoned!.queuedMs,
+    7,
+  )
+  expect(timing.overload.active).toBe(false)
+}
 
 test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, testInfo) => {
   const issues = collectBrowserIssues(page)
@@ -22,6 +64,13 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
     frameScheduled: false,
   })
   idle = await waitForStaticQuiescence(page, idle)
+  expectDefaultExactScheduler(idle)
+  expect(idle.engine.physicsTiming).toMatchObject({
+    simulationStep: null,
+    totalExecutedSteps: 0,
+    queuedMs: 0,
+    terminalAbandoned: null,
+  })
   expect(idle.engine.physicsStepCount).toBe(0)
   expect(idle.engine.performanceProfile).toBeUndefined()
   expect(idle.renderExperiment).toMatchObject({
@@ -68,6 +117,7 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
     afterRenderCount: idle.engine.renderCount,
     frameScheduled: true,
   })
+  expectDefaultExactScheduler(rolling)
   expect(rolling.roll.seed).toBe(E2E_NEXT_SEED)
   expect(rolling.roll.placementPath).toMatch(/^(rejection|constructive|fallback)$/)
   expect(rolling.engine.physicsStepCount).toBeGreaterThanOrEqual(idle.engine.physicsStepCount)
@@ -100,6 +150,7 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
     frameScheduled: false,
     timeout: BROWSER_BUDGETS.settlementWallTimeoutMs,
   })
+  expectSettledExactTiming(settled)
   expect(settled.roll.seed).toBe(E2E_NEXT_SEED)
   expect(settled.roll.settleReason).not.toBeNull()
   expect(settled.engine.performanceProfile).toBeUndefined()
@@ -136,6 +187,7 @@ test('timeout 不提交结果，并可在同一轮恢复投掷', async ({ page }
 
   let previous = await waitForPostRender(page, { mode: 'idle', frameScheduled: false })
   previous = await waitForStaticQuiescence(page, previous)
+  expectDefaultExactScheduler(previous)
 
   await page.getByRole('button', { name: '掷骰' }).click()
   const firstRolling = await waitForPostRender(page, {
@@ -144,6 +196,7 @@ test('timeout 不提交结果，并可在同一轮恢复投掷', async ({ page }
     afterRenderCount: previous.engine.renderCount,
     frameScheduled: true,
   })
+  expectDefaultExactScheduler(firstRolling)
   expect(firstRolling.roll.seed).toBe(42)
 
   const errorSettled = await waitForPostRender(page, {
@@ -160,6 +213,9 @@ test('timeout 不提交结果，并可在同一轮恢复投掷', async ({ page }
   await expect(page.getByRole('button', { name: '掷骰', exact: true })).toBeDisabled()
   expect(errorSettled.roll.seed).toBe(42)
   expect(errorSettled.roll.settleReason).toBe('timeout')
+  expectDefaultExactScheduler(errorSettled)
+  expect(errorSettled.engine.physicsTiming.terminalAbandoned).toMatchObject({ reason: 'settled' })
+  expect(errorSettled.roll.finalState).toBeNull()
   await expectNoStaticFrames(page, errorSettled)
 
   await page.getByRole('button', { name: '重新掷骰' }).click()
@@ -169,6 +225,7 @@ test('timeout 不提交结果，并可在同一轮恢复投掷', async ({ page }
     afterRenderCount: errorSettled.engine.renderCount,
     frameScheduled: true,
   })
+  expectDefaultExactScheduler(recoveryRolling)
   expect(recoveryRolling.roll.seed).toBe(50_000)
 
   await waitForSettlementUi(page)
@@ -178,6 +235,7 @@ test('timeout 不提交结果，并可在同一轮恢复投掷', async ({ page }
     afterRenderCount: recoveryRolling.engine.renderCount,
     frameScheduled: false,
   })
+  expectSettledExactTiming(recovered)
   expect(recovered.roll.seed).toBe(50_000)
   expect(recovered.roll.settleReason).not.toBe('timeout')
   await expect(page.getByRole('alert')).toHaveCount(0)
@@ -190,7 +248,7 @@ test('timeout 不提交结果，并可在同一轮恢复投掷', async ({ page }
   expect(issues.consoleErrors, 'browser console errors').toEqual([])
 })
 
-test('exact-cap6 使用逐固定步真值完成正常结算并满足时间守恒', async ({ page }) => {
+test('显式 exact-cap6 preset 使用逐固定步真值完成正常结算并满足时间守恒', async ({ page }) => {
   const issues = collectBrowserIssues(page)
   const query = new URLSearchParams({
     nextSeed: String(E2E_NEXT_SEED),

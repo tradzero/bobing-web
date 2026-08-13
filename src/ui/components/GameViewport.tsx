@@ -127,7 +127,7 @@ function readRenderPerformanceExperiment(): RenderPerformanceVariant | undefined
 }
 
 function readPhysicsSchedulerExperiment(): PhysicsSchedulerVariant | undefined {
-  // exact scheduler 尚处于隔离验收阶段；生产构建即使带同名 query 也必须保持 legacy。
+  // 生产构建忽略调度实验 query，始终使用编译时选定的默认 preset。
   if (import.meta.env.MODE !== 'e2e') return undefined
   const params = new URLSearchParams(window.location.search)
   return resolvePhysicsSchedulerExperiment(

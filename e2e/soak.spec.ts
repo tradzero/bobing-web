@@ -17,7 +17,7 @@ import {
   type DiceRuntimeDiagnostics,
 } from './helpers/diagnostics'
 
-const SOAK_ARTIFACT_SCHEMA_VERSION = 3
+const SOAK_ARTIFACT_SCHEMA_VERSION = 4
 
 /**
  * v1 固定队列来自统一 Node runner：全部 natural-sleep、无倾斜、无保守边界/guard。
@@ -66,27 +66,48 @@ interface SoakRoundObservation {
 }
 
 interface SoakScenario {
-  id: 'legacy-batched' | 'exact-cap6'
-  tag: '@soak-legacy' | '@soak-exact-cap6'
+  id: 'production-default' | 'legacy-rollback'
+  tag: '@soak-default' | '@soak-legacy-rollback'
   query: Readonly<Record<string, string>>
-  durableArtifactSuffix: '' | '-exact-cap6'
+  durableArtifactSuffix: '-default' | '-legacy-rollback'
+  expectedScheduler: {
+    explicit: boolean
+    variant: 'exact-cap6' | 'legacy-batched'
+    kind: 'exact-accumulator' | 'legacy-batched'
+    maxStepsPerFrame: 6 | null
+  }
+  usesExactTiming: boolean
 }
 
 const SOAK_SCENARIOS: readonly SoakScenario[] = [
   {
-    id: 'legacy-batched',
-    tag: '@soak-legacy',
+    id: 'production-default',
+    tag: '@soak-default',
     query: {},
-    durableArtifactSuffix: '',
+    durableArtifactSuffix: '-default',
+    expectedScheduler: {
+      explicit: false,
+      variant: 'exact-cap6',
+      kind: 'exact-accumulator',
+      maxStepsPerFrame: 6,
+    },
+    usesExactTiming: true,
   },
   {
-    id: 'exact-cap6',
-    tag: '@soak-exact-cap6',
+    id: 'legacy-rollback',
+    tag: '@soak-legacy-rollback',
     query: {
       physicsSchedulerExperimentVersion: '1',
-      physicsSchedulerVariant: 'exact-cap6',
+      physicsSchedulerVariant: 'legacy-batched',
     },
-    durableArtifactSuffix: '-exact-cap6',
+    durableArtifactSuffix: '-legacy-rollback',
+    expectedScheduler: {
+      explicit: true,
+      variant: 'legacy-batched',
+      kind: 'legacy-batched',
+      maxStepsPerFrame: null,
+    },
+    usesExactTiming: false,
   },
 ] as const
 
@@ -157,7 +178,7 @@ test.describe('@soak 连续多轮真实浏览器 soak', () => {
         worktreeDirty: repositoryStateAtStart.worktreeDirty,
         schedulerScenario: scenario.id,
         seedPlan: SOAK_SEED_PLAN,
-        exactPathBudget: scenario.id === 'exact-cap6' ? EXACT_CAP6_PATH_BUDGET : null,
+        exactPathBudget: scenario.usesExactTiming ? EXACT_CAP6_PATH_BUDGET : null,
         environment: null,
         repository: { start: repositoryStateAtStart },
       }
@@ -176,6 +197,10 @@ test.describe('@soak 连续多轮真实浏览器 soak', () => {
 
         let previous = await waitForPostRender(page, { mode: 'idle', frameScheduled: false })
         previous = await waitForStaticQuiescence(page, previous)
+        expect(previous.physicsSchedulerExperiment).toEqual({
+          version: 1,
+          ...scenario.expectedScheduler,
+        })
         await expectNoStaticFrames(page, previous)
         baselineResources = resourcesOf(previous, await page.locator('canvas').count())
         let settledProgramBaseline: number | null = null
@@ -269,17 +294,14 @@ test.describe('@soak 连续多轮真实浏览器 soak', () => {
             settled.engine.rollSafety.maxRadius,
             `round ${index + 1} crossed the physical wall inner face`,
           ).toBeLessThan(settled.engine.rollSafety.containmentRadius)
+          expect(settled.physicsSchedulerExperiment).toEqual({
+            version: 1,
+            ...scenario.expectedScheduler,
+          })
 
           const physicsSteps = settled.engine.physicsStepCount - previous.engine.physicsStepCount
-          if (scenario.id === 'exact-cap6') {
+          if (scenario.usesExactTiming) {
             const timing = settled.engine.physicsTiming
-            expect(settled.physicsSchedulerExperiment).toEqual({
-              version: 1,
-              explicit: true,
-              variant: 'exact-cap6',
-              kind: 'exact-accumulator',
-              maxStepsPerFrame: 6,
-            })
             expect(timing.preset).toBe('exact-cap6')
             expect(timing.simulationStep).toBeGreaterThan(0)
             expect(timing.totalExecutedSteps).toBe(timing.simulationStep)
@@ -342,16 +364,15 @@ test.describe('@soak 连续多轮真实浏览器 soak', () => {
             settleElapsed: settled.roll.settleElapsed,
             wallMs: Date.now() - roundStartedAt,
             physicsSteps,
-            physicsTiming:
-              scenario.id === 'exact-cap6'
-                ? {
-                    ...settled.engine.physicsTiming,
-                    overload: { ...settled.engine.physicsTiming.overload },
-                    terminalAbandoned: settled.engine.physicsTiming.terminalAbandoned
-                      ? { ...settled.engine.physicsTiming.terminalAbandoned }
-                      : null,
-                  }
-                : undefined,
+            physicsTiming: scenario.usesExactTiming
+              ? {
+                  ...settled.engine.physicsTiming,
+                  overload: { ...settled.engine.physicsTiming.overload },
+                  terminalAbandoned: settled.engine.physicsTiming.terminalAbandoned
+                    ? { ...settled.engine.physicsTiming.terminalAbandoned }
+                    : null,
+                }
+              : undefined,
             rollSafety: { ...settled.engine.rollSafety },
             resources,
           })
@@ -366,7 +387,7 @@ test.describe('@soak 连续多轮真实浏览器 soak', () => {
         expect(rounds).toHaveLength(SOAK_SEED_PLAN.seeds.length)
 
         const settleReasons = countSettleReasons(rounds)
-        if (scenario.id === 'exact-cap6') {
+        if (scenario.usesExactTiming) {
           expect(settleReasonCount(settleReasons, 'cluster-assist')).toBeLessThanOrEqual(
             EXACT_CAP6_PATH_BUDGET.clusterAssistMaxCount,
           )

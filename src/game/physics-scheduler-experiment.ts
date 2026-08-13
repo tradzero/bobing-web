@@ -51,9 +51,8 @@ export const PHYSICS_SCHEDULER_VARIANT_IDS = Object.freeze(
   Object.keys(VARIANTS) as PhysicsSchedulerVariantId[],
 )
 
-/** 生产运行时在显式接线前始终保持 Cannon 旧 batched 调度。 */
-export const DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID: PhysicsSchedulerVariantId =
-  'legacy-batched'
+/** 生产运行时默认使用逐固定步 exact 调度；legacy 仅作版本化对照与回滚。 */
+export const DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID: PhysicsSchedulerVariantId = 'exact-cap6'
 
 /**
  * 只解析版本化、预注册的物理调度实验。是否允许读取 URL 由后续调用方按 Vite mode 决定。

@@ -38,6 +38,20 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
 
     idle = await waitForPostRender(page, { mode: 'idle', frameScheduled: false })
     idle = await waitForStaticQuiescence(page, idle)
+    expect(idle.physicsSchedulerExperiment).toEqual({
+      version: 1,
+      explicit: false,
+      variant: 'exact-cap6',
+      kind: 'exact-accumulator',
+      maxStepsPerFrame: 6,
+    })
+    expect(idle.engine.physicsTiming).toMatchObject({
+      preset: 'exact-cap6',
+      kind: 'exact-accumulator',
+      simulationStep: null,
+      totalExecutedSteps: 0,
+      overload: { active: false, highWaterMs: 250 },
+    })
     expect(idle.renderExperiment).toMatchObject({
       explicit: false,
       variant: 'rolling-dpr-reduced-tier',
@@ -54,6 +68,10 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
       afterRevision: idle.revision,
       afterRenderCount: idle.engine.renderCount,
       frameScheduled: true,
+    })
+    expect(rolling.physicsSchedulerExperiment).toMatchObject({
+      explicit: false,
+      variant: 'exact-cap6',
     })
     expectRenderBudgets(rolling, testInfo.project.name)
     expect(rolling.roll.seed).toBe(E2E_NEXT_SEED)
@@ -88,6 +106,35 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
     expect(settled.roll.seed).toBe(E2E_NEXT_SEED)
     expect(settled.roll.placementPath).toMatch(/^(rejection|constructive|fallback)$/)
     expect(settled.roll.settleReason).not.toBeNull()
+    expect(settled.physicsSchedulerExperiment).toEqual({
+      version: 1,
+      explicit: false,
+      variant: 'exact-cap6',
+      kind: 'exact-accumulator',
+      maxStepsPerFrame: 6,
+    })
+    const timing = settled.engine.physicsTiming
+    expect(timing).toMatchObject({
+      preset: 'exact-cap6',
+      kind: 'exact-accumulator',
+      overload: { active: false, highWaterMs: 250 },
+      terminalAbandoned: { reason: 'settled' },
+    })
+    expect(timing.simulationStep).toBeGreaterThan(0)
+    expect(timing.totalExecutedSteps).toBe(timing.simulationStep)
+    expect(timing.simulationTime).toBeCloseTo(
+      timing.totalExecutedSteps * (timing.fixedStepMs / 1000),
+      9,
+    )
+    expect(timing.totalRawWallDeltaMs).toBeCloseTo(
+      timing.totalAcceptedWallDeltaMs + timing.totalDiscardedWallDeltaMs,
+      8,
+    )
+    expect(timing.totalPausedWallDeltaMs).toBe(0)
+    expect(timing.totalAcceptedWallDeltaMs).toBeCloseTo(
+      timing.totalExecutedSteps * timing.fixedStepMs + timing.terminalAbandoned!.queuedMs,
+      7,
+    )
     expect(settled.engine.rollingShadow).toMatchObject({
       version: 1,
       preset: 'every-frame',
@@ -128,7 +175,7 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
     }
     expect(profile!.metrics.cannonStepnumberDelta.max).toBeGreaterThanOrEqual(0)
     expect(Number.isInteger(profile!.metrics.cannonStepnumberDelta.max)).toBe(true)
-    expect(profile!.metrics.cannonStepnumberDelta.max).toBeLessThanOrEqual(8)
+    expect(profile!.metrics.cannonStepnumberDelta.max).toBeLessThanOrEqual(6)
     await expectNoStaticFrames(page, settled)
 
     expect(issues.pageErrors, 'uncaught page errors').toEqual([])

@@ -160,7 +160,9 @@ describe('Engine 按需调度', () => {
       dicePairs,
       onSettled,
       onRollError: options?.onRollError,
-      physicsSchedulerVariant: options?.physicsSchedulerVariant,
+      // 这些通用 fixture 验证旧 batched Engine 语义，不应随生产默认切换。
+      physicsSchedulerVariant:
+        options?.physicsSchedulerVariant ?? getPhysicsSchedulerVariant('legacy-batched'),
       clock: options?.clock,
       initiallyHidden: options?.initiallyHidden,
       onDiagnostics: options?.onDiagnostics,

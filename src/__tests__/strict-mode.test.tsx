@@ -180,6 +180,7 @@ vi.mock('@/game/engine', () => ({
 }))
 
 beforeEach(() => {
+  window.history.replaceState({}, '', '/')
   callCounter = 0
   diceSetCallCounter = 0
   engineCreateCalls.length = 0
@@ -198,6 +199,23 @@ beforeEach(() => {
 })
 
 describe('StrictMode 重挂载', () => {
+  it('非 e2e 构建忽略 scheduler query，继续使用编译时生产默认', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/?physicsSchedulerExperimentVersion=1&physicsSchedulerVariant=legacy-batched',
+    )
+
+    const { unmount } = render(<GameViewport />)
+
+    expect(engineSchedulerVariants.at(-1)).toMatchObject({
+      id: 'exact-cap6',
+      kind: 'exact-accumulator',
+      maxStepsPerFrame: 6,
+    })
+    unmount()
+  })
+
   it('mount → unmount → remount 后只有一个 canvas', () => {
     // 第一次挂载 + 卸载
     const { unmount: unmount1, container: container1 } = render(
@@ -295,9 +313,9 @@ describe('StrictMode 重挂载', () => {
       physicsSchedulerExperiment: {
         version: 1,
         explicit: false,
-        variant: 'legacy-batched',
-        kind: 'legacy-batched',
-        maxStepsPerFrame: null,
+        variant: 'exact-cap6',
+        kind: 'exact-accumulator',
+        maxStepsPerFrame: 6,
       },
       renderExperiment: {
         version: 1,
@@ -337,7 +355,7 @@ describe('StrictMode 重挂载', () => {
     expect(engineSchedulerVariants).not.toHaveLength(0)
     expect(engineSchedulerVariants).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'legacy-batched', kind: 'legacy-batched' }),
+        expect.objectContaining({ id: 'exact-cap6', kind: 'exact-accumulator' }),
       ]),
     )
     expect(engineStepExactCallbacks.every((callback) => typeof callback === 'function')).toBe(true)

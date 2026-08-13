@@ -10,13 +10,13 @@ import {
 } from '@/game/physics-scheduler-experiment'
 
 describe('浏览器物理 scheduler 实验 preset', () => {
-  it('生产默认恒为 legacy batched', () => {
-    expect(DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID).toBe('legacy-batched')
+  it('生产默认使用 exact cap6', () => {
+    expect(DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID).toBe('exact-cap6')
     expect(getPhysicsSchedulerVariant(DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID)).toEqual({
-      id: 'legacy-batched',
+      id: 'exact-cap6',
       version: PHYSICS_SCHEDULER_EXPERIMENT_VERSION,
-      kind: 'legacy-batched',
-      maxStepsPerFrame: null,
+      kind: 'exact-accumulator',
+      maxStepsPerFrame: 6,
     })
   })
 
