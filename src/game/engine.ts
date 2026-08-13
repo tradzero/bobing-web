@@ -3,6 +3,13 @@ import type { DicePair } from '@/dice/create'
 import { checkSettled, createSettleState, type SettleResult, type SettleState } from '@/dice/settle'
 import { applyEscapeGuard } from '@/physics/escape-guard'
 import { copyBodyTransformToObject, syncBodyInterpolationState } from '@/physics/body-transform'
+import {
+  CONSERVATIVE_DICE_CENTER_RADIUS,
+  WALL_INNER_RADIUS,
+  createRollFrameDiagnostics,
+  sampleRollBodyDiagnostics,
+  sampleRollFrameDiagnostics,
+} from '@/physics/roll-diagnostics'
 import { soundManager } from '@/audio/sound'
 import type { SceneContext } from '@/scene/setup'
 
@@ -13,6 +20,17 @@ export interface EngineDiagnostics {
   renderCount: number
   physicsStepCount: number
   frameScheduled: boolean
+  /** 当前轮逐物理步累计的安全包络；用于发现飞出后落回或 guard 掩盖。 */
+  rollSafety: {
+    maxRadius: number
+    containmentRadius: number
+    conservativeContainmentRadius: number
+    conservativeBoundaryCrossings: number
+    wallCenterCrossings: number
+    maxContactPenetration: number
+    escapeGuardInterventionCount: number
+    nonFiniteBodyStateDetected: boolean
+  }
 }
 
 export interface EngineOptions {
@@ -65,6 +83,9 @@ export function createEngine(opts: EngineOptions): Engine {
   let renderCount = 0
   let physicsStepCount = 0
   let disposed = false
+  let rollFrameDiagnostics = createRollFrameDiagnostics()
+  let rollEscapeGuardInterventionCount = 0
+  const rollSafetyEnabled = onDiagnostics !== undefined
 
   for (const body of bodies) {
     body.addEventListener('collide', soundManager.handleCollision)
@@ -102,6 +123,22 @@ export function createEngine(opts: EngineOptions): Engine {
       copyBodyTransformToObject(body, mesh, 'interpolated')
       syncVisual?.()
     }
+  }
+
+  function resetRollSafety(): void {
+    rollFrameDiagnostics = createRollFrameDiagnostics()
+    rollEscapeGuardInterventionCount = 0
+  }
+
+  function observeRollSafety(): void {
+    if (!rollSafetyEnabled) return
+    sampleRollFrameDiagnostics(rollFrameDiagnostics, bodies, world)
+  }
+
+  function observeInitialRollSafety(): void {
+    if (!rollSafetyEnabled) return
+    // world.contacts 此刻仍可能属于上一轮；teleport 后只采新 body，不拼接陈旧 contact。
+    sampleRollBodyDiagnostics(rollFrameDiagnostics, bodies)
   }
 
   function renderStaticFrame(): void {
@@ -157,8 +194,9 @@ export function createEngine(opts: EngineOptions): Engine {
     physicsStepCount++
 
     for (const body of bodies) {
-      applyEscapeGuard(body)
+      if (applyEscapeGuard(body) && rollSafetyEnabled) rollEscapeGuardInterventionCount++
     }
+    observeRollSafety()
 
     const settleResult = settleState
       ? checkSettled(bodies, rollingElapsed, settleState, world)
@@ -204,6 +242,8 @@ export function createEngine(opts: EngineOptions): Engine {
     rollingElapsed = 0
     previousRollingTimestamp = null
     settleState = createSettleState(0)
+    resetRollSafety()
+    observeInitialRollSafety()
 
     // throwDice 已更新 raw body；先初始化插值字段，避免首个基准帧显示上一轮姿态。
     for (const body of bodies) syncBodyInterpolationState(body)
@@ -219,6 +259,7 @@ export function createEngine(opts: EngineOptions): Engine {
     rollingElapsed = 0
     previousRollingTimestamp = null
     settleState = null
+    resetRollSafety()
     prepareStaticShadows()
     scheduleFrame()
   }
@@ -234,6 +275,16 @@ export function createEngine(opts: EngineOptions): Engine {
       renderCount,
       physicsStepCount,
       frameScheduled: rafId !== null,
+      rollSafety: {
+        maxRadius: rollFrameDiagnostics.maxRadius,
+        containmentRadius: WALL_INNER_RADIUS,
+        conservativeContainmentRadius: CONSERVATIVE_DICE_CENTER_RADIUS,
+        conservativeBoundaryCrossings: rollFrameDiagnostics.conservativeBoundaryCrossings,
+        wallCenterCrossings: rollFrameDiagnostics.wallCenterCrossings,
+        maxContactPenetration: rollFrameDiagnostics.maxContactPenetration,
+        escapeGuardInterventionCount: rollEscapeGuardInterventionCount,
+        nonFiniteBodyStateDetected: rollFrameDiagnostics.nanDetected,
+      },
     }
   }
 

@@ -25,10 +25,12 @@ function findBalancedBlock(source: string, marker: string): string {
 
 function expectLargeBackdropFallback(scope: string): void {
   expect(scope).toMatch(
-    /\.top-bar,\s*\.tilt-warning,\s*\.result-panel,\s*\.panel-card\s*\{[^}]*-webkit-backdrop-filter:\s*none;[^}]*backdrop-filter:\s*none;/,
+    /\.top-bar,\s*\.tilt-warning,\s*\.roll-error,\s*\.result-panel,\s*\.panel-card\s*\{[^}]*-webkit-backdrop-filter:\s*none;[^}]*backdrop-filter:\s*none;/,
   )
 
-  for (const selector of ['.top-bar', '.tilt-warning', '.result-panel', '.panel-card']) {
+  expect(scope).toMatch(/\.tilt-warning,\s*\.roll-error\s*\{[^}]*background:\s*rgba\(/)
+
+  for (const selector of ['.top-bar', '.result-panel', '.panel-card']) {
     const escapedSelector = selector.replaceAll('.', String.raw`\.`)
     expect(scope).toMatch(new RegExp(`${escapedSelector}\\s*\\{[^}]*background:\\s*rgba\\(`))
   }
@@ -65,7 +67,7 @@ describe('低性能 CSS 合成契约', () => {
     expectLargeBackdropFallback(slowUpdate)
 
     expect(slowUpdate).toMatch(
-      /\.btn-throw\.is-rolling,\s*\.btn-throw\.is-rolling \.btn-throw-ornament,\s*\.tilt-warning,\s*\.result-panel\s*\{[^}]*animation:\s*none;/,
+      /\.btn-throw\.is-rolling,\s*\.btn-throw\.is-rolling \.btn-throw-ornament,\s*\.tilt-warning,\s*\.roll-error,\s*\.result-panel\s*\{[^}]*animation:\s*none;/,
     )
   })
 
@@ -73,7 +75,7 @@ describe('低性能 CSS 合成契约', () => {
     const reduced = findBalancedBlock(gameCss, '@media (prefers-reduced-motion: reduce)')
     expect(reduced).toMatch(/\.btn\s*\{[^}]*transition:\s*none;/)
     expect(reduced).toMatch(
-      /\.btn-throw\.is-rolling,\s*\.btn-throw\.is-rolling \.btn-throw-ornament,\s*\.tilt-warning,\s*\.result-panel\s*\{[^}]*animation:\s*none;/,
+      /\.btn-throw\.is-rolling,\s*\.btn-throw\.is-rolling \.btn-throw-ornament,\s*\.tilt-warning,\s*\.roll-error,\s*\.result-panel\s*\{[^}]*animation:\s*none;/,
     )
     expect(reduced).toMatch(
       /\.btn-throw:not\(:disabled\):hover,\s*\.btn-icon:not\(:disabled\):hover\s*\{[^}]*transform:\s*none;/,

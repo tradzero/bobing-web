@@ -100,3 +100,69 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
   expect(issues.pageErrors, 'uncaught page errors').toEqual([])
   expect(issues.consoleErrors, 'browser console errors').toEqual([])
 })
+
+test('timeout 不提交结果，并可在同一轮恢复投掷', async ({ page }) => {
+  const issues = collectBrowserIssues(page)
+  const query = new URLSearchParams({
+    nextSeeds: [42, 50_000].join(','),
+    seedPlanVersion: '1',
+    forceNextSettlement: 'timeout',
+    settlementOverrideVersion: '1',
+  })
+  await page.goto(`/?${query}`)
+
+  let previous = await waitForPostRender(page, { mode: 'idle', frameScheduled: false })
+  previous = await waitForStaticQuiescence(page, previous)
+
+  await page.getByRole('button', { name: '掷骰' }).click()
+  const firstRolling = await waitForPostRender(page, {
+    mode: 'rolling',
+    afterRevision: previous.revision,
+    afterRenderCount: previous.engine.renderCount,
+    frameScheduled: true,
+  })
+  expect(firstRolling.roll.seed).toBe(42)
+
+  const errorSettled = await waitForPostRender(page, {
+    mode: 'settled',
+    afterRevision: firstRolling.revision,
+    afterRenderCount: firstRolling.engine.renderCount,
+    frameScheduled: false,
+  })
+  await expect(page.getByRole('alert')).toContainText('本轮未结算')
+  await expect(page.getByRole('alert')).toContainText('未读取点数，也未计入记录')
+  await expect(page.locator('.result-panel')).toHaveCount(0)
+  await expect(page.locator('.history-item')).toHaveCount(0)
+  await expect(page.locator('.round-display-value')).toHaveText('第 1 轮')
+  await expect(page.getByRole('button', { name: '掷骰', exact: true })).toBeDisabled()
+  expect(errorSettled.roll.seed).toBe(42)
+  expect(errorSettled.roll.settleReason).toBe('timeout')
+  await expectNoStaticFrames(page, errorSettled)
+
+  await page.getByRole('button', { name: '重新掷骰' }).click()
+  const recoveryRolling = await waitForPostRender(page, {
+    mode: 'rolling',
+    afterRevision: errorSettled.revision,
+    afterRenderCount: errorSettled.engine.renderCount,
+    frameScheduled: true,
+  })
+  expect(recoveryRolling.roll.seed).toBe(50_000)
+
+  await waitForSettlementUi(page)
+  const recovered = await waitForPostRender(page, {
+    mode: 'settled',
+    afterRevision: recoveryRolling.revision,
+    afterRenderCount: recoveryRolling.engine.renderCount,
+    frameScheduled: false,
+  })
+  expect(recovered.roll.seed).toBe(50_000)
+  expect(recovered.roll.settleReason).not.toBe('timeout')
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.locator('.result-panel [aria-label^="骰子点数 "]')).toHaveCount(6)
+  await expect(page.locator('.history-item')).toHaveCount(1)
+  await expect(page.locator('.round-display-value')).toHaveText('第 2 轮')
+  await expectNoStaticFrames(page, recovered)
+
+  expect(issues.pageErrors, 'uncaught page errors').toEqual([])
+  expect(issues.consoleErrors, 'browser console errors').toEqual([])
+})

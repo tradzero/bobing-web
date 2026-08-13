@@ -14,6 +14,8 @@
     "test:watch": "vitest",
     "pretest:e2e": "pnpm run build:e2e",
     "test:e2e": "playwright test e2e/game.spec.ts",
+    "pretest:e2e:soak": "pnpm run build:e2e",
+    "test:e2e:soak": "playwright test e2e/soak.spec.ts",
     "prebench:browser": "pnpm run build:e2e",
     "bench:browser": "playwright test e2e/browser-bench.spec.ts",
     "test:physics": "vitest run src/__tests__/physics-acceptance.test.ts src/__tests__/physics-smoke.test.ts src/__tests__/dice-escape.test.ts src/__tests__/freeze-consistency.test.ts src/__tests__/contact-cluster-assist.test.ts src/__tests__/settle.test.ts",

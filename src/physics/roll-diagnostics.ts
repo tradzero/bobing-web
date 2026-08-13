@@ -46,13 +46,10 @@ function contactPenetration(contact: CANNON.ContactEquation): number {
   return Math.max(0, -contact.ni.dot(delta))
 }
 
-/**
- * 在每个物理步之后采样一次。这里只记录事实，不改变刚体状态。
- */
-export function sampleRollFrameDiagnostics(
+/** 采样刚体姿态/速度包络；可在 teleport 后、首个 world.step 前安全调用。 */
+export function sampleRollBodyDiagnostics(
   diagnostics: RollFrameDiagnostics,
   bodies: CANNON.Body[],
-  world: CANNON.World,
 ): void {
   for (const body of bodies) {
     const { x, y, z } = body.position
@@ -84,11 +81,29 @@ export function sampleRollFrameDiagnostics(
     if (radius > CONSERVATIVE_DICE_CENTER_RADIUS) diagnostics.conservativeBoundaryCrossings++
     if (radius > WALL_RADIUS) diagnostics.wallCenterCrossings++
   }
+}
 
+function sampleRollContactDiagnostics(
+  diagnostics: RollFrameDiagnostics,
+  world: CANNON.World,
+): void {
   for (const contact of world.contacts) {
     diagnostics.maxContactPenetration = Math.max(
       diagnostics.maxContactPenetration,
       contactPenetration(contact),
     )
   }
+}
+
+/**
+ * 在每个物理步之后采样一次。这里只记录事实，不改变刚体状态。
+ * contact 必须来自刚完成的同一 world.step，不能与 teleport 后的新 body pose 混用。
+ */
+export function sampleRollFrameDiagnostics(
+  diagnostics: RollFrameDiagnostics,
+  bodies: CANNON.Body[],
+  world: CANNON.World,
+): void {
+  sampleRollBodyDiagnostics(diagnostics, bodies)
+  sampleRollContactDiagnostics(diagnostics, world)
 }

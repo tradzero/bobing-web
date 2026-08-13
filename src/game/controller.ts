@@ -1,9 +1,5 @@
 import type { DicePair } from '@/dice/create'
-import {
-  THROW_ALGORITHM_VERSION,
-  throwDice,
-  type ThrowDiagnostics,
-} from '@/dice/throw'
+import { THROW_ALGORITHM_VERSION, throwDice, type ThrowDiagnostics } from '@/dice/throw'
 import { readAllFacesDetailed } from '@/dice/read-face'
 import { judge } from '@/rules/judge'
 import { SETTLE } from '@/config/settle'
@@ -19,6 +15,8 @@ export interface GameControllerDeps {
   dicePairs: DicePair[]
   /** 仅供可复现验收注入；只影响下一次投掷，消费后立即清空。 */
   nextSeed?: number
+  /** 仅供连续可复现验收；按投掷顺序逐个消费，构造时防御复制。 */
+  nextSeeds?: readonly number[]
 }
 
 export interface GameRollDiagnostics {
@@ -45,6 +43,7 @@ export class GameController {
   private engine: Engine | null = null
   private dicePairs: DicePair[]
   private nextSeed: number | undefined
+  private nextSeeds: number[]
   private rollDiagnostics: GameRollDiagnostics = {
     seed: null,
     throwAlgorithmVersion: THROW_ALGORITHM_VERSION,
@@ -64,11 +63,17 @@ export class GameController {
     this.store = deps.store
     this.dicePairs = deps.dicePairs
     this.nextSeed = deps.nextSeed
+    this.nextSeeds = [...(deps.nextSeeds ?? [])]
   }
 
   private startRoll(): void {
-    const seed = reseed(this.nextSeed)
-    this.nextSeed = undefined
+    // 队列专用于连续验收；耗尽后才回退到旧的单次注入，再回退到运行时时间种子。
+    let injectedSeed = this.nextSeeds.shift()
+    if (injectedSeed === undefined) {
+      injectedSeed = this.nextSeed
+      this.nextSeed = undefined
+    }
+    const seed = reseed(injectedSeed)
     const placement = throwDice(this.dicePairs, { seed })
     this.rollDiagnostics = {
       seed,
@@ -91,10 +96,10 @@ export class GameController {
     this.engine = engine
   }
 
-  /** 掷骰：拒绝 rolling 和 tilt-confirm 阶段调用 */
+  /** 掷骰：rolling、待确认和异常态均由各自专用流程接管。 */
   throw(): void {
     const { phase } = this.store.getState()
-    if (phase === 'rolling' || phase === 'tilt-confirm' || !this.engine) return
+    if (phase === 'rolling' || phase === 'tilt-confirm' || phase === 'error' || !this.engine) return
 
     this.store.getState().setPhase('rolling')
     this.startRoll()
@@ -106,11 +111,25 @@ export class GameController {
    * 冻结在判定之前，确保 tilt-confirm 期间骰子姿态不漂移
    */
   onSettled(settleResult?: SettleResult): void {
+    // rAF/生命周期可能送达重复或迟到回调；只有本轮 rolling 能改变业务状态。
+    if (this.store.getState().phase !== 'rolling') return
+
     const bodies = this.dicePairs.map((p) => p.body)
     this.rollDiagnostics = {
       ...this.rollDiagnostics,
       settleReason: settleResult?.reason ?? 'external-call',
       settleElapsed: settleResult?.elapsed ?? null,
+    }
+
+    if (settleResult?.reason === 'timeout') {
+      // timeout 只冻结异常画面，绝不读面、判奖、播放中奖音或推进轮次。
+      for (const body of bodies) {
+        body.velocity.set(0, 0, 0)
+        body.angularVelocity.set(0, 0, 0)
+        body.sleep()
+      }
+      this.store.getState().setRollError({ reason: 'timeout', elapsed: settleResult.elapsed })
+      return
     }
 
     // 1. 读取详细结果（点数 + 可信度）
@@ -145,12 +164,12 @@ export class GameController {
       this.store.getState().setPending({ diceValues, result, tiltedIndices })
     } else {
       this.store.getState().setResult({ diceValues, result })
+      this.playCommittedWin(result.prize)
     }
+  }
 
-    // 5. 中奖音效反馈
-    if (result.prize !== 'none') {
-      soundManager.playWinSound()
-    }
+  private playCommittedWin(prize: ReturnType<typeof judge>['prize']): void {
+    if (prize !== 'none') soundManager.playWinSound()
   }
 
   /** 接受倾斜结果：确认待提交数据 → result */
@@ -158,19 +177,22 @@ export class GameController {
     const { phase } = this.store.getState()
     if (phase !== 'tilt-confirm') return
     this.store.getState().commitPending()
+    const committed = this.store.getState().currentResult
+    if (committed) this.playCommittedWin(committed.prize)
   }
 
-  /** 重掷：清除待提交数据 → 全部 6 颗重新投掷 */
+  /** 重掷：清除待确认/异常数据 → 同一轮重新投掷全部 6 颗。 */
   rethrow(): void {
     const { phase } = this.store.getState()
-    if (phase !== 'tilt-confirm') return
+    if (phase !== 'tilt-confirm' && phase !== 'error') return
 
-    this.store.getState().clearPending()
+    if (phase === 'tilt-confirm') this.store.getState().clearPending()
+    else this.store.getState().clearRollError()
     this.startRoll()
     this.engine?.beginSettle()
   }
 
-  /** 重置：rolling 阶段拒绝，tilt-confirm 阶段清空 pending */
+  /** 重置：rolling 阶段拒绝；其他阶段回到全新 idle，保留音效偏好。 */
   reset(): void {
     const { phase } = this.store.getState()
     if (phase === 'rolling') return

@@ -101,7 +101,9 @@
   color: var(--color-gold-light);
   letter-spacing: 0.06em;
   line-height: 1.08;
-  text-shadow: 0 2px 0 rgba(85, 36, 16, 0.42), 0 6px 14px rgba(0, 0, 0, 0.18);
+  text-shadow:
+    0 2px 0 rgba(85, 36, 16, 0.42),
+    0 6px 14px rgba(0, 0, 0, 0.18);
 }
 
 .top-actions {
@@ -141,7 +143,11 @@
   border-radius: var(--radius);
   cursor: pointer;
   font-weight: 600;
-  transition: transform 0.18s ease, background 0.18s ease, opacity 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    opacity 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .btn:disabled {
@@ -159,8 +165,12 @@
   padding: 18px 44px;
   font-family: var(--font-display);
   font-size: clamp(1.7rem, 2vw, 2.35rem);
-  background:
-    linear-gradient(180deg, rgba(248, 223, 137, 0.95), rgba(230, 176, 70, 0.95) 55%, rgba(173, 95, 36, 0.95));
+  background: linear-gradient(
+    180deg,
+    rgba(248, 223, 137, 0.95),
+    rgba(230, 176, 70, 0.95) 55%,
+    rgba(173, 95, 36, 0.95)
+  );
   color: #74281b;
   border-radius: 28px;
   border: 2px solid rgba(248, 227, 171, 0.72);
@@ -230,7 +240,9 @@
   border: 1px solid rgba(241, 213, 143, 0.3);
   color: var(--color-gold-light);
   border-radius: 18px;
-  box-shadow: inset 0 1px 0 rgba(255, 245, 210, 0.14), 0 10px 18px rgba(15, 8, 5, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 210, 0.14),
+    0 10px 18px rgba(15, 8, 5, 0.16);
   backdrop-filter: var(--blur-strong);
   position: relative;
   overflow: hidden;
@@ -278,8 +290,9 @@
   height: 21px;
 }
 
-/* ---- 倾斜确认面板 ---- */
-.tilt-warning {
+/* ---- 倾斜确认 / 不可信结算面板 ---- */
+.tilt-warning,
+.roll-error {
   position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, rgba(70, 37, 30, 0.76), rgba(45, 24, 18, 0.8));
@@ -295,7 +308,8 @@
   animation: fadeSlideUp 0.3s ease;
 }
 
-.tilt-warning::before {
+.tilt-warning::before,
+.roll-error::before {
   content: '';
   position: absolute;
   inset: 8px;
@@ -321,6 +335,13 @@
   font-size: 1rem;
   line-height: 1.6;
   margin-bottom: 18px;
+}
+
+.roll-error-detail {
+  color: rgba(246, 226, 179, 0.72);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: -8px 0 18px;
 }
 
 .tilt-warning-actions {
@@ -395,7 +416,9 @@
 }
 
 .result-panel-win {
-  box-shadow: 0 24px 60px rgba(18, 9, 5, 0.4), 0 0 0 1px rgba(255, 219, 140, 0.06);
+  box-shadow:
+    0 24px 60px rgba(18, 9, 5, 0.4),
+    0 0 0 1px rgba(255, 219, 140, 0.06);
 }
 
 .result-panel-none {
@@ -476,7 +499,9 @@
   font-weight: 700;
   color: var(--color-gold-light);
   line-height: 1.1;
-  text-shadow: 0 2px 0 rgba(106, 55, 21, 0.55), 0 12px 20px rgba(0, 0, 0, 0.18);
+  text-shadow:
+    0 2px 0 rgba(106, 55, 21, 0.55),
+    0 12px 20px rgba(0, 0, 0, 0.18);
   margin-bottom: 6px;
 }
 
@@ -513,7 +538,9 @@
   justify-content: center;
   font-size: 1.35rem;
   font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 8px 16px rgba(31, 17, 11, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 8px 16px rgba(31, 17, 11, 0.18);
 }
 
 .dice-pip.red {
@@ -579,7 +606,9 @@
   height: 32px;
   font-size: 1rem;
   border-radius: 9px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 4px 10px rgba(31, 17, 11, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 4px 10px rgba(31, 17, 11, 0.12);
 }
 
 .dice-pip-mini .dice-dot {
@@ -1088,7 +1117,8 @@
   }
 
   .result-panel,
-  .tilt-warning {
+  .tilt-warning,
+  .roll-error {
     min-width: 0;
     max-width: 100%;
     position: relative;
@@ -1149,6 +1179,7 @@
   /* 移动端降低大面积背景采样成本；小面积 .btn-icon 仍保留桌面质感。 */
   .top-bar,
   .tilt-warning,
+  .roll-error,
   .result-panel,
   .panel-card {
     -webkit-backdrop-filter: none;
@@ -1159,7 +1190,8 @@
     background: rgba(67, 27, 20, 0.94);
   }
 
-  .tilt-warning {
+  .tilt-warning,
+  .roll-error {
     background: rgba(51, 27, 21, 0.94);
   }
 
@@ -1183,7 +1215,8 @@
 
 @media (max-width: 480px) {
   .result-panel,
-  .tilt-warning {
+  .tilt-warning,
+  .roll-error {
     min-width: 0;
     padding-left: 18px;
     padding-right: 18px;
@@ -1227,6 +1260,7 @@
 @media (update: slow) {
   .top-bar,
   .tilt-warning,
+  .roll-error,
   .result-panel,
   .panel-card {
     -webkit-backdrop-filter: none;
@@ -1237,7 +1271,8 @@
     background: rgba(67, 27, 20, 0.94);
   }
 
-  .tilt-warning {
+  .tilt-warning,
+  .roll-error {
     background: rgba(51, 27, 21, 0.94);
   }
 
@@ -1256,6 +1291,7 @@
   .btn-throw.is-rolling,
   .btn-throw.is-rolling .btn-throw-ornament,
   .tilt-warning,
+  .roll-error,
   .result-panel {
     animation: none;
   }
@@ -1270,6 +1306,7 @@
   .btn-throw.is-rolling,
   .btn-throw.is-rolling .btn-throw-ornament,
   .tilt-warning,
+  .roll-error,
   .result-panel {
     animation: none;
   }

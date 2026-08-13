@@ -9,6 +9,7 @@ import { SoundToggle } from '@/ui/components/SoundToggle'
 import { ResetButton } from '@/ui/components/ResetButton'
 import { RoundDisplay } from '@/ui/components/RoundDisplay'
 import { TiltWarning } from '@/ui/components/TiltWarning'
+import { RollErrorPanel } from '@/ui/components/RollErrorPanel'
 import { useGameStore } from '@/ui/components/GameStoreContext'
 import { Prize } from '@/rules/types'
 
@@ -19,7 +20,7 @@ export function GameOverlay() {
   const history = useGameStore((s) => s.history)
   const prizeRecord = useGameStore((s) => s.prizeRecord)
 
-  const hasSettlement = phase === 'result' || phase === 'tilt-confirm'
+  const hasSettlement = phase === 'result' || phase === 'tilt-confirm' || phase === 'error'
   const hasPrizeRecord = DISPLAY_PRIZES.some((prize) => (prizeRecord[prize] ?? 0) > 0)
   const hasPanelContent = hasPrizeRecord || history.length > 0
   const showContentPeek = !hasSettlement && !hasPanelContent
@@ -43,6 +44,7 @@ export function GameOverlay() {
         <div className="bottom-area">
           <div className="settlement-slot">
             <TiltWarning />
+            <RollErrorPanel />
             <ResultPanel />
           </div>
           <ThrowButton />

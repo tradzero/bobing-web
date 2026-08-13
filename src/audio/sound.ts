@@ -17,9 +17,34 @@ let audioCtx: AudioContext | null = null
 let muted = false
 let lastCollisionTime = 0
 let activeCollisionCount = 0
+let collisionNoiseBuffer: AudioBuffer | null = null
+
+/**
+ * Web Audio 的生命周期方法返回 Promise，且在自动播放策略、重复关闭等情况下可能拒绝。
+ * 音效是可选反馈，这些拒绝不应变成页面的 unhandled rejection。
+ */
+function safelyRunContextOperation(operation: () => Promise<unknown>): void {
+  try {
+    void Promise.resolve(operation()).catch(() => undefined)
+  } catch {
+    // 某些 mock / 浏览器实现也可能同步抛错；保持音效降级为静默。
+  }
+}
+
+function clearClosedContext(): void {
+  if (audioCtx?.state !== 'closed') return
+  audioCtx = null
+  collisionNoiseBuffer = null
+  activeCollisionCount = 0
+  lastCollisionTime = 0
+}
 
 /** 确保 AudioContext 存在且恢复 */
 function ensureCtx(): AudioContext | null {
+  // 静音期间不得因碰撞/中奖事件创建或恢复音频上下文。
+  if (muted) return null
+
+  clearClosedContext()
   if (!audioCtx) {
     try {
       audioCtx = new AudioContext()
@@ -28,9 +53,24 @@ function ensureCtx(): AudioContext | null {
     }
   }
   if (audioCtx.state === 'suspended') {
-    audioCtx.resume()
+    safelyRunContextOperation(() => audioCtx!.resume())
   }
   return audioCtx
+}
+
+/** 每个 AudioContext 只生成一次极短白噪声 burst；各次播放仍独立建立滤波与音量包络。 */
+function getCollisionNoiseBuffer(ctx: AudioContext): AudioBuffer {
+  if (collisionNoiseBuffer) return collisionNoiseBuffer
+
+  const duration = 0.04
+  const bufferSize = Math.floor(ctx.sampleRate * duration)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize) // 线性衰减噪声
+  }
+  collisionNoiseBuffer = buffer
+  return buffer
 }
 
 /**
@@ -39,8 +79,9 @@ function ensureCtx(): AudioContext | null {
  * @param impulse 碰撞冲量，用于控制音量
  */
 function playCollisionSound(impulse: number): void {
+  if (muted) return
   const ctx = ensureCtx()
-  if (!ctx || muted) return
+  if (!ctx) return
 
   const now = performance.now()
   if (now - lastCollisionTime < COLLISION_THROTTLE) return
@@ -52,18 +93,8 @@ function playCollisionSound(impulse: number): void {
   const volume = Math.min(0.35, impulse * 0.08)
   const t = ctx.currentTime
 
-  // 白噪声 buffer（极短 burst，模拟瓷器/骨质碰撞）
-  const duration = 0.04
-  const sampleRate = ctx.sampleRate
-  const bufferSize = Math.floor(sampleRate * duration)
-  const buffer = ctx.createBuffer(1, bufferSize, sampleRate)
-  const data = buffer.getChannelData(0)
-  for (let i = 0; i < bufferSize; i++) {
-    data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize) // 线性衰减噪声
-  }
-
   const source = ctx.createBufferSource()
-  source.buffer = buffer
+  source.buffer = getCollisionNoiseBuffer(ctx)
 
   // 带通滤波：保留中高频碰击感
   const filter = ctx.createBiquadFilter()
@@ -76,10 +107,13 @@ function playCollisionSound(impulse: number): void {
   gain.gain.setValueAtTime(volume, t)
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06)
 
+  source.onended = () => {
+    // dispose 后旧 source 可能才收到 ended，不得污染新一轮 context 的并发计数。
+    if (audioCtx === ctx) activeCollisionCount = Math.max(0, activeCollisionCount - 1)
+  }
   source.connect(filter).connect(gain).connect(ctx.destination)
   source.start(t)
   source.stop(t + 0.07)
-  source.onended = () => { activeCollisionCount-- }
 }
 
 /**
@@ -87,8 +121,9 @@ function playCollisionSound(impulse: number): void {
  * Web Audio 合成：宫商角风格三音阶短促上行
  */
 function playWinSound(): void {
+  if (muted) return
   const ctx = ensureCtx()
-  if (!ctx || muted) return
+  if (!ctx) return
 
   const t = ctx.currentTime
   // 宫商角：C5 → D5 → E5（523, 587, 659 Hz）
@@ -117,12 +152,13 @@ function playWinSound(): void {
  */
 function setMuted(value: boolean): void {
   muted = value
-  if (audioCtx) {
-    if (muted) {
-      audioCtx.suspend()
-    } else {
-      audioCtx.resume()
-    }
+  clearClosedContext()
+  if (!audioCtx) return
+
+  if (muted && audioCtx.state === 'running') {
+    safelyRunContextOperation(() => audioCtx!.suspend())
+  } else if (!muted && audioCtx.state === 'suspended') {
+    safelyRunContextOperation(() => audioCtx!.resume())
   }
 }
 
@@ -143,9 +179,17 @@ function handleCollision(event: { contact: { getImpactVelocityAlongNormal: () =>
 
 /** 释放 AudioContext */
 function dispose(): void {
-  if (audioCtx) {
-    audioCtx.close()
-    audioCtx = null
+  const contextToClose = audioCtx
+
+  // 先切断所有旧 source 回调与单例状态的关联，再异步关闭 context。
+  audioCtx = null
+  collisionNoiseBuffer = null
+  muted = false
+  lastCollisionTime = 0
+  activeCollisionCount = 0
+
+  if (contextToClose && contextToClose.state !== 'closed') {
+    safelyRunContextOperation(() => contextToClose.close())
   }
 }
 

@@ -9,6 +9,8 @@ import * as CANNON from 'cannon-es'
 import { bowlInnerHeight } from '@/config/bowl'
 import { PHYSICS } from '@/config/physics'
 import { REST_RING_RADIUS } from '@/dice/rest'
+import { soundManager } from '@/audio/sound'
+import * as readFace from '@/dice/read-face'
 
 /** 创建 mock engine */
 function mockEngine(): Engine {
@@ -40,6 +42,7 @@ describe('GameController 编排层集成测试', () => {
   let controller: GameController
 
   beforeEach(() => {
+    vi.restoreAllMocks()
     store = createGameStore()
     engine = mockEngine()
     dicePairs = mockDicePairs()
@@ -138,6 +141,103 @@ describe('GameController 编排层集成测试', () => {
     expect(state.currentResult!.priority).toBeGreaterThanOrEqual(1)
   })
 
+  it('timeout 进入显式 error，冻结异常画面且不读取或提交业务结果', () => {
+    const playWinSound = vi.spyOn(soundManager, 'playWinSound')
+    const readAllFacesDetailed = vi.spyOn(readFace, 'readAllFacesDetailed')
+    controller.throw()
+    for (const { body } of dicePairs) {
+      body.velocity.set(1, 2, 3)
+      body.angularVelocity.set(4, 5, 6)
+      // 非有限姿态若被读面会污染或抛错；timeout 分支不得触碰它。
+      body.quaternion.set(Number.NaN, 0, 0, 1)
+      body.wakeUp()
+    }
+
+    controller.onSettled({ reason: 'timeout', elapsed: 10 })
+
+    const state = store.getState()
+    expect(state).toMatchObject({
+      phase: 'error',
+      round: UI.INITIAL_ROUND,
+      diceValues: [],
+      currentResult: null,
+      history: [],
+      pendingSettlement: null,
+      rollError: { reason: 'timeout', elapsed: 10 },
+    })
+    expect(Object.values(state.prizeRecord).every((count) => count === 0)).toBe(true)
+    expect(readAllFacesDetailed).not.toHaveBeenCalled()
+    expect(playWinSound).not.toHaveBeenCalled()
+    expect(controller.getRollDiagnostics()).toMatchObject({
+      settleReason: 'timeout',
+      settleElapsed: 10,
+    })
+    for (const { body } of dicePairs) {
+      expect(body.velocity.length()).toBe(0)
+      expect(body.angularVelocity.length()).toBe(0)
+      expect(body.sleepState).toBe(CANNON.Body.SLEEPING)
+    }
+  })
+
+  it('error 可在同一轮重新掷骰，且普通 throw 不能绕过专用恢复路径', () => {
+    controller.throw()
+    controller.onSettled({ reason: 'timeout', elapsed: 10 })
+    const roundBefore = store.getState().round
+
+    controller.throw()
+    expect(store.getState().phase).toBe('error')
+    expect(engine.beginSettle).toHaveBeenCalledTimes(1)
+
+    controller.rethrow()
+    expect(store.getState()).toMatchObject({
+      phase: 'rolling',
+      round: roundBefore,
+      rollError: null,
+      diceValues: [],
+      currentResult: null,
+    })
+    expect(engine.beginSettle).toHaveBeenCalledTimes(2)
+  })
+
+  it('timeout 后重置清空异常但保留 soundEnabled', () => {
+    controller.toggleSound()
+    expect(store.getState().soundEnabled).toBe(false)
+    controller.throw()
+    controller.onSettled({ reason: 'timeout', elapsed: 10 })
+
+    controller.reset()
+
+    expect(store.getState()).toMatchObject({
+      phase: 'idle',
+      round: UI.INITIAL_ROUND,
+      rollError: null,
+      soundEnabled: false,
+      history: [],
+    })
+    expect(engine.returnToIdle).toHaveBeenCalledTimes(1)
+  })
+
+  it('只接受 rolling 阶段的首个结算回调，重复或迟到回调不重复提交/播放', () => {
+    const playWinSound = vi.spyOn(soundManager, 'playWinSound')
+    controller.throw()
+    for (const { body } of dicePairs) body.quaternion.set(0, 0, Math.SQRT1_2, Math.SQRT1_2)
+
+    controller.onSettled({ reason: 'natural-sleep', elapsed: 2 })
+    expect(store.getState()).toMatchObject({ phase: 'result', round: UI.INITIAL_ROUND + 1 })
+    expect(store.getState().history).toHaveLength(1)
+    expect(playWinSound).toHaveBeenCalledTimes(1)
+
+    controller.onSettled({ reason: 'timeout', elapsed: 10 })
+    controller.onSettled({ reason: 'natural-sleep', elapsed: 3 })
+    expect(store.getState()).toMatchObject({
+      phase: 'result',
+      round: UI.INITIAL_ROUND + 1,
+      rollError: null,
+    })
+    expect(store.getState().history).toHaveLength(1)
+    expect(playWinSound).toHaveBeenCalledTimes(1)
+  })
+
   it('一次性 nextSeed 和实际投掷/停稳路径可诊断', () => {
     controller = new GameController({ store, dicePairs, nextSeed: 42 })
     controller.setEngine(engine)
@@ -173,6 +273,22 @@ describe('GameController 编排层集成测试', () => {
       settleElapsed: null,
     })
     now.mockRestore()
+  })
+
+  it('nextSeeds 防御复制并按轮消费，耗尽后回退到一次性 nextSeed', () => {
+    const nextSeeds = [101, 202]
+    controller = new GameController({ store, dicePairs, nextSeeds, nextSeed: 303 })
+    controller.setEngine(engine)
+    nextSeeds[0] = 999
+
+    for (const expectedSeed of [101, 202, 303]) {
+      controller.throw()
+      expect(controller.getRollDiagnostics().seed).toBe(expectedSeed)
+      settleFlat()
+    }
+
+    expect(store.getState().round).toBe(UI.INITIAL_ROUND + 3)
+    expect(engine.beginSettle).toHaveBeenCalledTimes(3)
   })
 
   // ── 物理副作用测试 ──

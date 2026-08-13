@@ -239,7 +239,7 @@ describe('StrictMode 重挂载', () => {
     const canvas = container.querySelector('canvas')
     const diagnostics = JSON.parse(canvas?.dataset.diceDiagnostics ?? '{}')
     expect(diagnostics).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       revision: 1,
       sampleKind: 'post-render',
       roll: {

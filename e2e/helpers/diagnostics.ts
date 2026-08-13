@@ -9,7 +9,7 @@ export const E2E_NEXT_SEED = 42
  * 所有 browser bench 只消费此常量，渲染结构改变时避免散落修改断言。
  */
 export const BROWSER_BUDGETS = {
-  diagnosticsSchemaVersion: 2,
+  diagnosticsSchemaVersion: 3,
   mainPassCalls: 8,
   mainPassTriangles: 41_288,
   geometries: 8,
@@ -46,6 +46,16 @@ export interface DiceRuntimeDiagnostics {
     renderCount: number
     physicsStepCount: number
     frameScheduled: boolean
+    rollSafety: {
+      maxRadius: number
+      containmentRadius: number
+      conservativeContainmentRadius: number
+      conservativeBoundaryCrossings: number
+      wallCenterCrossings: number
+      maxContactPenetration: number
+      escapeGuardInterventionCount: number
+      nonFiniteBodyStateDetected: boolean
+    }
   }
   roll: {
     seed: number | null

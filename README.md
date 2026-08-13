@@ -7,11 +7,11 @@
 ## 当前状态
 
 - 已完成 6 颗骰子的投掷、碰撞、停稳检测、点数读取与博饼奖级判定
-- 已完成当轮结果、累计奖级记录、最近 5 轮历史记录、音效开关与重置流程
+- 已完成当轮结果、累计奖级记录、最近 5 轮历史、音效生命周期、timeout 异常恢复与重置流程
 - 已完成移动端真实上下布局，不再使用可拖拽底部浮层
 - 已完成桌面程序化木纹占位与海碗程序化青花占位
 - 当前 THROW v3 默认投掷为 `stratified-ring`（六槽、随机整体旋转与槽位分配）；SETTLE v4 中 contact-cluster assist 默认关闭
-- 已落地统一物理 runner、命名 variant A/B、单 seed 复现、200-seed 验收与浏览器结构性能门禁
+- 已落地统一物理 runner、命名 variant A/B、单 seed 复现、200-seed 验收、浏览器结构性能门禁与连续 20 轮 soak；当前桌面/移动完整验收均通过
 - 当前运行时场景只接入桌面、海碗和骰子；灯笼、月饼等摆件不在当前推进范围内
 - 后续视觉方向优先是桌布方案与正式海碗纹样素材，而不是重做桌体或继续扩展桌面摆件
 
@@ -25,6 +25,7 @@
 - 投掷 layout/dynamics 使用独立可复现随机子流；普通运行由时间种子 mulberry32 驱动，不使用 `Math.random`
 - 奖级规则数据驱动，支持状元子级优先级与带数规则
 - React + Zustand DOM overlay UI，业务写入集中在 GameController
+- 开发/e2e 使用 schema v3 post-render diagnostics，记录引擎调度、投掷版本/路径、渲染结构与逐步物理安全包络
 
 ## 技术栈
 
@@ -35,7 +36,7 @@
 | 状态管理 | Zustand                  |
 | 3D 渲染  | Three.js                 |
 | 物理引擎 | cannon-es                |
-| 测试     | Vitest                   |
+| 测试     | Vitest + Playwright      |
 | 样式     | 原生 CSS + CSS Variables |
 
 ## 快速开始
@@ -66,6 +67,7 @@ http://127.0.0.1:5173
 | `pnpm test:acceptance`            | 运行默认 200-seed 物理预算门禁                                      |
 | `pnpm test:physics:ab`            | 交替运行命名 A/B preset、watch/batch cohort 与 natural continuation |
 | `pnpm test:e2e`                   | 运行 Playwright 桌面/移动端真实流程门禁                             |
+| `pnpm test:e2e:soak`              | 桌面/移动各连续 20 轮，检查安全包络、状态提交与 WebGL 资源稳定      |
 | `pnpm bench:browser`              | 门禁浏览器渲染结构、DPR/像素预算与静态零帧，保留 JSON/截图 artifact |
 | `pnpm sweep:parallel:core`        | 并发执行 sleep / timeout / tilt 三类核心 sweep                      |
 
@@ -92,8 +94,8 @@ http://127.0.0.1:5173
 
 1. 点击“掷骰”后，6 颗骰子从碗上方投入
 2. 引擎统一驱动物理步进、mesh 同步、停稳检测和渲染
-3. 停稳后读取每颗骰子朝上点数
-4. 根据博饼规则计算最高优先级奖级
+3. 若发生 timeout，进入显式 error：不读点、不判奖、不写记录，用户可同轮重新掷骰或重置
+4. 可信停稳后读取每颗骰子朝上点数，并根据博饼规则计算最高优先级奖级
 5. 若存在倾斜骰子，进入 tilt-confirm；否则直接提交结果
 6. UI 展示当轮结果、累计奖级记录和最近 5 轮历史
 
@@ -105,11 +107,14 @@ http://127.0.0.1:5173
 - 点数读取与朝向扰动
 - 停稳检测与回归种子
 - 默认分层环形投掷、layout/dynamics 随机子流和历史 sampler 兼容
-- 控制流、倾斜确认流程与 UI 行为
+- 控制流、timeout/error 恢复、重复结算幂等、倾斜确认与提交后音效行为
+- Web Audio 懒创建、静音、节流/并发、异常降级与 dispose/remount 生命周期
 - 真实物理烟雾、逃逸防护、冻结一致性
 - 接触簇辅助的历史显式 variant 与默认禁用契约
 
 `test:acceptance` 的当前默认预算要求 assist/fallback 均为 0、pose-stable 不超过 2%。`test:physics:ab` 将历史问题 seed 与批量 seed 分成 watch/batch cohort，并对每个非自然结算运行最多 20 秒的同 seed 自然延续对照。完整口径与当前逻辑基线见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
+
+当前浏览器验收结果：`test:e2e:soak` 桌面/移动各 20 轮均通过，最大接触穿透为 0.054898m / 0.053635m，观测到的最大半径上限为 0.656797m（小于 1m containment radius），boundary crossing、escape guard、非有限状态、资源增长和页面错误均为 0；`test:e2e` 4/4、`bench:browser` 2/2 通过。完整结果仍应以每次运行生成的 artifact 为准。
 
 `sweep/` 目录下保留了长时间运行的参数扫描和诊断脚本，例如：
 

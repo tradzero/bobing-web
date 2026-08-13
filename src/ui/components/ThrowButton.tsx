@@ -1,12 +1,12 @@
 import { useGameStore } from './GameStoreContext'
 import { useGameController } from './GameControllerContext'
 
-/** 掷骰按钮：rolling / tilt-confirm 阶段禁用 */
+/** 掷骰按钮：rolling / tilt-confirm / error 阶段由专用流程接管。 */
 export function ThrowButton() {
   const phase = useGameStore((s) => s.phase)
   const ctrl = useGameController()
   const isRolling = phase === 'rolling'
-  const isBusy = phase === 'rolling' || phase === 'tilt-confirm'
+  const isBusy = phase === 'rolling' || phase === 'tilt-confirm' || phase === 'error'
 
   return (
     <button

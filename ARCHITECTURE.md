@@ -10,7 +10,7 @@
 | 状态管理 | Zustand                            | 5.x           |
 | 3D 渲染  | Three.js（原生命令式，不使用 R3F） | latest stable |
 | 物理引擎 | cannon-es（原生命令式）            | latest stable |
-| 测试     | Vitest                             | latest stable |
+| 测试     | Vitest + Playwright                | latest stable |
 | CSS      | 原生 CSS 文件 + CSS Variables      | —             |
 
 ## 架构原则
@@ -23,7 +23,7 @@
 6. **响应式归 CSS**：布局、按钮尺寸、面板排列等响应式适配交给 CSS 媒体查询。脚本层只处理 canvas resize、受预算约束的 DPR、camera aspect ratio、阴影档位，并在有效 resize 后发出一次渲染失效请求。
 7. **核心逻辑可测试**：奖级判定、点数读取、停稳检测为纯函数/可隔离逻辑，Vitest 重点覆盖。随机数源抽为可注入接口，测试时注入确定性种子。
 8. **StrictMode 幂等且资源所有权明确**：引擎初始化和销毁必须幂等。React StrictMode 会在开发环境双调用 effect；每个 `DiceSet` 独占 instance buffer、geometry、material 和 texture，不跨挂载缓存，GameViewport cleanup 必须先将其移出 scene，再显式 `dispose()`，重建时不复用上一实例已释放的资源。
-9. **移动端布局不引入额外 UI 状态**：移动端采用真实上下布局，结算卡仅通过 CSS 在上下分界线处做轻度侵入，不再维护 `peek / expanded / hidden` 之类的局部状态。store 只提供 `phase` 驱动 `ResultPanel / TiltWarning` 的显隐，不影响 game/controller 的业务状态机。
+9. **移动端布局不引入额外 UI 状态**：移动端采用真实上下布局，结算卡仅通过 CSS 在上下分界线处做轻度侵入，不再维护 `peek / expanded / hidden` 之类的局部状态。store 只提供 `phase` 驱动 `ResultPanel / TiltWarning / RollErrorPanel` 的显隐，不影响 game/controller 的业务状态机。
 10. **视觉占位先于正式素材**：当前允许用程序化木纹、程序化青花纹样等占位资源推进画面；后续替换正式素材时应通过贴图/样式替换完成，不反向改动业务流、物理结构和 UI 状态机。
 
 ## 项目结构
@@ -43,8 +43,8 @@ src/
 │
 ├── game/
 │   ├── engine.ts               # 运行时：按需 rAF 状态机、物理步进、插值/最终姿态渲染、停稳检测、dispose
-│   ├── controller.ts           # 游戏编排层：状态机、轮次推进、结算触发、重置（唯一业务入口）
-│   └── store.ts                # Zustand store：游戏状态 + 纯状态设置器
+│   ├── controller.ts           # 游戏编排层：状态机、可信结算/timeout 分流、轮次推进、重置（唯一业务入口）
+│   └── store.ts                # Zustand store：五态游戏状态、pending/error 数据 + 纯状态设置器
 │
 ├── scene/
 │   ├── setup.ts                # Three.js 场景、renderer、灯光、摄像机预设、resize 质量与失效通知（无 PMREM、无 rAF 循环）
@@ -79,17 +79,18 @@ src/
 ├── ui/
 │   ├── components/
 │   │   ├── GameViewport.tsx    # 3D 容器：装配/销毁 DiceSet 与引擎，绑定 resize 失效，开发态发布 diagnostics
-│   │   ├── ThrowButton.tsx     # 掷骰按钮（rolling/tilt-confirm 禁用 + 状态文案）
+│   │   ├── ThrowButton.tsx     # 掷骰按钮（rolling/tilt-confirm/error 禁用 + 状态文案）
 │   │   ├── ResetButton.tsx     # 重置按钮
 │   │   ├── TiltWarning.tsx     # 倾斜确认面板：显示倾斜骰子编号，提供「接受结果」「重掷」按钮
-│   │   ├── ResultPanel.tsx     # 当轮结果面板：点数组合 + 奖级 + 带数（tilt-confirm 期间隐藏）
+│   │   ├── RollErrorPanel.tsx  # timeout 异常面板：不展示结果，提供同轮重新掷骰与重置
+│   │   ├── ResultPanel.tsx     # 当轮结果面板：点数组合 + 奖级 + 带数（仅 result 显示）
 │   │   ├── PrizeRecord.tsx     # 本局累计奖级记录（奖池/榜单面板）
 │   │   ├── History.tsx         # 最近 5 轮历史记录
 │   │   └── SoundToggle.tsx     # 音效开关
 │   └── styles/                 # 原生 CSS 文件：global.css / variables.css / game.css
 │
 ├── audio/
-│   └── sound.ts                # 音效管理：碰撞声、中奖提示音、节流控制
+│   └── sound.ts                # Web Audio：懒创建、静音、碰撞/中奖合成音与完整 dispose/remount 复位
 │
 ├── utils/
 │   └── random.ts               # 时间种子 mulberry32、固定 seed 复现、稳定派生随机子流
@@ -100,7 +101,8 @@ src/
     ├── chamfer.test.ts         # 倒角骰子几何验证：顶点/面数、对称性、尺寸
     ├── settle.test.ts          # 停稳检测：假时钟 + 快照序列、多种边界场景
     ├── settle-regression.test.ts # 停稳回归：已知问题种子的结算路径验证
-    ├── controller.test.ts      # 编排层集成：phase 变化、重复点击、history 上限、reset、sound
+    ├── controller.test.ts      # 编排层集成：phase、timeout、重复回调幂等、history、reset、sound
+    ├── store.test.ts           # error 不提交结果与 reset 保留 soundEnabled
     ├── engine-timing.test.ts   # 引擎时序：按需/连续 rAF、插值帧与最终 raw 帧验证
     ├── body-transform.test.ts  # raw/interpolated pose 复制与 teleport 状态同步
     ├── dice-instancing.test.ts # atlas 实例、代理矩阵同步、资源所有权与 dispose 幂等
@@ -109,6 +111,7 @@ src/
     ├── scene-setup.test.ts     # resize 去重、质量切档、渲染失效通知与不创建 PMREM
     ├── css-performance-contract.test.ts # 桌面视觉保留与移动/slow 合成降级、reduced-motion 动效契约
     ├── strict-mode.test.tsx    # 重挂载资源配对、无残留 canvas/rAF 与开发 diagnostics 口径
+    ├── sound.test.ts           # 音频懒创建、静音、并发/节流、异常降级与 dispose/remount
     ├── tilt-flow.test.ts       # 倾斜确认流程：tilt-confirm 进入/pending 隔离/接受/重掷/throw 拒绝/reset/冻结/35° 不触发
     ├── physics-smoke.test.ts   # 物理烟雾：真实世界 + 碗 + 骰子，固定种子跑 N 帧，无 NaN/不穿模
     ├── bowl-body.test.ts       # 碗碰撞体：Heightfield 几何、挡墙布局
@@ -124,6 +127,12 @@ src/
 scripts/
 ├── physics-acceptance.ts       # 单 seed / 批量验收，结构化输出版本、配置与物理极值
 └── physics-ab.ts               # 命名 preset 的 A/B、B/A 交替执行和结果门禁
+
+e2e/
+├── game.spec.ts                # 桌面/移动正常流程、timeout 不提交与同轮恢复、reset
+├── soak.spec.ts                # 版本化 seed 队列连续 20 轮状态、安全与资源断言
+├── browser-bench.spec.ts       # 三阶段渲染结构、DPR/像素与静态零帧预算
+└── helpers/diagnostics.ts      # schema v3 类型、预算与 post-render 读取 helper
 
 sweep/                          # 独立长时间运行脚本（按需手动执行，不在 pnpm test 中）
 ├── lib/
@@ -154,11 +163,11 @@ sweep/                          # 独立长时间运行脚本（按需手动执�
 ## 投掷、停稳与可复现性
 
 - 运行时投掷默认为 `stratified-ring`：6 个等角度槽位使用同一环形半径，每轮随机旋转整体布局，再随机打乱“骰子索引 → 槽位”分配。该路径是永远满足初始间距的构造式布局，不走 rejection/fallback。
-- 投掷 v3 将随机计划版本化，用同一 seed 派生独立的 layout 和 dynamics 子流。因此更换位置 sampler 不会改变高度、四元数、线速度和角速度的单骰随机单位值。普通运行使用时间种子初始化 mulberry32，e2e/诊断可注入一次性 seed；生产路径不使用 `Math.random`。
+- 投掷 v3 将随机计划版本化，用同一 seed 派生独立的 layout 和 dynamics 子流。因此更换位置 sampler 不会改变高度、四元数、线速度和角速度的单骰随机单位值。普通运行使用时间种子初始化 mulberry32；开发/e2e 可注入一次性 `nextSeed` 或带版本的 `nextSeeds` 队列，只有隔离 e2e 构建接受带版本的强制 timeout outcome。生产路径不使用这些 seam，也不使用 `Math.random` 驱动投掷。
 - `legacy-v1` 保留旧共享随机流，`uniform-area-restarts` 保留面积均匀 rejection 与整组重试；二者不是运行时默认，只通过命名 A/B preset 作历史/布局对照。
 - 停稳 v4 区分 `natural-sleep / stable-window / pose-stable-window / cluster-assist / timeout`。contact-cluster assist 运行时默认关闭，只有 historical variant 显式开启以复现旧冻结路径。
 - `pose-stable-window` 在投掷 1.2s 后才可建立锚点，要求完整 0.75s 内每颗骰子相对锚点位移不超过 2mm、四元数角距不超过 0.015rad，且逐骰读面不变。它只读 body 姿态，不清速度、不 sleep、不改四元数，也不用瞬时线速度/角速度噪声预筛空间稳定。
-- `timeout` 目前已作为独立结算原因上报，但产品层的异常/重试/救援 UI 尚未完成；不应把这项描述为正常奖级流程已验收。
+- `timeout` 作为独立结算原因上报后，controller 只冻结异常画面并写入 `RollError`，不会调用读面、判奖或结果提交，也不会播放中奖音。UI 进入显式 `error`，允许同一轮重新掷骰或重置；这一异常出口与正常奖级流程严格分离。
 
 ### 统一 runner、命名 variant 与反事实
 
@@ -195,6 +204,8 @@ settle 返回结构化结果（natural-sleep / stable-window / pose-stable-windo
     │
     ▼
 Engine 切换 settled，不再续排连续 rAF；回调 GameController.onSettled():
+    timeout → 冻结异常画面，进入 error；不读面、不判奖、不播放中奖音、不推进 round/history/prizeRecord
+    其余可信路径继续：
     5. dice/read-face.ts → readAllFacesDetailed() → 读取 6 颗骰子朝上点数 + 置信度
     6. rules/judge.ts → 判定奖级 → 返回 JudgeResult 完整对象
     7. 线速度/角速度清零并 sleep，确保后续姿态不漂移
@@ -220,18 +231,20 @@ Engine 切换 settled，不再续排连续 rAF；回调 GameController.onSettled
                      └── 用户点击「重掷」→ controller.rethrow()
                            → store.clearPending()（phase = 'rolling'）
                            → throwDice() + engine.beginSettle()
+
+error 状态由 RollErrorPanel 明确说明“本轮未结算”，用户可在同一轮重新掷骰，或重置整局。`onSettled` 只接受 rolling 阶段的首个回调，重复或迟到回调不会重复提交或播放音效；倾斜结果也只有在用户接受、正式提交后才播放中奖音。
 ```
 
 ## 引擎渲染状态机
 
-引擎状态与下文 Zustand/UI 的 `phase` 相互协作，但不是同一组状态：UI 使用 `idle / rolling / tilt-confirm / result` 表达业务流程；引擎只关心渲染和物理调度。
+引擎状态与下文 Zustand/UI 的 `phase` 相互协作，但不是同一组状态：UI 使用 `idle / rolling / tilt-confirm / result / error` 表达业务流程；引擎只关心渲染和物理调度。
 
-| Engine mode | 进入方式                            | 物理与渲染行为                                                                                                |
-| ----------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `stopped`   | 初始状态，或调用 `stop()/dispose()` | 取消待执行 rAF，不推进物理，也不接受失效渲染                                                                  |
-| `idle`      | `start()` 将 stopped 切换为 idle    | 启动时渲染一帧 raw pose；之后不常驻 rAF，`invalidate()` 只合并调度一个静态帧                                  |
-| `rolling`   | `beginSettle()`                     | 唯一连续 rAF；按固定时间步长推进 cannon-es，未停稳帧使用 `interpolatedPosition / interpolatedQuaternion` 渲染 |
-| `settled`   | `checkSettled()` 返回结构化结果     | 调用 controller 完成读面与冻结，再以 raw `position / quaternion` 渲染最终帧；之后按需单帧                     |
+| Engine mode | 进入方式                            | 物理与渲染行为                                                                                                   |
+| ----------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `stopped`   | 初始状态，或调用 `stop()/dispose()` | 取消待执行 rAF，不推进物理，也不接受失效渲染                                                                     |
+| `idle`      | `start()` 将 stopped 切换为 idle    | 启动时渲染一帧 raw pose；之后不常驻 rAF，`invalidate()` 只合并调度一个静态帧                                     |
+| `rolling`   | `beginSettle()`                     | 唯一连续 rAF；按固定时间步长推进 cannon-es，未停稳帧使用 `interpolatedPosition / interpolatedQuaternion` 渲染    |
+| `settled`   | `checkSettled()` 返回结构化结果     | 调用 controller 完成可信读面/结果分流或 timeout error，再以 raw `position / quaternion` 渲染最终帧；之后按需单帧 |
 
 `start()` / `invalidate()` 通过同一个 `rafId` 去重，因此连续的静态失效请求最多合并成一个待执行帧。`rolling` 已有连续循环，额外 `invalidate()` 是无操作。
 
@@ -241,20 +254,21 @@ Engine 切换 settled，不再续排连续 rAF；回调 GameController.onSettled
 - 未触发像素预算限制时使用 `1024 × 1024` 阴影贴图；触发限制时降为 `512 × 512`，切档时释放旧阴影 map 并请求重建。
 - rolling 期间阴影 `autoUpdate=true`；idle/settled 静态帧关闭自动更新，仅将 `needsUpdate` 置为 true 后刷新一次。
 - `scene/setup.ts` 只在 CSS 尺寸或设备 DPR 实际变化时重算 renderer 尺寸、有效 DPR、camera preset/aspect 和阴影档位；`GameViewport` 将 resize 失效回调绑定到 `engine.invalidate()`，cleanup 时解绑。静态状态因此补渲一个合并帧，rolling 状态则沿用正在运行的连续帧。
-- 开发环境与隔离的 e2e 构建把 diagnostics 写入 canvas 的 `data-dice-diagnostics`；普通生产构建不发布该数据集。每份快照带 `schemaVersion / revision / sampleKind: 'post-render'`，且只在一次真实 `renderer.render()` 完成后发布，避免把上一帧的 `renderer.info` 与新引擎状态错误配对。
-- `mainPassCalls / mainPassTriangles` 明确表示 renderer 主 pass 的调用数和三角形数，不冒充包含 shadow pass 的总量；`geometries / textures` 来自 `renderer.info.memory`，并附带当前 `programs` 数量、CSS/drawing-buffer 尺寸、DPR 与 Engine 调度计数。投掷诊断同时记录实际 seed、rejection/fallback 路径、fallback layout、停稳原因与模拟耗时。
-- Playwright 的 `test:e2e` 在 `1920×873@2x` 桌面项目和 `390×844@3x` 移动项目中执行真实 `throwDice()` 的固定 seed 单轮、结果提交、reset 与静态零帧验收。`bench:browser` 对三种引擎阶段锁定 8 个主 pass calls、41,288 个三角形、8 个 geometry、最多 6 个 texture、DPR/3.5MP drawing-buffer 预算和分平台 shader program 上限；rAF 帧时只记录到 JSON，不作为跨硬件硬门槛。失败时保留 JSON、页面截图、video 与 trace。
+- 开发环境与隔离的 e2e 构建把 diagnostics 写入 canvas 的 `data-dice-diagnostics`；普通生产构建不发布该数据集。当前 schema v3 的每份快照带 `schemaVersion / revision / sampleKind: 'post-render'`，且只在一次真实 `renderer.render()` 完成后发布，避免把上一帧的 `renderer.info` 与新引擎状态错误配对。
+- `mainPassCalls / mainPassTriangles` 明确表示 renderer 主 pass 的调用数和三角形数，不冒充包含 shadow pass 的总量；`geometries / textures` 来自 `renderer.info.memory`，并附带当前 `programs` 数量、CSS/drawing-buffer 尺寸、DPR 与 Engine 调度计数。投掷诊断同时记录实际 seed、投掷路径、停稳原因与模拟耗时；Engine 还逐物理步累计最大半径、保守/墙中心越界、最大接触穿透、非有限状态与 escape-guard 介入，避免飞出或穿透后落回被终态掩盖。
+- Playwright 的 `test:e2e` 在 `1920×873@2x` 桌面项目和 `390×844@3x` 移动项目中执行真实 `throwDice()` 的固定 seed 正常流程、timeout 不提交/同轮恢复、reset 与静态零帧验收。`test:e2e:soak` 在两种项目各执行 20 个版本化 seed，逐轮检查单次提交、最近 5 轮历史、无倾斜/assist/timeout、逐步安全包络、静态零帧、单 canvas 与 geometry/texture/program 不增长，并写出逐轮 JSON artifact。当前完整运行桌面/移动 2/2 通过：最大接触穿透 0.054898m / 0.053635m，观测到的最大半径上限为 0.656797m（小于 1m containment radius），boundary crossing、escape guard、非有限状态、资源增长和页面错误均为 0；同阶段 `test:e2e` 4/4、`bench:browser` 2/2 通过。浏览器调度下 natural/low-speed/pose 三种无介入结算路径可能竞争，soak 不把其差异误设为跨环境硬门槛。
+- `bench:browser` 对三种引擎阶段锁定 8 个主 pass calls、41,288 个三角形、8 个 geometry、最多 6 个 texture、DPR/3.5MP drawing-buffer 预算和分平台 shader program 上限；rAF 帧时只记录到 JSON，不作为跨硬件硬门槛。失败时保留 JSON、页面截图、video 与 trace。
 
 ### 移动端与低动态环境的 CSS 合成降级
 
-- 桌面默认保留玻璃模糊和 rolling 按钮的光晕动效；`max-width: 768px` 时只关闭 `.top-bar / .tilt-warning / .result-panel / .panel-card` 等大面积区域的 `backdrop-filter`，以高不透明度实色背景补偿，小面积 `.btn-icon` 仍保留原样。
+- 桌面默认保留玻璃模糊和 rolling 按钮的光晕动效；`max-width: 768px` 时只关闭 `.top-bar / .tilt-warning / .roll-error / .result-panel / .panel-card` 等大面积区域的 `backdrop-filter`，以高不透明度实色背景补偿，小面积 `.btn-icon` 仍保留原样。
 - 移动端 rolling 按钮禁用会逐帧重绘 `box-shadow` 的 `buttonPulse`，但保留基于 `transform / opacity` 的 ornament 动效。
-- `(update: slow)` 环境采用大面积模糊回退，并关闭 rolling 按钮、ornament、倾斜提示和结果面板动画。`prefers-reduced-motion: reduce` 只关闭动画、按钮过渡和 hover 位移，不额外牺牲桌面 blur 等静态视觉；这些规则不全局移除其他阴影。
+- `(update: slow)` 环境采用大面积模糊回退，并关闭 rolling 按钮、ornament、倾斜/异常提示和结果面板动画。`prefers-reduced-motion: reduce` 只关闭动画、按钮过渡和 hover 位移，不额外牺牲桌面 blur 等静态视觉；这些规则不全局移除其他阴影。
 
 ## 游戏状态机
 
 ```text
-        throw()                        onSettled()
+        throw()                    可信 onSettled()
 IDLE ──────────▶ ROLLING ──────────────────────────▶ RESULT
   ▲                                       │            │
   │                                       │ 有倾斜     │
@@ -267,6 +281,9 @@ IDLE ──────────▶ ROLLING ───────────
   │                                RESULT   ROLLING    │
   │                                   │                │
   └───────────────────────────────────┴────────────────┘
+
+ROLLING ── timeout ──▶ ERROR ── rethrow ──▶ ROLLING
+                         └──── reset ─────▶ IDLE
 ```
 
 | Phase          | UI 状态                                 | 引擎行为                                                            |
@@ -275,8 +292,9 @@ IDLE ──────────▶ ROLLING ───────────
 | `rolling`      | 按钮禁用，显示"骰子翻滚中"              | Engine rolling；施加初速度 → 连续 rAF 物理步进与插值渲染 → 停稳检测 |
 | `tilt-confirm` | 按钮禁用，TiltWarning 显示（接受/重掷） | Engine settled；骰子已冻结，无常驻 rAF，等待用户决策                |
 | `result`       | 显示结果面板，按钮恢复为"再掷一次"      | Engine settled；骰子静止，无常驻 rAF，等待下一轮、重置或失效单帧    |
+| `error`        | 显示本轮未结算（重新掷骰/重置）         | Engine settled；异常画面已冻结，不读取或提交点数                    |
 
-说明：不再区分 throwing 和 settling。对 UI 来说两者表现完全一致（按钮禁用），合并为 rolling 减少边界管理复杂度。tilt-confirm 为倾斜确认态，骰子物理体已冻结，结果数据预写入 store 供 UI 预览但不提交至历史记录，等待用户选择接受或重掷。
+说明：不再区分 throwing 和 settling。对 UI 来说两者表现完全一致（按钮禁用），合并为 rolling 减少边界管理复杂度。tilt-confirm 为倾斜确认态，骰子物理体已冻结，结果数据预写入 store 供 UI 预览但不提交至历史记录，等待用户选择接受或重掷。error 不含点数或奖级，只保留可观测的异常原因与逻辑耗时。
 
 ## Zustand Store 结构（概要）
 
@@ -298,15 +316,21 @@ interface PendingSettlement {
   tiltedIndices: number[] // 倾斜骰子下标（0-based）
 }
 
+interface RollError {
+  reason: 'timeout'
+  elapsed: number
+}
+
 interface GameState {
   // 状态
-  phase: 'idle' | 'rolling' | 'tilt-confirm' | 'result'
+  phase: 'idle' | 'rolling' | 'tilt-confirm' | 'result' | 'error'
   round: number
   diceValues: number[] // 当轮 6 颗骰子点数
   currentResult: JudgeResult | null // 当轮完整判定结果
   history: HistoryEntry[] // 最近 HISTORY_MAX_LENGTH 轮历史（默认 5，来自 config/ui.ts）
   prizeRecord: Record<Prize, number> // 累计各奖级次数
   pendingSettlement: PendingSettlement | null // 倾斜确认期间暂存
+  rollError: RollError | null // 不可信结算原因，不包含业务结果
   soundEnabled: boolean
   playerId: string | null // 预留多人，当前默认 null
 
@@ -316,7 +340,9 @@ interface GameState {
   setPending: (p: PendingSettlement) => void // 有倾斜：预写 diceValues/currentResult，不提交历史
   commitPending: () => void // 用户接受倾斜结果：调用 applyResult 提交
   clearPending: () => void // 用户选择重掷：清空 pending，phase → rolling
-  resetState: () => void
+  setRollError: (error: RollError) => void // 不推进轮次/历史/奖级
+  clearRollError: () => void // 同一轮重掷
+  resetState: () => void // 清空游戏数据，但保留 soundEnabled 用户偏好
   toggleSound: () => void
 }
 
@@ -326,10 +352,16 @@ interface GameState {
 
 注意：UI 组件只通过 selector 读取 store，所有业务操作（掷骰、重置）通过 GameController 实例方法调用，不直接调用 store 的 set 方法。
 
+### 音效生命周期
+
+- `soundManager` 仍是单例，但 AudioContext 只在非静音的首次实际播放时创建；muted 状态下的碰撞或中奖事件不会创建、恢复或分配播放节点。
+- `suspend / resume / close` 的同步异常和 Promise rejection 都降级为静默，不形成页面级 unhandled rejection。`dispose()` 会复位 context、muted、节流时间、并发计数和碰撞 noise buffer，保证 StrictMode/remount 后 store 默认状态与音频管理器一致。
+- 碰撞白噪声 buffer 在同一 AudioContext 内复用；每次碰撞仍创建独立 source、滤波与包络。中奖音只在业务结果正式提交后播放，tilt-confirm、rethrow、reset 和 timeout 均不会提前触发。
+
 ## 移动端布局不变量
 
 - 移动端采用真实上下布局：上方为游戏舞台，下方为文档流中的内容区；内容增长时依赖页面整体滚动，而不是固定底部浮层。
-- `ResultPanel / TiltWarning` 位于下方内容区顶部，可通过负外边距轻度侵入上下分界线，制造悬浮感，但 DOM 仍属于内容区。
+- `ResultPanel / TiltWarning / RollErrorPanel` 位于下方内容区顶部，可通过负外边距轻度侵入上下分界线，制造悬浮感，但 DOM 仍属于内容区。
 - `ThrowButton` 始终位于结算卡之后，仍是移动端唯一主操作入口。
 - `PrizeRecord / History` 位于按钮之后，不再使用独立内部滚动容器抢占视口；内容变多时直接推动页面向下滚动。
 - 初始态下方内容区默认不整块展开，只保留一条轻提示边提醒用户下方存在记录区；一旦出现结算、累计或历史内容，再切回真实内容区。
@@ -378,23 +410,25 @@ interface GameState {
 
 ## 测试策略
 
-| 层级                   | 模块                                                    | 测试重点                                                                                                                                                                                                         | 方法                                                          |
-| ---------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| 规则穷举               | `rules/judge.ts`                                        | 46656 种有序结果全扫，每组只命中一个最高优先级，返回完整 JudgeResult                                                                                                                                             | Vitest 参数化穷举                                             |
-| 规则示例               | `rules/judge.ts`                                        | 全部 13 种奖级的典型用例 + 带数计算正确性                                                                                                                                                                        | 纯函数单测                                                    |
-| 点数读取               | `dice/read-face.ts`                                     | 24 个立方体合法朝向 + 近边界轻微扰动样本                                                                                                                                                                         | 构造已知四元数                                                |
-| 停稳检测               | `dice/settle.ts`                                        | natural/low-speed/pose-stable/timeout 路径；pose 开关、位移/角距/读面窗口与刚体不变性                                                                                                                            | 假时钟 + 快照序列                                             |
-| 接触簇辅助             | `dice/contact-cluster-assist.ts`                        | 默认禁用；历史 variant 的 activationDelay、簇大小、簇外活跃骰子和介入诊断                                                                                                                                        | node 环境纯逻辑单测                                           |
-| 投掷与随机计划         | `dice/throw.ts` + `utils/random.ts`                     | 6 槽几何、整体旋转/槽位打乱、layout/dynamics 子流隔离、算法/计划版本                                                                                                                                             | 固定 seed + 随机单位值快照                                    |
-| 物理 A/B               | `physics/roll-runner.ts` + `physics/roll-comparison.ts` | 命名 preset、A/B-B/A 交替、watch/batch cohort、非自然结算 20s continuation 真值与安全性                                                                                                                          | 统一 runner + 固定 seed + 结构化汇总                          |
-| 引擎调度与姿态         | `game/engine.ts` + `physics/body-transform.ts`          | idle/settled 按需单帧、rolling 连续帧、stop 取消调度、rolling interpolated pose、结算 raw pose、teleport 状态同步                                                                                                | mock rAF/renderer + 真实 Cannon Body                          |
-| 骰子实例与资源生命周期 | `dice/create.ts` + `GameViewport.tsx`                   | 单材质 atlas InstancedMesh、6 个 body/proxy、矩阵索引同步、dispose 幂等、StrictMode 重挂载不复用已释放贴图                                                                                                       | Three 对象断言 + dispose spy + React StrictMode 重挂载        |
-| 渲染质量与 resize      | `config/render.ts` + `scene/setup.ts`                   | DPR 1.5 上限、350 万像素预算、1024/512 阴影档位、重复 resize 去重、resize 失效通知、不创建 PMREM                                                                                                                 | 纯质量函数 + mock WebGLRenderer/ResizeObserver/PMREMGenerator |
-| 开发态渲染诊断         | `GameViewport.tsx`                                      | 主 pass calls/triangles 命名、renderer memory/programs 与 drawing-buffer/DPR 字段，生产态不发布                                                                                                                  | mock renderer.info + dataset 断言                             |
-| CSS 合成降级契约       | `ui/styles/game.css`                                    | 桌面 backdrop/光晕规则仍在；移动端与 slow-update 关闭大面积 blur 和 rolling box-shadow 动画；reduced-motion 单独关闭运动且保留静态视觉                                                                           | 读取 CSS 文本并限定媒体查询块断言                             |
-| 编排集成               | `game/controller.ts`                                    | phase 变化正确、rolling 中二次点击被拒、rolling 中 reset 被拒、history 只保留最近 HISTORY_MAX_LENGTH 轮、reset 清理当轮+累计、sound toggle 不影响主流程                                                          | mock dice/judge/engine                                        |
-| 倾斜确认流程           | `game/controller.ts` + `store.ts`                       | onSettled 倾斜检测→tilt-confirm、35° 靠壁正常姿态不触发、pending 隔离（不写 history/prizeRecord/round）、acceptTilted 提交完整内容、rethrow 重新投掷、throw 在 tilt-confirm 被拒、reset 清空 pending、冻结一致性 | 构造已知四元数 mock DicePair，settleWithoutThrow 跳过随机投掷 |
-| 物理烟雾               | 物理层整体                                              | 真实 cannon-es 世界 + 碗碰撞体 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能在预期时间内结算或触发超时                                                                                                      | 固定种子 + 帧循环                                             |
+| 层级                   | 模块                                                    | 测试重点                                                                                                                                                                        | 方法                                                          |
+| ---------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 规则穷举               | `rules/judge.ts`                                        | 46656 种有序结果全扫，每组只命中一个最高优先级，返回完整 JudgeResult                                                                                                            | Vitest 参数化穷举                                             |
+| 规则示例               | `rules/judge.ts`                                        | 全部 13 种奖级的典型用例 + 带数计算正确性                                                                                                                                       | 纯函数单测                                                    |
+| 点数读取               | `dice/read-face.ts`                                     | 24 个立方体合法朝向 + 近边界轻微扰动样本                                                                                                                                        | 构造已知四元数                                                |
+| 停稳检测               | `dice/settle.ts`                                        | natural/low-speed/pose-stable/timeout 路径；pose 开关、位移/角距/读面窗口与刚体不变性                                                                                           | 假时钟 + 快照序列                                             |
+| 接触簇辅助             | `dice/contact-cluster-assist.ts`                        | 默认禁用；历史 variant 的 activationDelay、簇大小、簇外活跃骰子和介入诊断                                                                                                       | node 环境纯逻辑单测                                           |
+| 投掷与随机计划         | `dice/throw.ts` + `utils/random.ts`                     | 6 槽几何、整体旋转/槽位打乱、layout/dynamics 子流隔离、算法/计划版本                                                                                                            | 固定 seed + 随机单位值快照                                    |
+| 物理 A/B               | `physics/roll-runner.ts` + `physics/roll-comparison.ts` | 命名 preset、A/B-B/A 交替、watch/batch cohort、非自然结算 20s continuation 真值与安全性                                                                                         | 统一 runner + 固定 seed + 结构化汇总                          |
+| 引擎调度与姿态         | `game/engine.ts` + `physics/body-transform.ts`          | idle/settled 按需单帧、rolling 连续帧、stop 取消调度、rolling interpolated pose、结算 raw pose、teleport 状态同步                                                               | mock rAF/renderer + 真实 Cannon Body                          |
+| 骰子实例与资源生命周期 | `dice/create.ts` + `GameViewport.tsx`                   | 单材质 atlas InstancedMesh、6 个 body/proxy、矩阵索引同步、dispose 幂等、StrictMode 重挂载不复用已释放贴图                                                                      | Three 对象断言 + dispose spy + React StrictMode 重挂载        |
+| 渲染质量与 resize      | `config/render.ts` + `scene/setup.ts`                   | DPR 1.5 上限、350 万像素预算、1024/512 阴影档位、重复 resize 去重、resize 失效通知、不创建 PMREM                                                                                | 纯质量函数 + mock WebGLRenderer/ResizeObserver/PMREMGenerator |
+| 开发态渲染诊断         | `GameViewport.tsx`                                      | schema v3 post-render revision、主 pass calls/triangles、renderer memory/programs、drawing-buffer/DPR、逐步 rollSafety，生产态不发布                                            | mock renderer.info + dataset 断言                             |
+| CSS 合成降级契约       | `ui/styles/game.css`                                    | 桌面 backdrop/光晕规则仍在；移动端与 slow-update 对 tilt/error/result 等大面积面板关闭 blur/动画；reduced-motion 单独关闭运动且保留静态视觉                                     | 读取 CSS 文本并限定媒体查询块断言                             |
+| 编排与异常状态         | `game/controller.ts` + `store.ts`                       | 仅 rolling 首个结算回调生效；timeout 不读面/提交/播放/推进，error 同轮重掷或重置；history 上限、reset 保留 soundEnabled、中奖音只在正式提交后一次触发                           | mock dice/engine/sound + 直接 store 断言                      |
+| 倾斜确认流程           | `game/controller.ts` + `store.ts`                       | onSettled 倾斜检测→tilt-confirm、35° 靠壁正常姿态不触发、pending 隔离（不写 history/prizeRecord/round）、acceptTilted 提交完整内容并播放一次、rethrow/reset 不播放 pending 结果 | 构造已知四元数 mock DicePair，settleWithoutThrow 跳过随机投掷 |
+| 音频生命周期           | `audio/sound.ts`                                        | 静音不创建/恢复 context、碰撞节流/并发、noise buffer 复用、同步异常/Promise rejection 静默降级、dispose/remount 完整复位                                                        | AudioContext mock + 事件/Promise 断言                         |
+| 浏览器流程与 soak      | `e2e/game.spec.ts` + `e2e/soak.spec.ts`                 | 正常结算、timeout 不提交/同轮恢复、固定队列逐轮提交、最近 5 轮历史、逐步安全包络、静态零帧和 WebGL 资源不增长；当前桌面/移动各 20 轮通过                                        | Playwright 桌面/移动项目 + JSON artifact                      |
+| 物理烟雾               | 物理层整体                                              | 真实 cannon-es 世界 + 碗碰撞体 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能在预期时间内结算或触发超时                                                                     | 固定种子 + 帧循环                                             |
 
 **随机数可复现**：`utils/random.ts` 默认以时间种子初始化 mulberry32，也支持固定 seed、测试随机源注入和带 salt 的独立子流。投掷 v3 在诊断中同时记录 seed、位置算法和 random-plan 版本，不把单一裸 seed 当作跨版本复现保证。
 

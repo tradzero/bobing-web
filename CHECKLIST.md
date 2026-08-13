@@ -120,17 +120,17 @@
 
 ### 1H 运行时与游戏编排层
 
-- [x] 1H.1 [实现] 实现 `game/store.ts`：Zustand store 定义（phase、round、diceValues、currentResult: JudgeResult | null、history、prizeRecord、soundEnabled、playerId）
+- [x] 1H.1 [实现] 实现 `game/store.ts`：Zustand store 定义（五态 phase、round、diceValues、currentResult、history、prizeRecord、pendingSettlement、rollError、soundEnabled、playerId）
 - [x] 1H.2 [实现] store 预留 playerId 字段（默认 null，多人阶段启用）
-- [x] 1H.3 [实现] store actions 为纯状态设置器：setPhase、setResult、resetState、toggleSound（无业务逻辑）
+- [x] 1H.3 [实现] store actions 为纯状态设置器：覆盖正常结果、倾斜 pending/commit/clear、timeout error/clear、reset 与 toggleSound
 - [x] 1H.4 [实现] 实现 `game/engine.ts` 按需唯一 rAF 调度器：显式 `idle / rolling / settled / stopped`；只有 rolling 连续调度，idle/settled 仅启动或失效时单帧，stopped 不调度
 - [x] 1H.5 [实现] engine 暴露 start()、stop()、dispose()、beginSettle()、returnToIdle()、invalidate() 与只读 diagnostics；静态失效请求按 rafId 合并
 - [x] 1H.6 [实现] rolling 帧使用固定步长推进 physics，未停稳时以 Cannon interpolated pose 渲染；停稳回调完成后以 raw body pose 渲染最终帧
 - [x] 1H.7 [实现] 实现 `game/controller.ts`：GameController 类（唯一业务入口）
-- [x] 1H.8 [实现] 实现 UI 四态状态机：idle → rolling → result/tilt-confirm，result 可直接 throw() 进入 rolling，tilt-confirm 可接受或重掷
-- [x] 1H.9 [实现] controller.throw()：拒绝 rolling 阶段调用，允许 idle 和 result 阶段调用
-- [x] 1H.10 [实现] controller.onSettled()：调用 read-face → judge → store.setResult()
-- [x] 1H.11 [实现] controller.reset()：拒绝 rolling 阶段调用；非 rolling 时清空历史、记录、轮次，将骰子放回已同步且休眠的碗底静态姿态，并让引擎回到 idle 后按需渲染一帧
+- [x] 1H.8 [实现] 实现 UI 五态状态机：idle → rolling → result/tilt-confirm/error；result 可直接进入下一轮，tilt-confirm 可接受/重掷，error 可同轮重掷/重置
+- [x] 1H.9 [实现] controller.throw()：只允许 idle/result，拒绝 rolling、tilt-confirm 与 error 绕过各自专用恢复路径
+- [x] 1H.10 [实现] controller.onSettled()：仅接受 rolling 阶段首个回调；timeout 冻结异常画面并进入 error，其余路径才读面、判奖并分流 result/tilt-confirm
+- [x] 1H.11 [实现] controller.reset()：拒绝 rolling；其余状态清空游戏数据但保留 soundEnabled，将骰子放回已同步且休眠的碗底静态姿态，并让引擎回到 idle 后按需渲染一帧
 - [x] 1H.12 [实现] controller.toggleSound()：统一的音效开关入口
 - [x] 1H.13 [测试] 编写编排层集成测试：phase 变化是否正确
 - [x] 1H.14 [测试] 集成测试：rolling 中二次点击 throw() 被拒绝
@@ -142,29 +142,30 @@
 - [x] 1H.20 [验收] 验证全部测试通过
 - [x] 1H.21 [测试] Engine 调度测试：idle/settled 不常驻 rAF，rolling 独占连续 rAF，stop/dispose 取消待执行帧
 - [x] 1H.22 [测试] Engine 姿态测试：rolling 读取 interpolated pose，结算帧读取 controller 回调后的 raw pose
-- [x] 1H.23 [实现] 开发态 diagnostics 区分 `mainPassCalls / mainPassTriangles` 主 pass 口径，并发布 CSS/drawing-buffer 尺寸、DPR、`renderer.info.memory` 的 geometries/textures、programs 数量与 Engine 调度计数
+- [x] 1H.23 [实现] diagnostics schema v3 区分 `mainPassCalls / mainPassTriangles` 主 pass 口径，并发布 CSS/drawing-buffer、DPR、renderer 资源、Engine 调度与逐步 rollSafety 计数
 - [x] 1H.24 [测试] 锁定 diagnostics 字段命名与来源，避免将主 pass 数据误写成包含 shadow pass 的总 calls/triangles
-- [x] 1H.25 [实现] diagnostics 使用版本化 `post-render` 快照，只在真实 render 后发布；e2e 可一次性注入 nextSeed，并记录实际投掷路径、fallback layout、停稳原因和模拟耗时
-- [x] 1H.26 [测试] 锁定 post-render revision、一次性 seed 消费和 idle/settled 静态零帧语义
+- [x] 1H.25 [实现] diagnostics 使用版本化 `post-render` 快照，只在真实 render 后发布；开发/e2e 支持 nextSeed 与版本化 nextSeeds 队列，隔离 e2e 另支持一次性强制 timeout outcome
+- [x] 1H.26 [测试] 锁定 schema v3 post-render revision、seed/队列消费、timeout seam 和 idle/settled 静态零帧语义
 
 ### 1I 阶段一集成验证
 
 - [x] 1I.1 [验收] 完整流程跑通：点击按钮 → 骰子投掷 → 翻滚 → 停稳 → 读数 → 判定 → 控制台输出完整 JudgeResult
-- [ ] 1I.2 [验收] 连续 20 轮投掷无穿模、无卡死、无骰子飞出
+- [x] 1I.2 [验收] `pnpm test:e2e:soak` 桌面/移动各 20 轮 2/2 通过；最大穿透 0.054898m / 0.053635m，最大半径 0.656797m < 1m，boundary crossing / guard / non-finite 均为 0
 - [x] 1I.3 [验收] 点数读取准确（人工目视对照至少 10 轮）
 - [x] 1I.4 [测试] 物理烟雾测试：真实 cannon-es 世界 + 碗 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能结算或超时
 - [x] 1I.5 [验收] 奖级判定与点数组合匹配（人工核对）
 - [x] 1I.6 [验收] 全部单测通过：`pnpm test`
 - [x] 1I.7 [验收] `pnpm build` 通过，无编译错误
-- [x] 1I.8 [验收] `pnpm test:e2e` 在桌面/移动项目完成真实固定 seed 单轮、结果提交、reset 与移动布局验收
-- [x] 1I.9 [验收] `pnpm bench:browser` 锁定三阶段渲染结构、DPR/像素预算与静态零帧，并保留 JSON/截图 artifact；帧时仅记录不设跨硬件硬门槛
+- [x] 1I.8 [验收] `pnpm test:e2e` 在桌面/移动项目完成真实固定 seed 正常结算、timeout 不提交/同轮恢复、reset、静态零帧与移动布局验收；当前 4/4 通过
+- [x] 1I.9 [验收] `pnpm bench:browser` 锁定三阶段渲染结构、DPR/像素预算与静态零帧，并保留 JSON/截图 artifact；帧时仅记录不设跨硬件硬门槛；当前 2/2 通过
 - [x] 1I.10 [实现] `physics/roll-runner.ts` 复用正式 throw/world/escape/settle/read-face 行为链，统一单 seed 复现、批量验收与 A/B 诊断
 - [x] 1I.11 [实现] variant schema v2 固定 historical、placement-control、placement-candidate、natural-control 与 current 的投掷/assist/pose 组合
 - [x] 1I.12 [测试] `pnpm test:physics:ab` 落地：按 seed 交替 A/B、B/A，分离 watch/batch cohort，并对每个非自然结果运行最多 20s 的同 seed natural continuation
 - [x] 1I.13 [验收] `pnpm test:acceptance` 默认 200 seeds；assist/fallback 预算均为 0，pose-stable 预算上限 2%
 - [x] 1I.14 [基线] 本机 2000 固定逻辑 seed：1990 natural / 10 pose，timeout、NaN、wall、guard、assist、fallback 均为 0，p95=3.3s、p99=4.8s、max=8.2s、max penetration=0.081546；10 个非自然结果的 20s continuation 均无 face/tilt/judge/safety 差异；不作为浏览器 FPS 或跨机器结论
 - [x] 1I.15 [A/B] 默认 200 seed 拆为 19 watch / 181 batch；current 的 batch fallback 与 assist 均为 0，最大穿透下降 0.016682m，p95 改善 0.1167s、p99 回退 0.25s且未越预算
-- [ ] 1I.16 [产品/验收] timeout 必须进入明确的异常、重试或救援 UI，不得按正常奖级提交
+- [x] 1I.16 [产品/验收] timeout 进入显式 error 与 RollErrorPanel；不读面、不判奖、不播放中奖音、不推进 round/history/prizeRecord，可同轮重新掷骰或重置
+- [x] 1I.17 [实现] `test:e2e:soak`、版本化 20-seed 队列、逐步安全/状态/静态调度/WebGL 资源断言与逐轮 JSON artifact 已落地；不以命令存在替代 1I.2 的最终运行验收
 
 ---
 
@@ -184,7 +185,7 @@
 ### 2B 核心 UI 组件
 
 - [x] 2B.1 [实现] 实现 `ThrowButton.tsx`：掷骰按钮，通过 useGameController().throw() 调用
-- [x] 2B.2 [实现] 掷骰中（rolling phase）显示"骰子翻滚中"并禁用
+- [x] 2B.2 [实现] rolling 显示“骰子翻滚中”并禁用；tilt-confirm/error 也禁用普通掷骰入口，由专用面板接管
 - [x] 2B.3 [实现] result phase 恢复可用
 - [x] 2B.4 [实现] 实现 `ResultPanel.tsx`：当轮结果面板
 - [x] 2B.5 [实现] 显示 6 颗骰子点数（数字 + 视觉排列）
@@ -199,6 +200,7 @@
 - [x] 2B.14 [实现] 实现 `ResetButton.tsx`：重置按钮，通过 useGameController().reset() 调用；rolling 阶段禁用
 - [x] 2B.15 [实现] 实现当前轮次显示
 - [x] 2B.16 [实现] 所有 UI 组件只通过 selector 读取 store，写入操作通过 useGameController() 获取的 controller 实例
+- [x] 2B.17 [实现] 实现 `RollErrorPanel.tsx`：明确提示 timeout 本轮未结算，隐藏正常结果/content peek，提供同轮“重新掷骰”与“重置”
 
 ### 2C 样式与主题
 
@@ -210,17 +212,17 @@
 - [x] 2C.6 [实现] 整体布局：桌面端 canvas 居中 + 右侧/底部 UI 面板
 - [x] 2C.7 [实现] 移动端布局：canvas 上半 + UI 下半，按钮足够大（≥44px touch target）
 - [x] 2C.8 [实现] CSS 媒体查询断点处理（桌面/平板/手机）
-- [x] 2C.9 [实现] `max-width: 768px` 关闭顶栏、倾斜提示、结果面板和卡片等大面积 `backdrop-filter`，用高不透明度实色背景补偿；保留小面积图标按钮的桌面质感
+- [x] 2C.9 [实现] `max-width: 768px` 关闭顶栏、倾斜/异常提示、结果面板和卡片等大面积 `backdrop-filter`，用高不透明度实色背景补偿；保留小面积图标按钮的桌面质感
 - [x] 2C.10 [实现] 移动端 rolling 按钮禁用会逐帧重绘 box-shadow 的 `buttonPulse`，保留 transform/opacity ornament 动效，不全局移除阴影
-- [x] 2C.11 [实现] `(update: slow)` 下复用大面积模糊回退并关闭动态效果；`prefers-reduced-motion: reduce` 单独关闭动画、按钮过渡和 hover 位移，不牺牲桌面静态 blur
+- [x] 2C.11 [实现] `(update: slow)` 下复用大面积模糊回退并关闭 rolling/倾斜/error/result 动态效果；`prefers-reduced-motion: reduce` 单独关闭动画、按钮过渡和 hover 位移，不牺牲桌面静态 blur
 - [x] 2C.12 [测试] CSS 契约测试锁定桌面 backdrop/rolling 规则仍存在、移动/slow 的 blur 与实色背景降级，以及 reduced-motion 的纯运动降级
 
 ### 2D 阶段二集成验证
 
 - [x] 2D.1 [验收] 桌面端完整操作流程：掷骰 → 翻滚 → 结果展示 → 再次掷骰 → 累计记录更新
 - [x] 2D.2 [验收] 移动端同上流程验证（Chrome DevTools 模拟 + 真机）
-- [x] 2D.3 [验收] 重置功能验证：非 rolling 时清空记录、轮次归 1、骰子复位；rolling 时重置按钮处于禁用状态
-- [ ] 2D.4 [验收] 真实浏览器连续 20 轮操作：按钮状态始终正确，无重复结算或资源泄漏
+- [x] 2D.3 [验收] 重置功能验证：非 rolling 时清空记录、轮次归 1、骰子复位并保留 soundEnabled；rolling 时重置按钮处于禁用状态
+- [x] 2D.4 [验收] 真实浏览器桌面/移动各连续 20 轮：状态均单次提交、历史维持最近 5 轮、静态零帧，canvas/geometry/texture/program 无逐轮增长，页面错误为 0
 - [x] 2D.5 [验收] 历史记录正确显示最近 HISTORY_MAX_LENGTH 轮（默认 5）
 - [x] 2D.6 [验收] 奖级记录累加正确
 - [x] 2D.7 [验收] 全部单测通过：`pnpm test`
@@ -293,7 +295,7 @@
 - [x] 6.2 [实现] ~~清理临时诊断测试文件~~ → 已拆分为 `sweep/` 独立脚本（param-sweep、sleep-sweep、jitter-diagnose、tilt-stats、timeout-risk、damping-tune、shape-bench）
 - [x] 6.3 [验收] 全量测试通过（19 files / 295 tests）
 - [x] 6.4 [验收] `pnpm build` 通过（修复未使用变量 TS 错误）
-- [ ] 6.5 [验收] 连续 20 轮投掷无穿模、无卡死、无飞出
+- [x] 6.5 [验收] 浏览器桌面/移动各连续 20 轮无穿模、卡死或飞出；逐步 boundary crossing / escape guard / non-finite 均为 0
 
 ---
 
@@ -369,12 +371,12 @@
 
 ### 3B 音效
 
-- [ ] 3B.1 [实现] 实现 `audio/sound.ts`：音效管理器（加载、播放、静音切换）
-- [ ] 3B.2 [实现] 添加骰子碰碗碰撞音效（cannon-es collide 事件触发）
-- [ ] 3B.3 [实现] 碰撞音效节流：同一帧内多次碰撞只播放一次，或按碰撞强度筛选
-- [ ] 3B.4 [实现] 添加中奖提示音效
-- [ ] 3B.5 [实现] 音效文件懒加载，不阻塞首屏
-- [ ] 3B.6 [验收] 验证静音开关功能
+- [x] 3B.1 [实现] `audio/sound.ts` 管理 Web Audio 合成播放、静音与完整 dispose/remount 生命周期
+- [x] 3B.2 [实现] cannon-es collide 事件按碰撞强度触发骰子碰击合成音
+- [x] 3B.3 [实现] 碰撞音效具备 60ms 节流、最低冲量筛选和最多 3 个并发限制
+- [x] 3B.4 [实现] 正式提交中奖结果后播放三音阶提示；倾斜待确认与 timeout 不提前播放
+- [x] 3B.5 [实现] AudioContext 与 noise buffer 懒创建，不阻塞首屏；同一 context 复用 noise buffer
+- [x] 3B.6 [验收] 单测覆盖静音期间不创建/恢复 context、取消静音、Promise rejection 和 dispose/remount 复位
 - [ ] 3B.7 [验收] 验证高频碰撞时不产生刺耳叠音
 
 ### 3C 视觉反馈

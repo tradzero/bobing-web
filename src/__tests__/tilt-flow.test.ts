@@ -6,6 +6,7 @@ import type { Engine } from '@/game/engine'
 import type { DicePair } from '@/dice/create'
 import * as CANNON from 'cannon-es'
 import { SETTLE } from '@/config/settle'
+import { soundManager } from '@/audio/sound'
 
 /**
  * 倾斜确认流程测试
@@ -51,6 +52,7 @@ describe('倾斜确认流程', () => {
   let engine: Engine
 
   beforeEach(() => {
+    vi.restoreAllMocks()
     store = createGameStore()
     engine = mockEngine()
   })
@@ -135,6 +137,52 @@ describe('倾斜确认流程', () => {
 
     const record = store.getState().prizeRecord
     expect(Object.values(record).every((v) => v === 0)).toBe(true)
+  })
+
+  it('tilt-confirm 尚未正式提交时不播放中奖音，接受后仅播放一次', () => {
+    const playWinSound = vi.spyOn(soundManager, 'playWinSound')
+    const dicePairs = mockDicePairs([0])
+    // 其余骰子仍为 1；把一颗平骰转为 4，确保 pending 是中奖结果。
+    const faceFour = new CANNON.Quaternion()
+    faceFour.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2)
+    dicePairs[1].body.quaternion.copy(faceFour)
+    const ctrl = new GameController({ store, dicePairs })
+    ctrl.setEngine(engine)
+
+    settleWithoutThrow(ctrl)
+    expect(store.getState().phase).toBe('tilt-confirm')
+    expect(store.getState().pendingSettlement?.result.prize).not.toBe('none')
+    expect(playWinSound).not.toHaveBeenCalled()
+
+    ctrl.acceptTilted()
+    ctrl.acceptTilted()
+    expect(store.getState().phase).toBe('result')
+    expect(playWinSound).toHaveBeenCalledTimes(1)
+  })
+
+  it('tilt-confirm 重掷和重置都不播放 pending 中奖音', () => {
+    const playWinSound = vi.spyOn(soundManager, 'playWinSound')
+    const dicePairs = mockDicePairs([0])
+    const faceFour = new CANNON.Quaternion()
+    faceFour.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2)
+    dicePairs[1].body.quaternion.copy(faceFour)
+    const ctrl = new GameController({ store, dicePairs })
+    ctrl.setEngine(engine)
+
+    settleWithoutThrow(ctrl)
+    ctrl.rethrow()
+    expect(playWinSound).not.toHaveBeenCalled()
+
+    // 再建一轮 pending 后 reset；不依赖上次随机化后的姿态。
+    store.getState().setPhase('rolling')
+    dicePairs[0].body.quaternion.set(0, 0, 0, 1)
+    const tilt = new CANNON.Quaternion()
+    tilt.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), (44 * Math.PI) / 180)
+    dicePairs[0].body.quaternion.copy(tilt)
+    ctrl.onSettled()
+    expect(store.getState().phase).toBe('tilt-confirm')
+    ctrl.reset()
+    expect(playWinSound).not.toHaveBeenCalled()
   })
 
   // ── acceptTilted：确认后提交 ──

@@ -1,5 +1,4 @@
 import { useGameStore } from './GameStoreContext'
-import { Prize } from '@/rules/types'
 import { PRIZE_NAMES } from '@/rules/judge'
 import { DiceFace } from './DiceFace'
 
@@ -20,21 +19,17 @@ export function History() {
           <li key={i} className="history-item">
             <div className="history-row">
               <span className="history-round">第{entry.round}轮</span>
-              <span className="history-separator" aria-hidden="true">·</span>
-              <span className="history-prize">
-                {PRIZE_NAMES[entry.result.prize]}
+              <span className="history-separator" aria-hidden="true">
+                ·
               </span>
-              {entry.result.prize === Prize.ZhuangYuan && entry.result.carryScore > 0 && (
+              <span className="history-prize">{PRIZE_NAMES[entry.result.prize]}</span>
+              {entry.result.carryScore > 0 && (
                 <span className="history-carry">带{entry.result.carryScore}</span>
               )}
             </div>
             <div className="history-dice">
               {entry.diceValues.map((value, diceIndex) => (
-                <DiceFace
-                  key={`${entry.round}-${diceIndex}`}
-                  value={value}
-                  mini
-                />
+                <DiceFace key={`${entry.round}-${diceIndex}`} value={value} mini />
               ))}
             </div>
           </li>

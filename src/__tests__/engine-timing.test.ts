@@ -6,6 +6,7 @@ import type { DicePair } from '@/dice/create'
 import type { SettleResult } from '@/dice/settle'
 import { createEngine, type Engine, type EngineDiagnostics } from '@/game/engine'
 import type { SceneContext } from '@/scene/setup'
+import { CONSERVATIVE_DICE_CENTER_RADIUS, WALL_INNER_RADIUS } from '@/physics/roll-diagnostics'
 
 type MockSceneContext = SceneContext & {
   renderer: THREE.WebGLRenderer & {
@@ -16,6 +17,17 @@ type MockSceneContext = SceneContext & {
     }
   }
 }
+
+const ZERO_ROLL_SAFETY = {
+  maxRadius: 0,
+  containmentRadius: WALL_INNER_RADIUS,
+  conservativeContainmentRadius: CONSERVATIVE_DICE_CENTER_RADIUS,
+  conservativeBoundaryCrossings: 0,
+  wallCenterCrossings: 0,
+  maxContactPenetration: 0,
+  escapeGuardInterventionCount: 0,
+  nonFiniteBodyStateDetected: false,
+} as const
 
 function mockSceneCtx(): MockSceneContext {
   const renderer = {
@@ -117,6 +129,7 @@ describe('Engine 按需调度', () => {
       renderCount: 0,
       physicsStepCount: 0,
       frameScheduled: false,
+      rollSafety: ZERO_ROLL_SAFETY,
     })
 
     engine.start()
@@ -135,6 +148,7 @@ describe('Engine 按需调度', () => {
       renderCount: 1,
       physicsStepCount: 0,
       frameScheduled: false,
+      rollSafety: ZERO_ROLL_SAFETY,
     })
 
     expect(runNextFrame(2000)).toBe(false)
@@ -155,6 +169,7 @@ describe('Engine 按需调度', () => {
       renderCount: 1,
       physicsStepCount: 0,
       frameScheduled: false,
+      rollSafety: ZERO_ROLL_SAFETY,
     })
 
     engine.invalidate()
@@ -232,6 +247,32 @@ describe('Engine 按需调度', () => {
     runNextFrame(50_020)
     expect(worldStep).toHaveBeenCalledTimes(2)
     expect(worldStep).toHaveBeenLastCalledWith(expect.closeTo(0.02, 5))
+  })
+
+  it('逐步累计半径、escape guard 与非有限状态，结算后仍保留整轮安全包络', () => {
+    const dicePairs = makeDicePairs(2)
+    const worldStep = vi.fn(() => {
+      dicePairs[0].body.position.set(0.8, 1, 0)
+      dicePairs[0].body.velocity.set(0, 1, 0)
+      dicePairs[1].body.angularVelocity.x = Number.NaN
+    })
+    const { engine } = createFixture({ dicePairs, worldStep, onDiagnostics: vi.fn() })
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(1000)
+    runNextFrame(1016.67)
+
+    expect(engine.getDiagnostics().rollSafety).toEqual({
+      maxRadius: 0.8,
+      containmentRadius: WALL_INNER_RADIUS,
+      conservativeContainmentRadius: CONSERVATIVE_DICE_CENTER_RADIUS,
+      conservativeBoundaryCrossings: 1,
+      wallCenterCrossings: 0,
+      maxContactPenetration: 0,
+      escapeGuardInterventionCount: 1,
+      nonFiniteBodyStateDetected: true,
+    })
   })
 
   it('rolling 使用插值姿态，且 invalidate 不会额外安排帧', () => {
@@ -327,6 +368,9 @@ describe('Engine 按需调度', () => {
       renderCount: 2,
       physicsStepCount: 1,
       frameScheduled: false,
+      rollSafety: {
+        ...ZERO_ROLL_SAFETY,
+      },
     })
     expect(pendingFrames.size).toBe(0)
 
@@ -357,6 +401,7 @@ describe('Engine 按需调度', () => {
       renderCount: 0,
       physicsStepCount: 0,
       frameScheduled: false,
+      rollSafety: ZERO_ROLL_SAFETY,
     })
 
     engine.invalidate()

@@ -17,9 +17,15 @@ export interface PendingSettlement {
   tiltedIndices: number[]
 }
 
+/** 当前轮无法可信结算时的显式异常；不得包含或提交骰面/奖级。 */
+export interface RollError {
+  reason: 'timeout'
+  elapsed: number
+}
+
 /** 游戏状态 */
 export interface GameState {
-  phase: 'idle' | 'rolling' | 'tilt-confirm' | 'result'
+  phase: 'idle' | 'rolling' | 'tilt-confirm' | 'result' | 'error'
   round: number
   diceValues: number[]
   currentResult: JudgeResult | null
@@ -29,6 +35,8 @@ export interface GameState {
   playerId: string | null
   /** 倾斜确认态下的待提交数据 */
   pendingSettlement: PendingSettlement | null
+  /** error 态的可观测原因；正常流程必须为 null。 */
+  rollError: RollError | null
 }
 
 /** Store actions（纯状态设置器） */
@@ -41,6 +49,10 @@ export interface GameActions {
   commitPending: () => void
   /** 清空待提交数据，回到 rolling 态（重掷用） */
   clearPending: () => void
+  /** 进入不可结算异常态；不提交任何业务结果。 */
+  setRollError: (error: RollError) => void
+  /** 清空异常并保持同一轮，随后由 controller 启动新投掷。 */
+  clearRollError: () => void
   resetState: () => void
   toggleSound: () => void
 }
@@ -82,6 +94,7 @@ function applyResult(
     history,
     prizeRecord,
     pendingSettlement: null,
+    rollError: null,
   }
 }
 
@@ -95,6 +108,7 @@ const initialState: GameState = {
   soundEnabled: true,
   playerId: null,
   pendingSettlement: null,
+  rollError: null,
 }
 
 /**
@@ -105,10 +119,9 @@ export function createGameStore() {
   return createStore<GameStore>((set) => ({
     ...initialState,
 
-    setPhase: (phase) => set({ phase }),
+    setPhase: (phase) => set({ phase, ...(phase === 'rolling' ? { rollError: null } : {}) }),
 
-    setResult: ({ diceValues, result }) =>
-      set((state) => applyResult(state, diceValues, result)),
+    setResult: ({ diceValues, result }) => set((state) => applyResult(state, diceValues, result)),
 
     setPending: (payload) =>
       set({
@@ -117,6 +130,7 @@ export function createGameStore() {
         // 暂存 diceValues 供 UI 预览（但不写入 history/prizeRecord）
         diceValues: payload.diceValues,
         currentResult: payload.result,
+        rollError: null,
       }),
 
     commitPending: () =>
@@ -132,12 +146,34 @@ export function createGameStore() {
         pendingSettlement: null,
         diceValues: [],
         currentResult: null,
+        rollError: null,
       }),
 
-    resetState: () => set({ ...initialState, prizeRecord: initPrizeRecord() }),
+    setRollError: (rollError) =>
+      set({
+        phase: 'error' as const,
+        rollError,
+        pendingSettlement: null,
+        diceValues: [],
+        currentResult: null,
+      }),
+
+    clearRollError: () =>
+      set({
+        phase: 'rolling' as const,
+        rollError: null,
+        pendingSettlement: null,
+        diceValues: [],
+        currentResult: null,
+      }),
+
+    resetState: () =>
+      set((state) => ({
+        ...initialState,
+        soundEnabled: state.soundEnabled,
+        prizeRecord: initPrizeRecord(),
+      })),
 
     toggleSound: () => set((state) => ({ soundEnabled: !state.soundEnabled })),
   }))
 }
-
-

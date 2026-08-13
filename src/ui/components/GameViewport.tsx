@@ -11,11 +11,14 @@ import { placeDiceAtRest } from '@/dice/rest'
 import { createEngine, type EngineDiagnostics } from '@/game/engine'
 import { createGameStore } from '@/game/store'
 import { GameController } from '@/game/controller'
+import { SETTLE } from '@/config/settle'
 import { GameControllerContext } from './GameControllerContext'
 import { GameStoreContext } from './GameStoreContext'
 
-const DIAGNOSTICS_SCHEMA_VERSION = 2
+const DIAGNOSTICS_SCHEMA_VERSION = 3
 const DIAGNOSTICS_ENABLED = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
+const E2E_SEED_PLAN_VERSION = '1'
+const E2E_SETTLEMENT_OVERRIDE_VERSION = '1'
 
 interface GameViewportProps {
   children?: ReactNode
@@ -50,6 +53,31 @@ function readNextSeed(): number | undefined {
 
   const seed = Number(value)
   return Number.isSafeInteger(seed) ? seed : undefined
+}
+
+function readNextSeeds(): number[] | undefined {
+  if (!DIAGNOSTICS_ENABLED) return undefined
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('seedPlanVersion') !== E2E_SEED_PLAN_VERSION) return undefined
+
+  const serialized = params.get('nextSeeds')
+  if (!serialized) return undefined
+  const seeds = serialized.split(',').map((value) => Number(value.trim()))
+  if (
+    seeds.length === 0 ||
+    seeds.length > 100 ||
+    seeds.some((seed) => !Number.isSafeInteger(seed))
+  ) {
+    return undefined
+  }
+  return seeds
+}
+
+function readNextSettlementOverride(): 'timeout' | undefined {
+  if (import.meta.env.MODE !== 'e2e') return undefined
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('settlementOverrideVersion') !== E2E_SETTLEMENT_OVERRIDE_VERSION) return undefined
+  return params.get('forceNextSettlement') === 'timeout' ? 'timeout' : undefined
 }
 
 /** 递归释放 scene 中所有 geometry / material / texture */
@@ -141,7 +169,9 @@ export function GameViewport({ children }: GameViewportProps) {
       store: gameStore,
       dicePairs,
       nextSeed: readNextSeed(),
+      nextSeeds: readNextSeeds(),
     })
+    let nextSettlementOverride = readNextSettlementOverride()
 
     let diagnosticsRevision = 0
     const publishDiagnostics = (engineDiagnostics: EngineDiagnostics) => {
@@ -175,7 +205,14 @@ export function GameViewport({ children }: GameViewportProps) {
       world: physics.world,
       worldStep: physics.step,
       dicePairs,
-      onSettled: (result) => ctrl.onSettled(result),
+      onSettled: (result) => {
+        if (nextSettlementOverride === 'timeout') {
+          nextSettlementOverride = undefined
+          ctrl.onSettled({ reason: 'timeout', elapsed: SETTLE.timeout })
+          return
+        }
+        ctrl.onSettled(result)
+      },
       onDiagnostics: DIAGNOSTICS_ENABLED ? publishDiagnostics : undefined,
     })
 

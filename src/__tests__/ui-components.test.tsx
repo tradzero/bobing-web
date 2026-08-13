@@ -13,6 +13,7 @@ import { PrizeRecord } from '@/ui/components/PrizeRecord'
 import { RoundDisplay } from '@/ui/components/RoundDisplay'
 import { SoundToggle } from '@/ui/components/SoundToggle'
 import { TiltWarning } from '@/ui/components/TiltWarning'
+import { RollErrorPanel } from '@/ui/components/RollErrorPanel'
 import { GameOverlay } from '@/App'
 import { Prize } from '@/rules/types'
 import type { DicePair } from '@/dice/create'
@@ -171,6 +172,25 @@ describe('ResultPanel', () => {
     expect(screen.getByText('未中奖')).toBeInTheDocument()
     expect(document.querySelector('.result-prize.no-prize')).toBeInTheDocument()
   })
+
+  it('非状元奖级也显示带数', () => {
+    act(() => {
+      store.getState().setResult({
+        diceValues: [4, 4, 4, 1, 2, 3],
+        result: {
+          prize: Prize.SanHong,
+          priority: 9,
+          carryScore: 6,
+          matchedDice: [4, 4, 4],
+          remainDice: [1, 2, 3],
+          description: '三红 带6',
+        },
+      })
+    })
+    render(<ResultPanel />, { wrapper: Wrapper })
+    expect(screen.getByText('三红')).toBeInTheDocument()
+    expect(screen.getByText('带6')).toBeInTheDocument()
+  })
 })
 
 // ── RoundDisplay ──
@@ -246,6 +266,7 @@ describe('History', () => {
     expect(screen.getByText('历史记录')).toBeInTheDocument()
     expect(screen.getByText('第1轮')).toBeInTheDocument()
     expect(screen.getByText('三红')).toBeInTheDocument()
+    expect(screen.getByText('带6')).toBeInTheDocument()
   })
 })
 
@@ -351,6 +372,30 @@ describe('TiltWarning', () => {
     render(<TiltWarning />, { wrapper: Wrapper })
     await userEvent.click(screen.getByRole('button', { name: '重掷' }))
     expect(mockCtrl.rethrow).toHaveBeenCalledOnce()
+  })
+})
+
+describe('RollErrorPanel', () => {
+  beforeEach(() => {
+    act(() => store.getState().setRollError({ reason: 'timeout', elapsed: 10 }))
+  })
+
+  it('明确说明超时未结算且不渲染正常结果', () => {
+    const { container } = render(<GameOverlay />, { wrapper: Wrapper })
+    expect(screen.getByRole('alert')).toHaveTextContent(/未读取点数.*未计入记录/)
+    expect(screen.getByText(/结算超时（10\.0 秒）/)).toBeInTheDocument()
+    expect(container.querySelector('.result-panel')).toBeNull()
+    expect(container.querySelector('.history-item')).toBeNull()
+    expect(container.querySelector('.content-peek')).toBeNull()
+    expect(screen.getByRole('button', { name: '掷骰' })).toBeDisabled()
+  })
+
+  it('提供重新掷骰与重置操作', async () => {
+    render(<RollErrorPanel />, { wrapper: Wrapper })
+    await userEvent.click(screen.getByRole('button', { name: '重新掷骰' }))
+    await userEvent.click(screen.getByRole('button', { name: '重置' }))
+    expect(mockCtrl.rethrow).toHaveBeenCalledOnce()
+    expect(mockCtrl.reset).toHaveBeenCalledOnce()
   })
 })
 
