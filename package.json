@@ -24,6 +24,7 @@
     "test:seed": "vite-node scripts/physics-acceptance.ts",
     "test:acceptance": "vite-node scripts/physics-acceptance.ts --seeds=200",
     "test:physics:ab": "vite-node scripts/physics-ab.ts",
+    "test:physics:cadence": "vite-node scripts/physics-cadence.ts",
     "sweep:param": "vite-node sweep/param-sweep.ts",
     "sweep:sleep": "vite-node sweep/sleep-sweep.ts",
     "sweep:timeout": "vite-node sweep/timeout-risk.ts",
