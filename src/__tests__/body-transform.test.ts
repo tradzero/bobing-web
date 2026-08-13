@@ -2,7 +2,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import * as CANNON from 'cannon-es'
 import * as THREE from 'three'
-import { copyBodyTransformToObject, syncBodyInterpolationState } from '@/physics/body-transform'
+import {
+  copyBodyTransformToObject,
+  interpolateBodyTransform,
+  syncBodyInterpolationState,
+} from '@/physics/body-transform'
 import { createDiceBody } from '@/dice/dice-body'
 import { throwDice } from '@/dice/throw'
 import { resetRandom, setRandom } from '@/utils/random'
@@ -75,6 +79,51 @@ describe('body transform 同步', () => {
     expectPosition(object.position, body.interpolatedPosition)
     expectQuaternion(object.quaternion, body.interpolatedQuaternion)
   })
+
+  it.each([
+    { alpha: 0, expectedPosition: [0, 2, -4], expectedAngle: 0 },
+    { alpha: 0.5, expectedPosition: [2, 4, 2], expectedAngle: Math.PI / 4 },
+    { alpha: 1, expectedPosition: [4, 6, 8], expectedAngle: Math.PI / 2 },
+  ])('alpha=$alpha 时从 previous 插值到 raw pose', ({ alpha, expectedPosition, expectedAngle }) => {
+    const body = new CANNON.Body({ mass: 1 })
+    body.previousPosition.set(0, 2, -4)
+    body.position.set(4, 6, 8)
+    body.previousQuaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0)
+    body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI / 2)
+    body.interpolatedPosition.set(-1, -1, -1)
+    body.interpolatedQuaternion.set(1, 1, 1, 1)
+    const previousPosition = body.previousPosition.clone()
+    const rawPosition = body.position.clone()
+    const previousQuaternion = body.previousQuaternion.clone()
+    const rawQuaternion = body.quaternion.clone()
+    const expectedQuaternion = new CANNON.Quaternion().setFromAxisAngle(
+      new CANNON.Vec3(0, 1, 0),
+      expectedAngle,
+    )
+
+    interpolateBodyTransform(body, alpha)
+
+    expect(body.interpolatedPosition.toArray()).toEqual(expectedPosition)
+    const expectedQuaternionValues = expectedQuaternion.toArray()
+    for (const [actual, expected] of body.interpolatedQuaternion
+      .toArray()
+      .map((value, index) => [value, expectedQuaternionValues[index]] as const)) {
+      expect(actual).toBeCloseTo(expected, 12)
+    }
+    expect(Math.hypot(...body.interpolatedQuaternion.toArray())).toBeCloseTo(1, 12)
+    expectPosition(body.previousPosition, previousPosition)
+    expectPosition(body.position, rawPosition)
+    expectQuaternion(body.previousQuaternion, previousQuaternion)
+    expectQuaternion(body.quaternion, rawQuaternion)
+  })
+
+  it.each([-0.001, 1.001, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    '拒绝非法插值 alpha=%s',
+    (alpha) => {
+      const body = new CANNON.Body({ mass: 1 })
+      expect(() => interpolateBodyTransform(body, alpha)).toThrow(RangeError)
+    },
+  )
 
   it('throwDice 完成后四个插值辅助状态均与最终 pose 一致', () => {
     // 固定为同一点的 rejection 候选会进入 fallback，覆盖最终高度二次改写路径。

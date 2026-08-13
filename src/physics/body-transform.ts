@@ -18,6 +18,20 @@ export function syncBodyInterpolationState(body: CANNON.Body): void {
   body.interpolatedQuaternion.copy(body.quaternion)
 }
 
+/**
+ * 以只读 previous/raw pose 计算渲染插值姿态。
+ * 结果只写入 Cannon 的 interpolated 字段，不改变物理真值或历史姿态。
+ */
+export function interpolateBodyTransform(body: CANNON.Body, alpha: number): void {
+  if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) {
+    throw new RangeError('interpolation alpha must be a finite number between 0 and 1')
+  }
+
+  body.previousPosition.lerp(body.position, alpha, body.interpolatedPosition)
+  body.previousQuaternion.slerp(body.quaternion, alpha, body.interpolatedQuaternion)
+  body.interpolatedQuaternion.normalize()
+}
+
 /** 将刚体的原始或插值姿态复制到 Three.js 渲染对象。 */
 export function copyBodyTransformToObject(
   body: CANNON.Body,

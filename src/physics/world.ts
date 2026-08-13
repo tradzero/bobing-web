@@ -11,8 +11,10 @@ export interface PhysicsWorldOptions {
 
 export interface PhysicsWorld {
   world: CANNON.World
-  /** 固定时间步长推进 */
+  /** 兼容当前生产调度：由 Cannon 根据墙钟时间累计并批量推进。 */
   step: (dt: number) => void
+  /** 精确推进一个固定物理步；不让 Cannon 自己累计墙钟时间。 */
+  stepExact: () => void
   dispose: () => void
 }
 
@@ -38,6 +40,10 @@ export function createPhysicsWorld(options?: PhysicsWorldOptions): PhysicsWorld 
     world.step(PHYSICS.fixedTimeStep, dt, PHYSICS.maxSubSteps)
   }
 
+  const stepExact = () => {
+    world.step(PHYSICS.fixedTimeStep)
+  }
+
   const dispose = () => {
     // 移除所有 body
     while (world.bodies.length > 0) {
@@ -45,5 +51,5 @@ export function createPhysicsWorld(options?: PhysicsWorldOptions): PhysicsWorld 
     }
   }
 
-  return { world, step, dispose }
+  return { world, step, stepExact, dispose }
 }
