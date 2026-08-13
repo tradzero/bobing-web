@@ -9,11 +9,10 @@
 import { PHYSICS } from '@/config/physics'
 import { runTrial } from './lib/run-trial'
 
-const CHAMFER_RATIOS = [0.15, 0.12, 0.10, 0] // 0 = box 对照
+const CHAMFER_RATIOS = [0.15, 0.12, 0.1, 0] // 0 = box 对照
 const SEEDS = [
-  1776390018022, 42, 1, 7777, 12345, 99999, 314159, 65535,
-  271828, 5555, 666, 11111, 54321, 777777, 31337, 13,
-  9999999, 123456789, 2024, 8888,
+  1776390018022, 42, 1, 7777, 12345, 99999, 314159, 65535, 271828, 5555, 666, 11111, 54321, 777777,
+  31337, 13, 9999999, 123456789, 2024, 8888,
 ]
 
 interface SeedResult {
@@ -64,15 +63,17 @@ for (const cr of CHAMFER_RATIOS) {
   const chamferSize = hs * cr
   const triEdge = chamferSize * Math.sqrt(2)
 
-  console.log(`\n═══ ${label}  chamfer=${chamferSize.toFixed(4)}m  三角面边≈${triEdge.toFixed(4)}m ═══`)
+  console.log(
+    `\n═══ ${label}  chamfer=${chamferSize.toFixed(4)}m  三角面边≈${triEdge.toFixed(4)}m ═══`,
+  )
 
-  const results = SEEDS.map(seed => runSeed(seed, cr))
-  const rises = results.map(r => r.maxYRise)
-  const brokens = results.map(r => r.stableBroken)
-  const sleeps = results.map(r => r.sleepTime).filter(t => t >= 0)
+  const results = SEEDS.map((seed) => runSeed(seed, cr))
+  const rises = results.map((r) => r.maxYRise)
+  const brokens = results.map((r) => r.stableBroken)
+  const sleeps = results.map((r) => r.sleepTime).filter((t) => t >= 0)
   const tilts = results.reduce((sum, r) => sum + r.tiltCount, 0)
 
-  const bounceCount = rises.filter(y => y > 0.01).length
+  const bounceCount = rises.filter((y) => y > 0.01).length
   const sorted = [...rises].sort((a, b) => a - b)
   const median = sorted[Math.floor(sorted.length / 2)]
   const p90 = sorted[Math.floor(sorted.length * 0.9)]
@@ -80,10 +81,14 @@ for (const cr of CHAMFER_RATIOS) {
   const avgSleep = sleeps.reduce((a, b) => a + b, 0) / sleeps.length
   const avgBroken = brokens.reduce((a, b) => a + b, 0) / brokens.length
 
-  console.log(`  明显弹跳(>10mm): ${bounceCount}/${SEEDS.length} (${(bounceCount/SEEDS.length*100).toFixed(0)}%)`)
-  console.log(`  maxYRise: median=${(median * 1000).toFixed(1)}mm, p90=${(p90 * 1000).toFixed(1)}mm, max=${(max * 1000).toFixed(1)}mm`)
+  console.log(
+    `  明显弹跳(>10mm): ${bounceCount}/${SEEDS.length} (${((bounceCount / SEEDS.length) * 100).toFixed(0)}%)`,
+  )
+  console.log(
+    `  maxYRise: median=${(median * 1000).toFixed(1)}mm, p90=${(p90 * 1000).toFixed(1)}mm, max=${(max * 1000).toFixed(1)}mm`,
+  )
   console.log(`  avg sleepTime: ${avgSleep.toFixed(2)}s`)
   console.log(`  avg stableBroken: ${avgBroken.toFixed(1)}`)
   console.log(`  tilt 总数: ${tilts}/${SEEDS.length * 6} dice`)
-  console.log(`  逐 seed maxYRise: ${rises.map(y => (y * 1000).toFixed(0) + 'mm').join(', ')}`)
+  console.log(`  逐 seed maxYRise: ${rises.map((y) => (y * 1000).toFixed(0) + 'mm').join(', ')}`)
 }

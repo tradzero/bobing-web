@@ -15,7 +15,11 @@ export function createContactClusterAssistState(): ContactClusterAssistState {
   }
 }
 
-function isBelowThreshold(body: CANNON.Body, speedThreshold: number, angularThreshold: number): boolean {
+function isBelowThreshold(
+  body: CANNON.Body,
+  speedThreshold: number,
+  angularThreshold: number,
+): boolean {
   return body.velocity.length() < speedThreshold && body.angularVelocity.length() < angularThreshold
 }
 
@@ -39,7 +43,10 @@ function pruneClusterTimers(state: ContactClusterAssistState, activeKeys: Set<st
   }
 }
 
-function collectLowSpeedClusters(world: CANNON.World, activeBodies: CANNON.Body[]): CANNON.Body[][] {
+function collectLowSpeedClusters(
+  world: CANNON.World,
+  activeBodies: CANNON.Body[],
+): CANNON.Body[][] {
   const assist = SETTLE.contactClusterAssist
   const activeSet = new Set(activeBodies)
   const adjacency = new Map<CANNON.Body, Set<CANNON.Body>>()
@@ -47,9 +54,12 @@ function collectLowSpeedClusters(world: CANNON.World, activeBodies: CANNON.Body[
     adjacency.set(body, new Set())
   }
 
-  const contacts = (world as CANNON.World & {
-    contacts?: Array<{ bi: CANNON.Body; bj: CANNON.Body }>
-  }).contacts ?? []
+  const contacts =
+    (
+      world as CANNON.World & {
+        contacts?: Array<{ bi: CANNON.Body; bj: CANNON.Body }>
+      }
+    ).contacts ?? []
 
   for (const contact of contacts) {
     const bodyA = contact.bi

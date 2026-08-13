@@ -23,8 +23,16 @@ const VARIANTS: Variant[] = [
     diceDiceContactEquationStiffness: CONTACT_EQUATION_BASELINE.diceDiceContactEquationStiffness,
     diceDiceContactEquationRelaxation: CONTACT_EQUATION_BASELINE.diceDiceContactEquationRelaxation,
   },
-  { label: 's=8e6 r=6', diceDiceContactEquationStiffness: 8e6, diceDiceContactEquationRelaxation: 6 },
-  { label: 's=6e6 r=6', diceDiceContactEquationStiffness: 6e6, diceDiceContactEquationRelaxation: 6 },
+  {
+    label: 's=8e6 r=6',
+    diceDiceContactEquationStiffness: 8e6,
+    diceDiceContactEquationRelaxation: 6,
+  },
+  {
+    label: 's=6e6 r=6',
+    diceDiceContactEquationStiffness: 6e6,
+    diceDiceContactEquationRelaxation: 6,
+  },
 ]
 
 function average(values: number[]): number {
@@ -41,7 +49,9 @@ const seeds = [...WATCH_SEEDS, ...generatedSeeds]
 console.log('╔══════════════════════════════════════════════════╗')
 console.log('║    contact-equation candidate validation         ║')
 console.log('╚══════════════════════════════════════════════════╝')
-console.log(`watch=${WATCH_SEEDS.length}, generated=${generatedSeeds.length}, total=${seeds.length}\n`)
+console.log(
+  `watch=${WATCH_SEEDS.length}, generated=${generatedSeeds.length}, total=${seeds.length}\n`,
+)
 
 console.log('variant     | timeout | tilt | avgSettle | p95     | maxSettle | >4s | avgBroken')
 console.log('------------|---------|------|-----------|---------|-----------|-----|-----------')

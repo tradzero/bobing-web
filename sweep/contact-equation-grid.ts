@@ -21,22 +21,8 @@ interface ResultRow {
 }
 
 const DEFAULT_SEEDS = [
-  1776401121559,
-  1776401998577,
-  1776308150130,
-  1776308167330,
-  1776308075747,
-  1776308125213,
-  42,
-  1,
-  7777,
-  12345,
-  99999,
-  314159,
-  65535,
-  271828,
-  2024,
-  8888,
+  1776401121559, 1776401998577, 1776308150130, 1776308167330, 1776308075747, 1776308125213, 42, 1,
+  7777, 12345, 99999, 314159, 65535, 271828, 2024, 8888,
 ]
 
 const DEFAULT_STIFFNESS_VALUES = [8e6, 7e6, 6e6, 5e6, 4e6, 3e6]
@@ -47,10 +33,19 @@ function average(values: number[]): number {
 }
 
 function parseNumberList(raw: string | undefined, fallback: number[]): number[] {
-  return raw ? raw.split(',').map(Number).filter((value) => Number.isFinite(value)) : fallback
+  return raw
+    ? raw
+        .split(',')
+        .map(Number)
+        .filter((value) => Number.isFinite(value))
+    : fallback
 }
 
-function buildRows(seeds: number[], stiffnessValues: number[], relaxationValues: number[]): ResultRow[] {
+function buildRows(
+  seeds: number[],
+  stiffnessValues: number[],
+  relaxationValues: number[],
+): ResultRow[] {
   const rows: ResultRow[] = []
 
   const variants = [
@@ -92,7 +87,10 @@ function buildRows(seeds: number[], stiffnessValues: number[], relaxationValues:
       avgBroken: average(trials.map(({ result }) => result.stableBrokenCount)),
       stickySeeds: trials
         .filter(({ result }) => result.settleTime > 4 || result.stableBrokenCount >= 8)
-        .map(({ seed, result }) => `${seed}:${result.settleTime.toFixed(1)}s/${result.stableBrokenCount}`),
+        .map(
+          ({ seed, result }) =>
+            `${seed}:${result.settleTime.toFixed(1)}s/${result.stableBrokenCount}`,
+        ),
     })
   }
 
@@ -121,10 +119,16 @@ const rankedRows = [...rows].sort(compareRows)
 console.log('╔══════════════════════════════════════════════════╗')
 console.log('║      dice-dice contact-equation 2D sweep         ║')
 console.log('╚══════════════════════════════════════════════════╝')
-console.log(`seeds=${seeds.length}, stiffness=${stiffnessValues.join('/')}, relaxation=${relaxationValues.join('/')}\n`)
+console.log(
+  `seeds=${seeds.length}, stiffness=${stiffnessValues.join('/')}, relaxation=${relaxationValues.join('/')}\n`,
+)
 
-console.log('variant              | timeout | tilt | avgSettle | maxSettle | >4s | avgBroken | sticky seeds')
-console.log('---------------------|---------|------|-----------|-----------|-----|-----------|-----------------------------')
+console.log(
+  'variant              | timeout | tilt | avgSettle | maxSettle | >4s | avgBroken | sticky seeds',
+)
+console.log(
+  '---------------------|---------|------|-----------|-----------|-----|-----------|-----------------------------',
+)
 
 for (const row of rows) {
   console.log(

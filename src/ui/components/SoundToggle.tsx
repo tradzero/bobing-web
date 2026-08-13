@@ -15,7 +15,10 @@ export function SoundToggle() {
       aria-label={label}
     >
       <span className="btn-icon-ring" aria-hidden="true" />
-      <span className={`btn-icon-glyph btn-icon-glyph-sound ${soundEnabled ? 'is-on' : 'is-off'}`} aria-hidden="true">
+      <span
+        className={`btn-icon-glyph btn-icon-glyph-sound ${soundEnabled ? 'is-on' : 'is-off'}`}
+        aria-hidden="true"
+      >
         <svg viewBox="0 0 24 24" role="presentation">
           <path d="M5.5 14.5H8.6L13.4 18V6L8.6 9.5H5.5Z" />
           <path d="M16.3 9.3C17.45 10.2 18.1 11.48 18.1 12.85C18.1 14.22 17.45 15.5 16.3 16.4" />

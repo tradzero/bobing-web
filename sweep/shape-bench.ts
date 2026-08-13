@@ -9,6 +9,7 @@ import { createDiceBody, type ShapeMode } from '@/dice/dice-body'
 import { PHYSICS } from '@/config/physics'
 import { reseed } from '@/utils/random'
 import { throwDice } from '@/dice/throw'
+import type { DicePair } from '@/dice/create'
 import { DEFAULT_SWEEP_CHAMFER_RATIO, parseArgs } from './lib/run-trial'
 
 const args = parseArgs()
@@ -29,7 +30,7 @@ function benchRound(shapeMode: ShapeMode, frames: number): number {
         : { shapeMode },
     )
     world.addBody(body)
-    return { mesh: {} as any, body }
+    return { mesh: {} as DicePair['mesh'], body }
   })
   throwDice(dicePairs)
 

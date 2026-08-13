@@ -48,7 +48,7 @@ function runThrow(floorRestitution: number): Metrics {
     maxFrames: 1200,
     floorRestitution,
     onFrame(frame, _time, bodies) {
-      if (firstContactFrame < 0 && bodies.every(b => b.position.y < 0.5)) {
+      if (firstContactFrame < 0 && bodies.every((b) => b.position.y < 0.5)) {
         firstContactFrame = frame
       }
       if (firstContactFrame >= 0 && frame <= firstContactFrame + 30) {
@@ -85,7 +85,10 @@ function runThrow(floorRestitution: number): Metrics {
 
 // ─── 多 seed 弹性感评估 ───────────────────────────────
 
-function runMultiSeedBounceCheck(floorRestitution: number): { avgFirstBounce: number; maxFirstBounce: number } {
+function runMultiSeedBounceCheck(floorRestitution: number): {
+  avgFirstBounce: number
+  maxFirstBounce: number
+} {
   const seeds = [42, 1, 7777, 12345, 99999, 314159, 65535, 271828, 5555, 666]
   let totalBounce = 0
   let maxBounce = 0
@@ -99,7 +102,7 @@ function runMultiSeedBounceCheck(floorRestitution: number): { avgFirstBounce: nu
       maxFrames: 300,
       floorRestitution,
       onFrame(frame, _time, bodies) {
-        if (firstContact < 0 && bodies.every(b => b.position.y < 0.5)) firstContact = frame
+        if (firstContact < 0 && bodies.every((b) => b.position.y < 0.5)) firstContact = frame
         if (firstContact >= 0 && frame <= firstContact + 40) {
           for (let i = 0; i < 6; i++) {
             const y = bodies[i].position.y
@@ -129,7 +132,11 @@ console.log()
 console.log('restit | maxYRise  | worst | broken | sleepT | settle  | duration | 1stBounce')
 console.log('-------|-----------|-------|--------|--------|---------|----------|----------')
 
-const results: { r: number; m: Metrics; bounce: { avgFirstBounce: number; maxFirstBounce: number } }[] = []
+const results: {
+  r: number
+  m: Metrics
+  bounce: { avgFirstBounce: number; maxFirstBounce: number }
+}[] = []
 
 for (const r of RESTITUTION_VALUES) {
   const m = runThrow(r)
@@ -137,7 +144,7 @@ for (const r of RESTITUTION_VALUES) {
   results.push({ r, m, bounce })
 
   console.log(
-    `  ${r.toFixed(2)} | ${(m.maxYRise * 1000).toFixed(1).padStart(7)}mm | die${m.worstDie + 1}  | ${String(m.stableBroken).padStart(6)} | ${m.sleepTime >= 0 ? m.sleepTime.toFixed(2).padStart(5) + 's' : '  N/A '} | ${m.settlePath.padStart(7)} | ${m.duration.toFixed(2).padStart(7)}s | ${(m.firstBounceHeight * 1000).toFixed(1)}mm`
+    `  ${r.toFixed(2)} | ${(m.maxYRise * 1000).toFixed(1).padStart(7)}mm | die${m.worstDie + 1}  | ${String(m.stableBroken).padStart(6)} | ${m.sleepTime >= 0 ? m.sleepTime.toFixed(2).padStart(5) + 's' : '  N/A '} | ${m.settlePath.padStart(7)} | ${m.duration.toFixed(2).padStart(7)}s | ${(m.firstBounceHeight * 1000).toFixed(1)}mm`,
   )
 }
 
@@ -147,8 +154,12 @@ console.log('-------|----------------|----------------|--------')
 for (const { r, bounce } of results) {
   const avg = (bounce.avgFirstBounce * 1000).toFixed(1)
   const max = (bounce.maxFirstBounce * 1000).toFixed(1)
-  const feel = bounce.avgFirstBounce < 0.005 ? '⚠️ 可能过死' :
-               bounce.avgFirstBounce < 0.015 ? '✓ 适中' : '✓ 正常'
+  const feel =
+    bounce.avgFirstBounce < 0.005
+      ? '⚠️ 可能过死'
+      : bounce.avgFirstBounce < 0.015
+        ? '✓ 适中'
+        : '✓ 正常'
   console.log(`  ${r.toFixed(2)} | ${avg.padStart(12)}mm | ${max.padStart(12)}mm | ${feel}`)
 }
 

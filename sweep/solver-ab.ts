@@ -12,22 +12,8 @@ interface Variant {
 }
 
 const DEFAULT_SEEDS = [
-  1776401121559,
-  1776401998577,
-  1776308150130,
-  1776308167330,
-  1776308075747,
-  1776308125213,
-  42,
-  1,
-  7777,
-  12345,
-  99999,
-  314159,
-  65535,
-  271828,
-  2024,
-  8888,
+  1776401121559, 1776401998577, 1776308150130, 1776308167330, 1776308075747, 1776308125213, 42, 1,
+  7777, 12345, 99999, 314159, 65535, 271828, 2024, 8888,
 ]
 
 const VARIANTS: Variant[] = [
@@ -42,9 +28,7 @@ function average(values: number[]): number {
 }
 
 const args = parseArgs()
-const seeds = args['seeds']
-  ? args['seeds'].split(',').map(Number)
-  : DEFAULT_SEEDS
+const seeds = args['seeds'] ? args['seeds'].split(',').map(Number) : DEFAULT_SEEDS
 
 console.log('╔══════════════════════════════════════════════════╗')
 console.log('║           solver A/B sweep                       ║')
@@ -52,7 +36,9 @@ console.log('╚═════════════════════�
 console.log(`seeds=${seeds.length} (box runtime)\n`)
 
 console.log('variant     | timeout | tilt | avgSettle | maxSettle | >5s | avgBroken | sticky seeds')
-console.log('------------|---------|------|-----------|-----------|-----|-----------|-----------------------------')
+console.log(
+  '------------|---------|------|-----------|-----------|-----|-----------|-----------------------------',
+)
 
 for (const variant of VARIANTS) {
   const results = seeds.map((seed) => ({

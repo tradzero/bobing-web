@@ -11,6 +11,7 @@ import { createBowlBodies, ESCAPE_Y, BOWL_RADIUS } from '@/physics/bowl-body'
 import { BOWL_HEIGHT } from '@/config/bowl'
 import { setupContactMaterials } from '@/physics/materials'
 import { createDiceBody } from '@/dice/dice-body'
+import type { DicePair } from '@/dice/create'
 import { PHYSICS } from '@/config/physics'
 import { reseed } from '@/utils/random'
 import { throwDice } from '@/dice/throw'
@@ -23,20 +24,10 @@ import * as CANNON from 'cannon-es'
 // ====== 在这里添加需要复现的种子 ======
 const SEEDS = [
   // 原始 8 个问题种子
-  1776305089401,
-  1776305112201,
-  1776305133651,
-  1776305147534,
-  1776305161217,
-  1776305174984,
-  1776305192933,
-  1776305210067,
+  1776305089401, 1776305112201, 1776305133651, 1776305147534, 1776305161217, 1776305174984,
+  1776305192933, 1776305210067,
   // 审查补充：慢结算 + 抖动
-  1776308075747,
-  1776308125213,
-  1776308167330,
-  1776308186180,
-  1776308201964,
+  1776308075747, 1776308125213, 1776308167330, 1776308186180, 1776308201964,
   // 审查补充：莫名倾角
   1776308150130,
 ]
@@ -56,7 +47,7 @@ describe('复现种子', () => {
       const dicePairs = Array.from({ length: 6 }, () => {
         const body = createDiceBody()
         world.addBody(body)
-        return { mesh: {} as any, body }
+        return { mesh: {} as DicePair['mesh'], body }
       })
       throwDice(dicePairs)
       const bodies = dicePairs.map((p) => p.body)
@@ -74,7 +65,10 @@ describe('复现种子', () => {
       let nanFrame: { frame: number; dieIndex: number } | null = null
 
       // 记录投掷初始参数
-      const initPositions = bodies.map((b) => `(${b.position.x.toFixed(3)}, ${b.position.y.toFixed(3)}, ${b.position.z.toFixed(3)})`)
+      const initPositions = bodies.map(
+        (b) =>
+          `(${b.position.x.toFixed(3)}, ${b.position.y.toFixed(3)}, ${b.position.z.toFixed(3)})`,
+      )
 
       for (let i = 0; i < MAX_FRAMES; i++) {
         step(dt)
@@ -115,12 +109,19 @@ describe('复现种子', () => {
       // ── 输出诊断报告 ──
       console.log(`\n${'='.repeat(60)}`)
       console.log(`  Seed: ${seed}`)
-      console.log(`  停稳: ${settled ? `✅ frame ${settleFrame} (${(settleFrame * dt).toFixed(2)}s)` : `❌ TIMEOUT (${MAX_FRAMES} frames / ${(MAX_FRAMES * dt).toFixed(1)}s)`}`)
-      if (nanFrame) console.log(`  ⛔ NaN 检测: 骰子${nanFrame.dieIndex + 1} 在第 ${nanFrame.frame} 帧位置变为 NaN（物理爆炸）`)
+      console.log(
+        `  停稳: ${settled ? `✅ frame ${settleFrame} (${(settleFrame * dt).toFixed(2)}s)` : `❌ TIMEOUT (${MAX_FRAMES} frames / ${(MAX_FRAMES * dt).toFixed(1)}s)`}`,
+      )
+      if (nanFrame)
+        console.log(
+          `  ⛔ NaN 检测: 骰子${nanFrame.dieIndex + 1} 在第 ${nanFrame.frame} 帧位置变为 NaN（物理爆炸）`,
+        )
       console.log(`  结果: [${values.join(', ')}] → ${result.prize} ${result.description}`)
       console.log(`${'='.repeat(60)}`)
 
-      console.log('\n  #  点数  confidence  倾斜角    终态位置                    初始位置                    速度       角速度     sleep  peakY  peakXZ  逃逸次数  状态')
+      console.log(
+        '\n  #  点数  confidence  倾斜角    终态位置                    初始位置                    速度       角速度     sleep  peakY  peakXZ  逃逸次数  状态',
+      )
       console.log('  ' + '-'.repeat(155))
 
       for (let i = 0; i < 6; i++) {
@@ -145,32 +146,44 @@ describe('复现种子', () => {
 
         const posStr = isNan
           ? '(NaN)'.padEnd(28)
-          : `(${b.position.x.toFixed(3)}, ${b.position.y.toFixed(3)}, ${b.position.z.toFixed(3)})`.padEnd(28)
+          : `(${b.position.x.toFixed(3)}, ${b.position.y.toFixed(3)}, ${b.position.z.toFixed(3)})`.padEnd(
+              28,
+            )
 
         console.log(
           `  ${i + 1}  ` +
-          `${String(d.value).padStart(2)}    ` +
-          `${d.confidence.toFixed(4)}      ` +
-          `${angleDeg.toFixed(1).padStart(5)}°   ` +
-          posStr +
-          initPositions[i].padEnd(28) +
-          `${(isNan ? 'NaN' : speed.toFixed(4)).padStart(8)}   ` +
-          `${(isNan ? 'NaN' : angSpeed.toFixed(4)).padStart(8)}   ` +
-          `${isSleep ? 'Y' : 'N'}      ` +
-          `${peakY[i].toFixed(2).padStart(5)}  ` +
-          `${peakXZ[i].toFixed(2).padStart(6)}  ` +
-          `${String(escapeCount[i]).padStart(5)}     ` +
-          status,
+            `${String(d.value).padStart(2)}    ` +
+            `${d.confidence.toFixed(4)}      ` +
+            `${angleDeg.toFixed(1).padStart(5)}°   ` +
+            posStr +
+            initPositions[i].padEnd(28) +
+            `${(isNan ? 'NaN' : speed.toFixed(4)).padStart(8)}   ` +
+            `${(isNan ? 'NaN' : angSpeed.toFixed(4)).padStart(8)}   ` +
+            `${isSleep ? 'Y' : 'N'}      ` +
+            `${peakY[i].toFixed(2).padStart(5)}  ` +
+            `${peakXZ[i].toFixed(2).padStart(6)}  ` +
+            `${String(escapeCount[i]).padStart(5)}     ` +
+            status,
         )
       }
 
       // 汇总
       const tiltedCount = detailed.filter((d) => d.confidence < SETTLE.tiltThreshold).length
       const nanCount = bodies.filter((b) => Number.isNaN(b.position.x)).length
-      const escapedY = bodies.filter((b) => !Number.isNaN(b.position.y) && b.position.y > BOWL_HEIGHT + 0.1).length
-      const escapedXZ = bodies.filter((b) => !Number.isNaN(b.position.x) && Math.sqrt(b.position.x ** 2 + b.position.z ** 2) > BOWL_RADIUS + 0.2).length
-      console.log(`\n  汇总: NaN=${nanCount}  倾斜=${tiltedCount}  飞出(Y)=${escapedY}  飞出(XZ)=${escapedXZ}  逃逸反射总次数=${escapeCount.reduce((a: number, b: number) => a + b, 0)}`)
-      console.log(`  参考: BOWL_RADIUS=${BOWL_RADIUS}  BOWL_HEIGHT=${BOWL_HEIGHT}  ESCAPE_Y=${ESCAPE_Y}  tiltThreshold=${SETTLE.tiltThreshold}(${(Math.acos(SETTLE.tiltThreshold) * 180 / Math.PI).toFixed(1)}°)\n`)
+      const escapedY = bodies.filter(
+        (b) => !Number.isNaN(b.position.y) && b.position.y > BOWL_HEIGHT + 0.1,
+      ).length
+      const escapedXZ = bodies.filter(
+        (b) =>
+          !Number.isNaN(b.position.x) &&
+          Math.sqrt(b.position.x ** 2 + b.position.z ** 2) > BOWL_RADIUS + 0.2,
+      ).length
+      console.log(
+        `\n  汇总: NaN=${nanCount}  倾斜=${tiltedCount}  飞出(Y)=${escapedY}  飞出(XZ)=${escapedXZ}  逃逸反射总次数=${escapeCount.reduce((a: number, b: number) => a + b, 0)}`,
+      )
+      console.log(
+        `  参考: BOWL_RADIUS=${BOWL_RADIUS}  BOWL_HEIGHT=${BOWL_HEIGHT}  ESCAPE_Y=${ESCAPE_Y}  tiltThreshold=${SETTLE.tiltThreshold}(${((Math.acos(SETTLE.tiltThreshold) * 180) / Math.PI).toFixed(1)}°)\n`,
+      )
 
       dispose()
     })

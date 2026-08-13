@@ -15,20 +15,12 @@ export function TiltWarning() {
     <div className="tilt-warning">
       <div className="tilt-warning-kicker">结果确认</div>
       <div className="tilt-warning-icon">⚠</div>
-      <div className="tilt-warning-text">
-        {tiltLabels}骰子倾斜，结果可能不准确
-      </div>
+      <div className="tilt-warning-text">{tiltLabels}骰子倾斜，结果可能不准确</div>
       <div className="tilt-warning-actions">
-        <button
-          className="btn btn-accept"
-          onClick={() => ctrl.acceptTilted()}
-        >
+        <button className="btn btn-accept" onClick={() => ctrl.acceptTilted()}>
           接受结果
         </button>
-        <button
-          className="btn btn-rethrow"
-          onClick={() => ctrl.rethrow()}
-        >
+        <button className="btn btn-rethrow" onClick={() => ctrl.rethrow()}>
           重掷
         </button>
       </div>

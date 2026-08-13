@@ -28,7 +28,10 @@ export const tableMaterial = new CANNON.Material('table')
 /**
  * 创建所有接触材质对并添加到世界
  */
-export function setupContactMaterials(world: CANNON.World, overrides?: ContactMaterialOverrides): void {
+export function setupContactMaterials(
+  world: CANNON.World,
+  overrides?: ContactMaterialOverrides,
+): void {
   const { diceFloor, diceWall, diceDice, diceTable } = PHYSICS.contact
   const mergedDiceFloor = { ...diceFloor, ...overrides?.diceFloor }
   const mergedDiceWall = { ...diceWall, ...overrides?.diceWall }

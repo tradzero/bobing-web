@@ -170,8 +170,8 @@ export function createBowl(): THREE.Group {
   // 独立底盖：最小遮缝策略，从上方微量盖住 Lathe 末端边缘
   // 分段与碗体一致（128）避免内接多边形不吻合
   const lastPoint = points[points.length - 1]
-  const CAP_R_EXPAND = 0.001   // 半径外扩，仅遮缝不暴露底盖
-  const CAP_Y_LIFT   = 0.0001  // 微量上浮，从上方盖住接缝避免透出桌面
+  const CAP_R_EXPAND = 0.001 // 半径外扩，仅遮缝不暴露底盖
+  const CAP_Y_LIFT = 0.0001 // 微量上浮，从上方盖住接缝避免透出桌面
   const capGeo = new THREE.CircleGeometry(lastPoint.x + CAP_R_EXPAND, 128)
   const capMaterial = new THREE.MeshPhysicalMaterial({
     color: 0xfdf8f1,

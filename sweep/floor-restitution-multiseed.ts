@@ -7,12 +7,14 @@ import { runTrial } from './lib/run-trial'
 
 const RESTITUTION_VALUES = [0.15, 0.08, 0.05, 0.02]
 const SEEDS = [
-  1776390018022, 42, 1, 7777, 12345, 99999, 314159, 65535,
-  271828, 5555, 666, 11111, 54321, 777777, 31337, 13,
-  9999999, 123456789, 2024, 8888,
+  1776390018022, 42, 1, 7777, 12345, 99999, 314159, 65535, 271828, 5555, 666, 11111, 54321, 777777,
+  31337, 13, 9999999, 123456789, 2024, 8888,
 ]
 
-function runSeed(seed: number, floorRestitution: number): { maxYRise: number; sleepTime: number; stableBroken: number } {
+function runSeed(
+  seed: number,
+  floorRestitution: number,
+): { maxYRise: number; sleepTime: number; stableBroken: number } {
   const post100MinY = new Array(6).fill(Infinity)
   const post100MaxY = new Array(6).fill(-Infinity)
   const trial = runTrial({
@@ -43,11 +45,11 @@ console.log('║   碗底 restitution 多 seed 稳定性验证 (20 seeds)     �
 console.log('╚══════════════════════════════════════════════════╝\n')
 
 for (const r of RESTITUTION_VALUES) {
-  const results = SEEDS.map(seed => runSeed(seed, r))
-  const rises = results.map(r => r.maxYRise)
-  const sleeps = results.map(r => r.sleepTime).filter(t => t >= 0)
-  const brokens = results.map(r => r.stableBroken)
-  const bounceCount = rises.filter(y => y > 0.01).length  // >10mm 算明显弹跳
+  const results = SEEDS.map((seed) => runSeed(seed, r))
+  const rises = results.map((r) => r.maxYRise)
+  const sleeps = results.map((r) => r.sleepTime).filter((t) => t >= 0)
+  const brokens = results.map((r) => r.stableBroken)
+  const bounceCount = rises.filter((y) => y > 0.01).length // >10mm 算明显弹跳
 
   const sorted = [...rises].sort((a, b) => a - b)
   const median = sorted[Math.floor(sorted.length / 2)]
@@ -57,10 +59,14 @@ for (const r of RESTITUTION_VALUES) {
   const avgBroken = brokens.reduce((a, b) => a + b, 0) / brokens.length
 
   console.log(`═══ restit=${r.toFixed(2)} ═══`)
-  console.log(`  明显弹跳(>10mm): ${bounceCount}/${SEEDS.length} seeds (${(bounceCount/SEEDS.length*100).toFixed(0)}%)`)
-  console.log(`  maxYRise: median=${(median * 1000).toFixed(1)}mm, p90=${(p90 * 1000).toFixed(1)}mm, max=${(max * 1000).toFixed(1)}mm`)
+  console.log(
+    `  明显弹跳(>10mm): ${bounceCount}/${SEEDS.length} seeds (${((bounceCount / SEEDS.length) * 100).toFixed(0)}%)`,
+  )
+  console.log(
+    `  maxYRise: median=${(median * 1000).toFixed(1)}mm, p90=${(p90 * 1000).toFixed(1)}mm, max=${(max * 1000).toFixed(1)}mm`,
+  )
   console.log(`  avg sleepTime: ${avgSleep >= 0 ? avgSleep.toFixed(2) + 's' : 'N/A'}`)
   console.log(`  avg stableBroken: ${avgBroken.toFixed(1)}`)
-  console.log(`  逐 seed maxYRise: ${rises.map(y => (y * 1000).toFixed(0) + 'mm').join(', ')}`)
+  console.log(`  逐 seed maxYRise: ${rises.map((y) => (y * 1000).toFixed(0) + 'mm').join(', ')}`)
   console.log()
 }

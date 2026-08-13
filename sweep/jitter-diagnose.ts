@@ -17,9 +17,12 @@ import type { ShapeMode } from '@/dice/dice-body'
 
 /** 六面法线（用于帧级倾角追踪） */
 const FACE_NORMALS = [
-  new CANNON.Vec3(0, 1, 0), new CANNON.Vec3(0, -1, 0),
-  new CANNON.Vec3(1, 0, 0), new CANNON.Vec3(-1, 0, 0),
-  new CANNON.Vec3(0, 0, 1), new CANNON.Vec3(0, 0, -1),
+  new CANNON.Vec3(0, 1, 0),
+  new CANNON.Vec3(0, -1, 0),
+  new CANNON.Vec3(1, 0, 0),
+  new CANNON.Vec3(-1, 0, 0),
+  new CANNON.Vec3(0, 0, 1),
+  new CANNON.Vec3(0, 0, -1),
 ]
 const UP = new CANNON.Vec3(0, 1, 0)
 
@@ -44,41 +47,67 @@ interface VariantConfig {
 }
 
 const ALL_VARIANTS: VariantConfig[] = [
-  { label: 'box baseline (f=0.30 r=0.25)', diceDiceFriction: 0.30, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32, shapeMode: 'box' },
-  { label: 'chamfer baseline (f=0.30 r=0.25)', diceDiceFriction: 0.30, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32, shapeMode: 'chamfer', chamferRatio: DEFAULT_SWEEP_CHAMFER_RATIO },
+  {
+    label: 'box baseline (f=0.30 r=0.25)',
+    diceDiceFriction: 0.3,
+    diceDiceRestitution: 0.25,
+    sleepTimeLimit: 0.32,
+    shapeMode: 'box',
+  },
+  {
+    label: 'chamfer baseline (f=0.30 r=0.25)',
+    diceDiceFriction: 0.3,
+    diceDiceRestitution: 0.25,
+    sleepTimeLimit: 0.32,
+    shapeMode: 'chamfer',
+    chamferRatio: DEFAULT_SWEEP_CHAMFER_RATIO,
+  },
   { label: 'f=0.27', diceDiceFriction: 0.27, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
   { label: 'f=0.25', diceDiceFriction: 0.25, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
   { label: 'f=0.22', diceDiceFriction: 0.22, diceDiceRestitution: 0.25, sleepTimeLimit: 0.32 },
-  { label: 'r=0.22', diceDiceFriction: 0.30, diceDiceRestitution: 0.22, sleepTimeLimit: 0.32 },
-  { label: 'r=0.20', diceDiceFriction: 0.30, diceDiceRestitution: 0.20, sleepTimeLimit: 0.32 },
-  { label: 'f=0.27 r=0.22', diceDiceFriction: 0.27, diceDiceRestitution: 0.22, sleepTimeLimit: 0.32 },
-  { label: 'f=0.25 r=0.22', diceDiceFriction: 0.25, diceDiceRestitution: 0.22, sleepTimeLimit: 0.32 },
-  { label: 'f=0.27 r=0.20', diceDiceFriction: 0.27, diceDiceRestitution: 0.20, sleepTimeLimit: 0.32 },
+  { label: 'r=0.22', diceDiceFriction: 0.3, diceDiceRestitution: 0.22, sleepTimeLimit: 0.32 },
+  { label: 'r=0.20', diceDiceFriction: 0.3, diceDiceRestitution: 0.2, sleepTimeLimit: 0.32 },
+  {
+    label: 'f=0.27 r=0.22',
+    diceDiceFriction: 0.27,
+    diceDiceRestitution: 0.22,
+    sleepTimeLimit: 0.32,
+  },
+  {
+    label: 'f=0.25 r=0.22',
+    diceDiceFriction: 0.25,
+    diceDiceRestitution: 0.22,
+    sleepTimeLimit: 0.32,
+  },
+  {
+    label: 'f=0.27 r=0.20',
+    diceDiceFriction: 0.27,
+    diceDiceRestitution: 0.2,
+    sleepTimeLimit: 0.32,
+  },
 ]
 
 const DEFAULT_SEEDS = [
-  1776310976115,  // 抖动 seed
-  1776311021115,  // 抖动 seed
-  1776308150130,  // tilt seed
-  1776305112201,  // f=0.22 回归 seed
-  1776308167330,  // f=0.22 受益 seed
-  1776305192933,  // 慢结算 seed
+  1776310976115, // 抖动 seed
+  1776311021115, // 抖动 seed
+  1776308150130, // tilt seed
+  1776305112201, // f=0.22 回归 seed
+  1776308167330, // f=0.22 受益 seed
+  1776305192933, // 慢结算 seed
 ]
 
 // ── CLI 参数 ──
 const args = parseArgs()
-const seeds = args['seeds']
-  ? args['seeds'].split(',').map(Number)
-  : DEFAULT_SEEDS
-const variantFilter = args['variant']
-  ? args['variant'].split(',').map(Number)
-  : undefined
+const seeds = args['seeds'] ? args['seeds'].split(',').map(Number) : DEFAULT_SEEDS
+const variantFilter = args['variant'] ? args['variant'].split(',').map(Number) : undefined
 const variants = variantFilter
   ? ALL_VARIANTS.filter((_, i) => variantFilter.includes(i))
   : ALL_VARIANTS
 
 const log = createLogger('jitter-diagnose')
-console.log(`jitter-diagnose: ${seeds.length} seeds × ${variants.length} 变体, 日志 → ${log.filePath}`)
+console.log(
+  `jitter-diagnose: ${seeds.length} seeds × ${variants.length} 变体, 日志 → ${log.filePath}`,
+)
 
 const totalStart = Date.now()
 

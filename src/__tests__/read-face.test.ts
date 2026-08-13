@@ -21,11 +21,11 @@ describe('点数读取 - 24 个合法朝向', () => {
   // 面值与本地法线映射（与 create.ts 中 FACE_NORMALS 一致）
   // +x→2, -x→5, +y→1, -y→6, +z→3, -z→4
   const faceAxes: { value: number; axis: CANNON.Vec3 }[] = [
-    { value: 2, axis: new CANNON.Vec3(1, 0, 0) },  // +x
+    { value: 2, axis: new CANNON.Vec3(1, 0, 0) }, // +x
     { value: 5, axis: new CANNON.Vec3(-1, 0, 0) }, // -x
-    { value: 1, axis: new CANNON.Vec3(0, 1, 0) },  // +y
+    { value: 1, axis: new CANNON.Vec3(0, 1, 0) }, // +y
     { value: 6, axis: new CANNON.Vec3(0, -1, 0) }, // -y
-    { value: 3, axis: new CANNON.Vec3(0, 0, 1) },  // +z
+    { value: 3, axis: new CANNON.Vec3(0, 0, 1) }, // +z
     { value: 4, axis: new CANNON.Vec3(0, 0, -1) }, // -z
   ]
 
@@ -97,11 +97,46 @@ describe('点数读取 - 近边界扰动', () => {
     // 测试每个面朝上 + 随机扰动
     const testCases: { value: number; q: CANNON.Quaternion }[] = [
       { value: 1, q: new CANNON.Quaternion(0, 0, 0, 1) },
-      { value: 6, q: (() => { const q = new CANNON.Quaternion(); q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI); return q })() },
-      { value: 2, q: (() => { const q = new CANNON.Quaternion(); q.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.PI / 2); return q })() },
-      { value: 5, q: (() => { const q = new CANNON.Quaternion(); q.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), -Math.PI / 2); return q })() },
-      { value: 3, q: (() => { const q = new CANNON.Quaternion(); q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2); return q })() },
-      { value: 4, q: (() => { const q = new CANNON.Quaternion(); q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2); return q })() },
+      {
+        value: 6,
+        q: (() => {
+          const q = new CANNON.Quaternion()
+          q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI)
+          return q
+        })(),
+      },
+      {
+        value: 2,
+        q: (() => {
+          const q = new CANNON.Quaternion()
+          q.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.PI / 2)
+          return q
+        })(),
+      },
+      {
+        value: 5,
+        q: (() => {
+          const q = new CANNON.Quaternion()
+          q.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), -Math.PI / 2)
+          return q
+        })(),
+      },
+      {
+        value: 3,
+        q: (() => {
+          const q = new CANNON.Quaternion()
+          q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2)
+          return q
+        })(),
+      },
+      {
+        value: 4,
+        q: (() => {
+          const q = new CANNON.Quaternion()
+          q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2)
+          return q
+        })(),
+      },
     ]
 
     // 多个扰动轴

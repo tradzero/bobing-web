@@ -51,7 +51,7 @@ export function createDiceBody(opts?: DiceBodyOptions): CANNON.Body {
     // 截角立方体凸包碰撞体
     const chamfer = hs * chamferRatio
     const { vertices, faces } = createChamferedCubeHull(hs, chamfer)
-    const verts = vertices.map(v => new CANNON.Vec3(v[0], v[1], v[2]))
+    const verts = vertices.map((v) => new CANNON.Vec3(v[0], v[1], v[2]))
     body.addShape(new CANNON.ConvexPolyhedron({ vertices: verts, faces }))
   } else {
     body.addShape(new CANNON.Box(new CANNON.Vec3(hs, hs, hs)))

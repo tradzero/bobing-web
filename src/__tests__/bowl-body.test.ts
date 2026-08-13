@@ -53,10 +53,7 @@ describe('T1: 挡墙几何正确性', () => {
 
       // 薄轴在水平面上应与径向对齐（Box 双面，取绝对值）
       const dotXZ = Math.abs(worldZ.x * radial.x + worldZ.z * radial.z)
-      expect(
-        dotXZ,
-        `wall[${i}] 薄轴径向对齐=${dotXZ.toFixed(4)}`,
-      ).toBeGreaterThan(0.95)
+      expect(dotXZ, `wall[${i}] 薄轴径向对齐=${dotXZ.toFixed(4)}`).toBeGreaterThan(0.95)
     }
 
     dispose()
@@ -77,8 +74,7 @@ describe('T1: 挡墙几何正确性', () => {
 
   it('相邻挡墙有足够重叠（无逃逸缝隙）', () => {
     // 计算每面墙的角度覆盖 vs 相邻墙角度间隙
-    const tangentialHalf =
-      ((2 * Math.PI * WALL_RADIUS) / WALL_COUNT) * 1.15 / 2
+    const tangentialHalf = (((2 * Math.PI * WALL_RADIUS) / WALL_COUNT) * 1.15) / 2
     const angularCoverage = 2 * Math.atan(tangentialHalf / WALL_RADIUS)
     const angularGap = (2 * Math.PI) / WALL_COUNT
 
@@ -302,8 +298,7 @@ describe('T5: 收敛时间回归测试', () => {
       step(1 / 60)
 
       const allConverged = bodies.every((b) => {
-        return b.velocity.length() < speedThreshold &&
-               b.angularVelocity.length() < angularThreshold
+        return b.velocity.length() < speedThreshold && b.angularVelocity.length() < angularThreshold
       })
 
       if (allConverged) {
@@ -322,10 +317,7 @@ describe('T5: 收敛时间回归测试', () => {
     it(`种子 ${seed}: 物理收敛帧数 < 400`, () => {
       const frames = measureConvergenceFrames(seed, 0.05, 0.05, 600)
       // 纯物理（无 sleep）收敛上限；阻尼 0.35/0.35 后部分种子收敛帧数增加
-      expect(
-        frames,
-        `种子${seed}: 收敛帧数=${frames}（上限400）`,
-      ).toBeLessThan(400)
+      expect(frames, `种子${seed}: 收敛帧数=${frames}（上限400）`).toBeLessThan(400)
     })
   }
 })
@@ -343,7 +335,10 @@ describe('T6: 结算路径回归测试（throwDice + 逃逸反射）', () => {
    * - 停稳后模拟 controller 冻结
    * 与 engine.ts tick 循环一致
    */
-  function measureSettleFrames(seed: number, maxFrames: number): {
+  function measureSettleFrames(
+    seed: number,
+    maxFrames: number,
+  ): {
     settleFrame: number
     settlePath: 'sleep' | 'threshold' | 'timeout' | 'none'
   } {
@@ -356,11 +351,11 @@ describe('T6: 结算路径回归测试（throwDice + 逃逸反射）', () => {
     const dicePairs = Array.from({ length: 6 }, () => {
       const body = createDiceBody()
       world.addBody(body)
-      return { mesh: {} as any, body }
+      return { mesh: {} as THREE.Object3D, body }
     })
     // 运行时批量投掷路径（含位置去重）
     throwDice(dicePairs)
-    const bodies = dicePairs.map(p => p.body)
+    const bodies = dicePairs.map((p) => p.body)
 
     const dt = 1 / 60
     const settleState = createSettleState(0)
@@ -409,14 +404,10 @@ describe('T6: 结算路径回归测试（throwDice + 逃逸反射）', () => {
   for (const seed of seeds) {
     it(`种子 ${seed}: 不超时`, () => {
       const { settlePath } = measureSettleFrames(seed, 800)
-      expect(
-        settlePath,
-        `种子${seed}: 结算路径=${settlePath}（不应为 timeout 或 none）`,
-      ).not.toBe('timeout')
-      expect(
-        settlePath,
-        `种子${seed}: 未在限定帧内结算`,
-      ).not.toBe('none')
+      expect(settlePath, `种子${seed}: 结算路径=${settlePath}（不应为 timeout 或 none）`).not.toBe(
+        'timeout',
+      )
+      expect(settlePath, `种子${seed}: 未在限定帧内结算`).not.toBe('none')
     })
   }
 })
@@ -463,10 +454,7 @@ describe('T7: 视觉碗内壁与物理碗对齐', () => {
       if (diff > maxDiff) maxDiff = diff
     }
 
-    expect(
-      maxDiff,
-      `最大偏差=${(maxDiff * 1000).toFixed(2)}mm 应<5mm`,
-    ).toBeLessThan(0.005)
+    expect(maxDiff, `最大偏差=${(maxDiff * 1000).toFixed(2)}mm 应<5mm`).toBeLessThan(0.005)
   })
 
   it('视觉内壁覆盖从 r≈rFlat 到 r≈BOWL_INNER_RADIUS 的完整范围', async () => {
@@ -478,8 +466,13 @@ describe('T7: 视觉碗内壁与物理碗对齐', () => {
     const maxR = Math.max(...radii)
 
     // 内壁截止到 rFlat = BOWL_THICKNESS，不再到轴心，碗底由平底盘覆盖
-    expect(minR, `最小半径=${minR.toFixed(4)} 应接近 BOWL_THICKNESS`).toBeLessThan(BOWL_THICKNESS + 0.03)
-    expect(maxR, `最大半径=${maxR.toFixed(4)} 应接近 BOWL_INNER_RADIUS=${BOWL_INNER_RADIUS}`).toBeCloseTo(BOWL_INNER_RADIUS, 1)
+    expect(minR, `最小半径=${minR.toFixed(4)} 应接近 BOWL_THICKNESS`).toBeLessThan(
+      BOWL_THICKNESS + 0.03,
+    )
+    expect(
+      maxR,
+      `最大半径=${maxR.toFixed(4)} 应接近 BOWL_INNER_RADIUS=${BOWL_INNER_RADIUS}`,
+    ).toBeCloseTo(BOWL_INNER_RADIUS, 1)
   })
 })
 
@@ -489,10 +482,7 @@ describe('T7b: 碗底盖结构与朝向', () => {
 
     const profile = generateBowlProfile()
     const axisPoints = profile.filter((pt: { x: number }) => pt.x < 0.001)
-    expect(
-      axisPoints.length,
-      `轮廓中有 ${axisPoints.length} 个近轴点 (r < 0.001)，应为 0`,
-    ).toBe(0)
+    expect(axisPoints.length, `轮廓中有 ${axisPoints.length} 个近轴点 (r < 0.001)，应为 0`).toBe(0)
   })
 
   it('createBowl 返回 Group，包含 LatheGeometry 碗壁 + CircleGeometry 底盖', async () => {
@@ -545,7 +535,8 @@ describe('T7b: 碗底盖结构与朝向', () => {
 
     const profile = generateBowlProfile()
     const matches = profile.filter(
-      (pt: { x: number; y: number }) => Math.abs(pt.x - BOWL_THICKNESS) < 1e-6 && Math.abs(pt.y) < 1e-6,
+      (pt: { x: number; y: number }) =>
+        Math.abs(pt.x - BOWL_THICKNESS) < 1e-6 && Math.abs(pt.y) < 1e-6,
     )
     expect(
       matches.length,

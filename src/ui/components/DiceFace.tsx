@@ -22,11 +22,7 @@ export function DiceFace({ value, mini = false }: DiceFaceProps) {
       aria-label={`骰子点数 ${value}`}
     >
       {dots.map((dot, index) => (
-        <span
-          key={`${dot}-${index}`}
-          className={`dice-dot dice-dot-${dot}`}
-          aria-hidden="true"
-        />
+        <span key={`${dot}-${index}`} className={`dice-dot dice-dot-${dot}`} aria-hidden="true" />
       ))}
     </span>
   )

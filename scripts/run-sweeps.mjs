@@ -67,9 +67,7 @@ const normalizedJobs = Math.max(
   1,
   Math.min(
     selectedTasks.length,
-    Number.isFinite(jobs)
-      ? Number(jobs)
-      : Math.max(1, Math.min(availableParallelism() - 1, 4)),
+    Number.isFinite(jobs) ? Number(jobs) : Math.max(1, Math.min(availableParallelism() - 1, 4)),
   ),
 )
 
@@ -149,7 +147,9 @@ async function main() {
   })
 
   if (failures.length > 0) {
-    console.error(`\n失败任务: ${failures.map((item) => `${item.taskName}(exit=${item.code})`).join(', ')}`)
+    console.error(
+      `\n失败任务: ${failures.map((item) => `${item.taskName}(exit=${item.code})`).join(', ')}`,
+    )
     process.exit(1)
   }
 

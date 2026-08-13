@@ -77,15 +77,25 @@ const avgSleep = allSleepTimes.reduce((a, b) => a + b, 0) / allSleepTimes.length
 const avgBroken = allBrokens.reduce((a, b) => a + b, 0) / allBrokens.length
 
 console.log(`═══ 总结 (${SEED_COUNT} seeds, ${SEED_COUNT * 6} dice) ═══`)
-console.log(`  Tilt: ${totalTilt}/${SEED_COUNT * 6} dice (${(totalTilt / (SEED_COUNT * 6) * 100).toFixed(2)}%)`)
+console.log(
+  `  Tilt: ${totalTilt}/${SEED_COUNT * 6} dice (${((totalTilt / (SEED_COUNT * 6)) * 100).toFixed(2)}%)`,
+)
 console.log(`  Tilt seeds: ${tiltSeeds.length > 0 ? tiltSeeds.join(', ') : '无'}`)
-console.log(`  弹跳(>10mm): ${totalBounce}/${SEED_COUNT} seeds (${(totalBounce / SEED_COUNT * 100).toFixed(1)}%)`)
-console.log(`  Timeout: ${totalTimeout}/${SEED_COUNT} (${(totalTimeout / SEED_COUNT * 100).toFixed(1)}%)`)
-console.log(`  maxYRise: median=${(median * 1000).toFixed(1)}mm, p90=${(p90 * 1000).toFixed(1)}mm, p95=${(p95 * 1000).toFixed(1)}mm, max=${(max * 1000).toFixed(1)}mm`)
+console.log(
+  `  弹跳(>10mm): ${totalBounce}/${SEED_COUNT} seeds (${((totalBounce / SEED_COUNT) * 100).toFixed(1)}%)`,
+)
+console.log(
+  `  Timeout: ${totalTimeout}/${SEED_COUNT} (${((totalTimeout / SEED_COUNT) * 100).toFixed(1)}%)`,
+)
+console.log(
+  `  maxYRise: median=${(median * 1000).toFixed(1)}mm, p90=${(p90 * 1000).toFixed(1)}mm, p95=${(p95 * 1000).toFixed(1)}mm, max=${(max * 1000).toFixed(1)}mm`,
+)
 console.log(`  avg sleepTime: ${avgSleep.toFixed(2)}s`)
 console.log(`  avg stableBroken: ${avgBroken.toFixed(1)}`)
 
 if (bounceSeeds.length > 0) {
   const top5 = bounceSeeds.sort((a, b) => b.rise - a.rise).slice(0, 5)
-  console.log(`  最严重弹跳 seeds: ${top5.map(s => `${s.seed}(${(s.rise * 1000).toFixed(0)}mm)`).join(', ')}`)
+  console.log(
+    `  最严重弹跳 seeds: ${top5.map((s) => `${s.seed}(${(s.rise * 1000).toFixed(0)}mm)`).join(', ')}`,
+  )
 }

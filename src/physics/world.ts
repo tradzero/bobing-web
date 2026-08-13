@@ -32,9 +32,7 @@ export function createPhysicsWorld(options?: PhysicsWorldOptions): PhysicsWorld 
   const gsSolver = new CANNON.GSSolver()
   gsSolver.iterations = solverIterations
   gsSolver.tolerance = solverTolerance
-  world.solver = solverMode === 'split'
-    ? new CANNON.SplitSolver(gsSolver)
-    : gsSolver
+  world.solver = solverMode === 'split' ? new CANNON.SplitSolver(gsSolver) : gsSolver
 
   const step = (dt: number) => {
     world.step(PHYSICS.fixedTimeStep, dt, PHYSICS.maxSubSteps)

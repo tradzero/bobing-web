@@ -63,8 +63,8 @@ function createWoodTexture(): THREE.CanvasTexture | null {
  */
 export function createTable(): THREE.Group {
   const radius = 4
-  const topHeight = 0.12      // 桌面板厚度
-  const skirtHeight = 0.23    // 侧壁裙边厚度
+  const topHeight = 0.12 // 桌面板厚度
+  const skirtHeight = 0.23 // 侧壁裙边厚度
   const woodTexture = createWoodTexture()
 
   const group = new THREE.Group()

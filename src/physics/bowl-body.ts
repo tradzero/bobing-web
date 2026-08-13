@@ -1,9 +1,6 @@
 import * as CANNON from 'cannon-es'
 import { bowlFloorMaterial, bowlWallMaterial, tableMaterial } from './materials'
-import {
-  BOWL_RADIUS,
-  bowlInnerHeight,
-} from '@/config/bowl'
+import { BOWL_RADIUS, bowlInnerHeight } from '@/config/bowl'
 
 // ─── 碗碰撞体参数（导出供测试引用） ───
 
@@ -106,8 +103,7 @@ export function createBowlBodies(world: CANNON.World): BowlBodies {
   // ─── 2. 竖直低矮挡墙（只防逃出，不拟合曲面） ───
   const walls: CANNON.Body[] = []
   // 每面墙切向半宽度（含 15% 重叠余量）
-  const wallTangentialHalf =
-    ((2 * Math.PI * WALL_RADIUS) / WALL_COUNT) * 1.15 / 2
+  const wallTangentialHalf = (((2 * Math.PI * WALL_RADIUS) / WALL_COUNT) * 1.15) / 2
   // 挡墙所在半径处的 Heightfield 高度（归一化后）
   const hfEdgeH = bowlCurveHeight(WALL_RADIUS) - minHeight
   // 挡墙中心 Y：底部埋入 Heightfield 以保证过渡无缝隙
@@ -126,9 +122,7 @@ export function createBowlBodies(world: CANNON.World): BowlBodies {
 
     // Box 半尺寸: X=切向(宽), Y=高度, Z=径向(薄)
     wall.addShape(
-      new CANNON.Box(
-        new CANNON.Vec3(wallTangentialHalf, WALL_HEIGHT / 2, WALL_THICKNESS / 2),
-      ),
+      new CANNON.Box(new CANNON.Vec3(wallTangentialHalf, WALL_HEIGHT / 2, WALL_THICKNESS / 2)),
     )
 
     // 绕 Y 轴旋转使薄轴 (local Z) 指向径向

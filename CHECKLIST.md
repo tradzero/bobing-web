@@ -296,6 +296,7 @@
 - [x] 6.3 [验收] 全量测试通过（19 files / 295 tests）
 - [x] 6.4 [验收] `pnpm build` 通过（修复未使用变量 TS 错误）
 - [x] 6.5 [验收] 浏览器桌面/移动各连续 20 轮无穿模、卡死或飞出；逐步 boundary crossing / escape guard / non-finite 均为 0
+- [x] 6.6 [工程] 清理全仓历史 ESLint/Prettier 债务；`pnpm lint` 从 296 项错误收敛为 0，并纳入可执行硬门禁
 
 ---
 

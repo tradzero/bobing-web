@@ -50,8 +50,8 @@ describe('createChamferedCubeHull', () => {
     })
 
     it('1.4b: 8 个三角形 + 6 个八边形', () => {
-      const triangles = faces.filter(f => f.length === 3)
-      const octagons = faces.filter(f => f.length === 8)
+      const triangles = faces.filter((f) => f.length === 3)
+      const octagons = faces.filter((f) => f.length === 8)
       expect(triangles).toHaveLength(8)
       expect(octagons).toHaveLength(6)
     })
@@ -85,9 +85,9 @@ describe('createChamferedCubeHull', () => {
           edgeSet.add(key)
         }
       }
-      const V = vertices.length  // 24
-      const E = edgeSet.size     // 36
-      const F = faces.length     // 14
+      const V = vertices.length // 24
+      const E = edgeSet.size // 36
+      const F = faces.length // 14
       expect(V - E + F).toBe(2)
     })
   })
@@ -125,13 +125,13 @@ describe('createChamferedCubeHull', () => {
 
   it('1.8: CANNON.ConvexPolyhedron 能用截角数据成功构造', () => {
     const { vertices, faces } = createChamferedCubeHull(h, chamfer)
-    const verts = vertices.map(v => new CANNON.Vec3(v[0], v[1], v[2]))
+    const verts = vertices.map((v) => new CANNON.Vec3(v[0], v[1], v[2]))
     expect(() => new CANNON.ConvexPolyhedron({ vertices: verts, faces })).not.toThrow()
   })
 
   it('1.8b: chamfer=0 立方体也能构造 ConvexPolyhedron', () => {
     const { vertices, faces } = createChamferedCubeHull(h, 0)
-    const verts = vertices.map(v => new CANNON.Vec3(v[0], v[1], v[2]))
+    const verts = vertices.map((v) => new CANNON.Vec3(v[0], v[1], v[2]))
     expect(() => new CANNON.ConvexPolyhedron({ vertices: verts, faces })).not.toThrow()
   })
 })
