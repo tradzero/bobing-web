@@ -23,9 +23,17 @@ type DiagnosticSnapshot = {
   renderCount: number
   physicsStepCount: number
   frameScheduled: boolean
+  rollingShadow: {
+    version: 1
+    preset: 'every-frame'
+    rollingRenderFrameCount: number
+    rollingShadowUpdateRequestCount: number
+    maxConsecutiveRollingFramesWithoutShadowUpdateRequest: number
+  }
 }
 const diagnosticPublishers: Array<(diagnostics: DiagnosticSnapshot) => void> = []
 const enginePerformanceProfiles: unknown[] = []
+const engineRollingShadowPresets: unknown[] = []
 let callCounter = 0
 let diceSetCallCounter = 0
 
@@ -130,11 +138,13 @@ vi.mock('@/game/engine', () => ({
   createEngine: (options: {
     onDiagnostics?: (diagnostics: DiagnosticSnapshot) => void
     performanceProfile?: unknown
+    rollingShadowPreset?: unknown
   }) => {
     const id = ++callCounter
     engineCreateCalls.push(id)
     if (options.onDiagnostics) diagnosticPublishers.push(options.onDiagnostics)
     enginePerformanceProfiles.push(options.performanceProfile)
+    engineRollingShadowPresets.push(options.rollingShadowPreset)
     return {
       start: vi.fn(),
       stop: vi.fn(),
@@ -158,6 +168,7 @@ beforeEach(() => {
   diceSetDisposeCalls.length = 0
   diagnosticPublishers.length = 0
   enginePerformanceProfiles.length = 0
+  engineRollingShadowPresets.length = 0
 })
 
 describe('StrictMode 重挂载', () => {
@@ -240,14 +251,28 @@ describe('StrictMode 重挂载', () => {
       renderCount: 1,
       physicsStepCount: 0,
       frameScheduled: false,
+      rollingShadow: {
+        version: 1,
+        preset: 'every-frame',
+        rollingRenderFrameCount: 0,
+        rollingShadowUpdateRequestCount: 0,
+        maxConsecutiveRollingFramesWithoutShadowUpdateRequest: 0,
+      },
     })
 
     const canvas = container.querySelector('canvas')
     const diagnostics = JSON.parse(canvas?.dataset.diceDiagnostics ?? '{}')
     expect(diagnostics).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 5,
       revision: 1,
       sampleKind: 'post-render',
+      renderExperiment: {
+        version: 1,
+        explicit: false,
+        variant: 'rolling-dpr-reduced-tier',
+        rollingDprPreset: 'cap-1x-reduced-tier',
+        rollingShadowPreset: 'every-frame',
+      },
       roll: {
         seed: null,
         throwAlgorithmVersion: 3,
@@ -273,6 +298,7 @@ describe('StrictMode 重挂载', () => {
     expect(diagnostics.render.calls).toBeUndefined()
     expect(diagnostics.engine.performanceProfile).toBeUndefined()
     expect(enginePerformanceProfiles.every((profile) => profile === undefined)).toBe(true)
+    expect(engineRollingShadowPresets.every((preset) => preset === 'every-frame')).toBe(true)
 
     unmount()
   })

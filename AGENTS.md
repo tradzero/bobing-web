@@ -264,15 +264,26 @@ floor diagnostics 同时记录 `initialContactObservedDiceCount / armedDiceCount
 
 ### 已落地：浏览器流程与结构性能门禁
 
-| 命令                 | 用途                                                                                                           |
-| -------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `pnpm test:e2e`      | Playwright 桌面/移动端正常流程、timeout 不提交与同轮恢复、reset、静态零帧及移动布局验收                        |
-| `pnpm test:e2e:soak` | 桌面/移动各连续 20 轮版本化 seed；逐轮门禁提交、历史、逐步安全包络、静态调度和 WebGL 资源不增长                |
-| `pnpm bench:browser` | 对 idle/rolling/settled 的 calls、triangles、资源数、DPR/像素预算和静态调度设硬门槛，并输出 JSON/截图 artifact |
+| 命令                           | 用途                                                                                                           |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `pnpm test:e2e`                | Playwright 桌面/移动端正常流程、timeout 不提交与同轮恢复、reset、静态零帧及移动布局验收                        |
+| `pnpm test:e2e:soak`           | 桌面/移动各连续 20 轮版本化 seed；逐轮门禁提交、历史、逐步安全包络、静态调度和 WebGL 资源不增长                |
+| `pnpm bench:browser`           | 对 idle/rolling/settled 的 calls、triangles、资源数、DPR/像素预算和静态调度设硬门槛，并输出 JSON/截图 artifact |
+| `pnpm bench:browser:render-ab` | 对固定 5 seeds 交替比较版本化渲染候选，门禁行为/安全等价并保留性能 artifact                                    |
 
-这些命令会先用 `vite build --mode e2e` 构建隔离产物，再由 Playwright 自动启动并停止严格端口的 preview server。浏览器诊断当前使用 schema v4，必须是带 `schemaVersion / revision / sampleKind: post-render` 的渲染后快照；`?nextSeed=<整数>` 与带版本的 `nextSeeds` 队列只在开发/e2e 模式生效，强制 timeout outcome 则仅在隔离的 e2e 构建生效。`bench:browser` 还显式使用 `?perfProfile=1&perfProfileVersion=1` 开启固定容量的 rolling CPU profile v1，记录 rAF 原始/截断间隔、Cannon 实际 substep 数以及 world step、guard、roll safety、settle、transform sync、renderer submit、diagnostics publish 和整帧 CPU 阶段；`rendererSubmitCpuMs` 只表示 `renderer.render()` 的同步 CPU submit，不是 GPU 时间。profile 只硬门禁字段完整、数值有限、样本存在和每帧 substeps ≤ 8，所有毫秒分布只写 artifact，不设跨机器阈值。soak 必须逐物理步检查最大半径、真实内壁边界、非有限状态、接触穿透与 escape-guard 介入，不能只看最终位置。当前结构预算集中在 `e2e/helpers/diagnostics.ts`。
+这些命令会先用 `vite build --mode e2e` 构建隔离产物，再由 Playwright 自动启动并停止严格端口的 preview server。浏览器诊断当前使用 schema v5，必须是带 `schemaVersion / revision / sampleKind: post-render` 的渲染后快照；除原有结构、调度和逐步安全包络外，还发布当前渲染实验、static/rolling 质量以及 rolling shadow 请求计数。`?nextSeed=<整数>` 与带版本的 `nextSeeds` 队列只在开发/e2e 模式生效，强制 timeout outcome 则仅在隔离的 e2e 构建生效。
 
-当前完整浏览器验收已确认：`test:e2e:soak` 桌面/移动各 20 轮均通过，最大接触穿透分别为 0.054898m / 0.053635m，观测到的最大半径上限为 0.656797m（小于 1m containment radius），boundary crossing、escape guard、非有限状态、资源增长和页面错误均为 0；`test:e2e` 4/4、`bench:browser` 2/2 通过。后续仍应保留实际 artifact，不能仅因命令存在沿用这一结论。
+生产使用 tier-aware rolling DPR：仅当基础质量 `tier=reduced` 时将 rolling 主画布 DPR 限制为 1x；`full` 档 rolling 保持基础 DPR，idle/settled 一律恢复由设备 DPR、`1.0～1.5` 范围和 350 万 drawing-buffer 像素预算共同决定的基础 DPR。基础质量档和 1024/512 阴影贴图档不因 rolling DPR 改变，rolling shadow 仍为 `every-frame`。隔离 e2e 的 render experiment v1 只接受预注册的 `baseline / rolling-dpr-1x / shadow-alternate / shadow-frozen`，不是任意生产调参入口；其中 `rolling-dpr-1x` 仍是无条件 1x 的可复现实验候选，不等同于生产 tier-aware 策略。
+
+`bench:browser` 显式使用 `?perfProfile=1&perfProfileVersion=1` 开启固定容量的 rolling CPU profile v1，记录 rAF 原始/截断间隔、Cannon 实际 substep 数以及 world step、guard、roll safety、settle、transform sync、renderer submit、diagnostics publish 和整帧 CPU 阶段；`rendererSubmitCpuMs` 只表示 `renderer.render()` 的同步 CPU submit，不是 GPU 时间。profile 只硬门禁字段完整、数值有限、样本存在和每帧 substeps ≤ 8，所有毫秒分布只写 artifact，不设跨机器阈值。soak 必须逐物理步检查最大半径、真实内壁边界、非有限状态、接触穿透与 escape-guard 介入，不能只看最终位置。当前结构预算集中在 `e2e/helpers/diagnostics.ts`。
+
+`bench:browser:render-ab` 对 5 个固定 seed 逐 seed 使用 ABBA/BAAB 交替顺序，比较前先分别 warm-up 两侧，每个 project/comparison 共 20 个 measured rolls。行为结果、初始投掷路径、结算安全、WebGL context、页面错误和静态零帧属于硬门禁；rAF p95、settlement wall time 与重复噪声只作同环境观测。durable artifact 写入 `artifacts/render-ab/<project>-<comparison>.json`。
+
+当前 SwiftShader durable A/B 四组都通过流程/正确性硬门禁：`behaviorViolation=0`、`schedulerSensitive=0`，但 4/4 通过不表示四组性能判断都通过。桌面 rolling DPR 的 rAF p95 候选/基线比值中位数为 `0.7943287446`，5/5 seeds 改善，repeat-noise 中位数 `0.04424385`，达到预设性能判据；移动端比值为 `0.8757462687`，仅 3/5 改善，repeat noise `0.24015354`，未达判据，只能判断方向偏改善但证据不确定。桌面 `shadow-frozen` 比值为 `1.001019368`，1/5 改善、noise `0.01821229`；移动为 `0.914913958`，4/5 改善、noise `0.25185361`，两端都未达判据。因此生产只在基础质量 `reduced` 档采用 rolling 1x，`full` 档保持基础 DPR，static 一律恢复基础 DPR；rolling shadow 仍使用 `every-frame`，不推进 alternate。交互 Chrome 单 seed 观察到 rolling DPR 候选约 17.6ms、baseline 约 33ms，并已核对 rolling 视觉与 static DPR 恢复；这只是补充观察，不是通用 GPU 结论。
+
+不能把 `maxSubSteps` 从 8 裸降为 4 当作性能修复：它会在慢帧下丢弃更多积压模拟时间，seed 25042 已暴露 cadence 分叉风险。后续若继续优化物理追帧，目标应是显式 accumulator 并逐 Cannon 子步执行 guard、roll safety 与 settle 检测，再以同 seed 不同帧序列验证轨迹、结算和安全，而不是只改一个上限。
+
+最终 tier-aware 策略的 schema v5 浏览器门禁已经重跑：`test:e2e` 4/4、`bench:browser` 桌面/移动 2/2 通过。桌面 `reduced` 档 idle/settled 为 3,498,014 pixels、DPR `1.445028`，rolling 为 1,676,160 pixels、DPR 1；移动 `full` 档 idle/rolling 均为 562,185 pixels、DPR 1.5，settled 因 CSS 布局变化为 414,765 pixels、DPR 仍为 1.5。rolling shadow 请求与真实渲染帧一致，桌面 17/17、移动 19/19。`test:e2e:soak` 桌面/移动各 20 轮 2/2 通过：桌面 77.181s，17 natural / 3 stable，单轮最长 8.346s，`maxRadius=0.6567970953m`、`maxContactPenetration=0.0548978013m`；移动 55.144s，20 natural，单轮最长 3.299s，`maxRadius=0.6555080668m`、`maxContactPenetration=0.0536350029m`。两端 boundary/wall/guard/non-finite/页面错误均为 0，canvas/geometry/texture/program 每轮保持 `1/8/6/10`。此前全视口 rolling 1x 与 schema v4 的结果只作历史 checkpoint，本次 wall time 也只能作为同环境观察，不能外推为稳定性能门禁。
 
 ---
 

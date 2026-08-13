@@ -38,6 +38,12 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
 
     idle = await waitForPostRender(page, { mode: 'idle', frameScheduled: false })
     idle = await waitForStaticQuiescence(page, idle)
+    expect(idle.renderExperiment).toMatchObject({
+      explicit: false,
+      variant: 'rolling-dpr-reduced-tier',
+      rollingDprPreset: 'cap-1x-reduced-tier',
+      rollingShadowPreset: 'every-frame',
+    })
     expectRenderBudgets(idle, testInfo.project.name)
     await expectNoStaticFrames(page, idle)
 
@@ -51,6 +57,11 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
     })
     expectRenderBudgets(rolling, testInfo.project.name)
     expect(rolling.roll.seed).toBe(E2E_NEXT_SEED)
+    if (rolling.render.quality?.tier === 'reduced') {
+      expect(rolling.render.drawingBufferPixels).toBeLessThan(idle.render.drawingBufferPixels)
+    } else {
+      expect(rolling.render.drawingBufferPixels).toBe(idle.render.drawingBufferPixels)
+    }
 
     raf = await measureRaf(page)
     const afterRaf = await readDiagnostics(page)
@@ -68,10 +79,22 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
     })
     settleWallMs = performance.now() - settleStartedAt
     expectRenderBudgets(settled, testInfo.project.name)
+    expect(settled.render.pixelRatio).toBeCloseTo(idle.render.pixelRatio, 8)
+    expect(settled.render.quality?.basePixelRatio).toBeCloseTo(
+      idle.render.quality?.basePixelRatio ?? Number.NaN,
+      8,
+    )
     expect(settleWallMs).toBeLessThanOrEqual(BROWSER_BUDGETS.settlementWallTimeoutMs)
     expect(settled.roll.seed).toBe(E2E_NEXT_SEED)
     expect(settled.roll.placementPath).toMatch(/^(rejection|constructive|fallback)$/)
     expect(settled.roll.settleReason).not.toBeNull()
+    expect(settled.engine.rollingShadow).toMatchObject({
+      version: 1,
+      preset: 'every-frame',
+    })
+    expect(settled.engine.rollingShadow.rollingShadowUpdateRequestCount).toBe(
+      settled.engine.rollingShadow.rollingRenderFrameCount,
+    )
     const profile = settled.engine.performanceProfile
     expect(profile, 'rolling CPU profile must be present in explicit profile mode').toBeDefined()
     expect(profile).toMatchObject({

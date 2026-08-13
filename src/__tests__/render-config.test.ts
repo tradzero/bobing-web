@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { RENDER_QUALITY, resolveRenderQuality } from '@/config/render'
+import { RENDER_QUALITY, resolveRenderPhasePixelRatio, resolveRenderQuality } from '@/config/render'
 
 describe('渲染质量预算', () => {
   it('小视口只应用 1.5 DPR 上限并保留 1024 阴影', () => {
@@ -38,5 +38,23 @@ describe('渲染质量预算', () => {
   it('无效或过低设备 DPR 归一化为 1', () => {
     expect(resolveRenderQuality(800, 600, Number.NaN).pixelRatio).toBe(1)
     expect(resolveRenderQuality(800, 600, 0.75).pixelRatio).toBe(1)
+  })
+
+  it('baseline 在 static/rolling 都保留基础 DPR', () => {
+    expect(resolveRenderPhasePixelRatio(1.5, 'full', 'static', 'baseline')).toBe(1.5)
+    expect(resolveRenderPhasePixelRatio(1.5, 'reduced', 'rolling', 'baseline')).toBe(1.5)
+  })
+
+  it('cap-1x 只在 rolling 将有效 DPR 限制为 1', () => {
+    expect(resolveRenderPhasePixelRatio(1.5, 'full', 'static', 'cap-1x')).toBe(1.5)
+    expect(resolveRenderPhasePixelRatio(1.5, 'full', 'rolling', 'cap-1x')).toBe(1)
+    expect(resolveRenderPhasePixelRatio(1, 'reduced', 'rolling', 'cap-1x')).toBe(1)
+  })
+
+  it('cap-1x-reduced-tier 仅在 reduced 基础质量档的 rolling 阶段限为 1', () => {
+    expect(resolveRenderPhasePixelRatio(1.5, 'full', 'static', 'cap-1x-reduced-tier')).toBe(1.5)
+    expect(resolveRenderPhasePixelRatio(1.5, 'full', 'rolling', 'cap-1x-reduced-tier')).toBe(1.5)
+    expect(resolveRenderPhasePixelRatio(1.4, 'reduced', 'static', 'cap-1x-reduced-tier')).toBe(1.4)
+    expect(resolveRenderPhasePixelRatio(1.4, 'reduced', 'rolling', 'cap-1x-reduced-tier')).toBe(1)
   })
 })

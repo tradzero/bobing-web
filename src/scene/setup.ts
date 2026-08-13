@@ -1,7 +1,27 @@
 import * as THREE from 'three'
-import { resolveRenderQuality } from '@/config/render'
+import {
+  resolveRenderPhasePixelRatio,
+  resolveRenderQuality,
+  type RenderPhase,
+  type RenderQuality,
+  type RollingDprPreset,
+} from '@/config/render'
 
 export type RenderInvalidationCallback = () => void
+
+export interface CreateSceneOptions {
+  /** 默认不降级；rolling preset 只改变主画布 DPR。 */
+  rollingDprPreset?: RollingDprPreset
+}
+
+export interface RenderQualityDiagnostics {
+  phase: RenderPhase
+  rollingDprPreset: RollingDprPreset
+  basePixelRatio: number
+  effectivePixelRatio: number
+  tier: RenderQuality['tier']
+  shadowMapSize: RenderQuality['shadowMapSize']
+}
 
 export interface SceneContext {
   scene: THREE.Scene
@@ -13,6 +33,10 @@ export interface SceneContext {
   setRenderInvalidationCallback?: (callback: RenderInvalidationCallback) => void
   /** 清除按需渲染失效回调。 */
   clearRenderInvalidationCallback?: () => void
+  /** 切换静态/rolling 主画布质量；真实 SceneContext 必定提供，保留可选以兼容轻量测试替身。 */
+  setRenderPhase?: (phase: RenderPhase) => void
+  /** 返回最近一次有效 resize 对应的质量快照；canvas 尚无有效尺寸时返回 null。 */
+  getRenderQualityDiagnostics?: () => RenderQualityDiagnostics | null
   dispose: () => void
 }
 
@@ -34,7 +58,11 @@ function getDefaultCameraPreset(w: number, h: number) {
  * 创建 Three.js 场景、摄像机、渲染器、灯光
  * 摄像机固定俯视 + 轻微倾斜，不可交互调节
  */
-export function createScene(canvas: HTMLCanvasElement): SceneContext {
+export function createScene(
+  canvas: HTMLCanvasElement,
+  options: CreateSceneOptions = {},
+): SceneContext {
+  const rollingDprPreset = options.rollingDprPreset ?? 'baseline'
   const scene = new THREE.Scene()
   // 中秋暖色调背景：深暖棕色，营造夜晚灯光氛围
   scene.background = new THREE.Color(0x1c1410)
@@ -75,6 +103,9 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
   let renderInvalidationCallback: RenderInvalidationCallback | null = null
   let lastResize: { width: number; height: number; devicePixelRatio: number } | null = null
   let shadowMapSize: number | null = null
+  let renderPhase: RenderPhase = 'static'
+  let baseQuality: RenderQuality | null = null
+  let effectivePixelRatio: number | null = null
 
   const setRenderInvalidationCallback = (callback: RenderInvalidationCallback) => {
     renderInvalidationCallback = callback
@@ -82,6 +113,37 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
 
   const clearRenderInvalidationCallback = () => {
     renderInvalidationCallback = null
+  }
+
+  const getRenderQualityDiagnostics = (): RenderQualityDiagnostics | null => {
+    if (!baseQuality || effectivePixelRatio === null) return null
+    return {
+      phase: renderPhase,
+      rollingDprPreset,
+      basePixelRatio: baseQuality.pixelRatio,
+      effectivePixelRatio,
+      tier: baseQuality.tier,
+      shadowMapSize: baseQuality.shadowMapSize,
+    }
+  }
+
+  const setRenderPhase = (phase: RenderPhase) => {
+    if (renderPhase === phase) return
+    renderPhase = phase
+    if (!baseQuality) return
+
+    const nextPixelRatio = resolveRenderPhasePixelRatio(
+      baseQuality.pixelRatio,
+      baseQuality.tier,
+      renderPhase,
+      rollingDprPreset,
+    )
+    if (effectivePixelRatio === nextPixelRatio) return
+
+    effectivePixelRatio = nextPixelRatio
+    // Three.js setPixelRatio 内部已按当前逻辑尺寸重建 drawing buffer；这里不能再重复 setSize。
+    renderer.setPixelRatio(effectivePixelRatio)
+    // phase 切换由 Engine 紧邻下一次 render 驱动，不能回调 invalidate 制造额外静态帧。
   }
 
   const handleResize = () => {
@@ -105,7 +167,15 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
     lastResize = { width, height, devicePixelRatio }
 
     const quality = resolveRenderQuality(width, height, devicePixelRatio)
-    renderer.setPixelRatio(quality.pixelRatio)
+    const nextPixelRatio = resolveRenderPhasePixelRatio(
+      quality.pixelRatio,
+      quality.tier,
+      renderPhase,
+      rollingDprPreset,
+    )
+    baseQuality = quality
+    effectivePixelRatio = nextPixelRatio
+    renderer.setPixelRatio(nextPixelRatio)
     renderer.setSize(width, height, false)
 
     if (shadowMapSize !== quality.shadowMapSize) {
@@ -150,6 +220,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
     handleResize,
     setRenderInvalidationCallback,
     clearRenderInvalidationCallback,
+    setRenderPhase,
+    getRenderQualityDiagnostics,
     dispose,
   }
 }

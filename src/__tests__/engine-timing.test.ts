@@ -9,10 +9,13 @@ import {
   ROLLING_CPU_PROFILE_METRICS,
   type RollingCpuProfileSnapshot,
 } from '@/game/performance-profile'
+import type { RollingShadowPreset } from '@/game/rolling-shadow'
 import type { SceneContext } from '@/scene/setup'
+import type { RenderPhase } from '@/config/render'
 import { CONSERVATIVE_DICE_CENTER_RADIUS, WALL_INNER_RADIUS } from '@/physics/roll-diagnostics'
 
-type MockSceneContext = SceneContext & {
+type MockSceneContext = Omit<SceneContext, 'renderer' | 'setRenderPhase'> & {
+  setRenderPhase: ReturnType<typeof vi.fn<(phase: RenderPhase) => void>>
   renderer: THREE.WebGLRenderer & {
     render: ReturnType<typeof vi.fn>
     shadowMap: {
@@ -33,6 +36,14 @@ const ZERO_ROLL_SAFETY = {
   nonFiniteBodyStateDetected: false,
 } as const
 
+const ZERO_ROLLING_SHADOW = {
+  version: 1,
+  preset: 'every-frame',
+  rollingRenderFrameCount: 0,
+  rollingShadowUpdateRequestCount: 0,
+  maxConsecutiveRollingFramesWithoutShadowUpdateRequest: 0,
+} as const
+
 function mockSceneCtx(): MockSceneContext {
   const renderer = {
     render: vi.fn(),
@@ -51,6 +62,7 @@ function mockSceneCtx(): MockSceneContext {
     camera: new THREE.PerspectiveCamera(),
     renderer,
     handleResize: vi.fn(),
+    setRenderPhase: vi.fn<(phase: RenderPhase) => void>(),
     dispose: vi.fn(),
   }
 }
@@ -99,6 +111,7 @@ describe('Engine 按需调度', () => {
     worldStep?: (dt: number) => void
     onSettled?: (result: SettleResult) => void
     onDiagnostics?: (diagnostics: EngineDiagnostics) => void
+    rollingShadowPreset?: RollingShadowPreset
     performanceProfile?: { now: () => number; capacity?: number }
   }) {
     const sceneCtx = mockSceneCtx()
@@ -113,6 +126,7 @@ describe('Engine 按需调度', () => {
       dicePairs,
       onSettled,
       onDiagnostics: options?.onDiagnostics,
+      rollingShadowPreset: options?.rollingShadowPreset,
       performanceProfile: options?.performanceProfile,
     })
     engines.push(engine)
@@ -221,6 +235,35 @@ describe('Engine 按需调度', () => {
     expect(run(true)).toEqual(run(false))
   })
 
+  it.each([false, true])('profile=%s 时最终 raw render 前都恢复 static DPR phase', (profiled) => {
+    const dicePairs = makeDicePairs(1, true)
+    let clock = 0
+    const { engine, sceneCtx } = createFixture({
+      dicePairs,
+      performanceProfile: profiled
+        ? {
+            now: () => {
+              clock += 0.1
+              return clock
+            },
+          }
+        : undefined,
+    })
+
+    engine.start()
+    engine.beginSettle()
+    expect(sceneCtx.setRenderPhase).toHaveBeenLastCalledWith('rolling')
+
+    runNextFrame(1000)
+    runNextFrame(1016.67)
+
+    expect(engine.getDiagnostics().mode).toBe('settled')
+    expect(sceneCtx.setRenderPhase).toHaveBeenLastCalledWith('static')
+    const lastRenderOrder = sceneCtx.renderer.render.mock.invocationCallOrder.at(-1)!
+    const lastStaticOrder = sceneCtx.setRenderPhase.mock.invocationCallOrder.at(-1)!
+    expect(lastStaticOrder).toBeLessThan(lastRenderOrder)
+  })
+
   function runNextFrame(timestamp: number): boolean {
     const next = pendingFrames.entries().next()
     if (next.done) return false
@@ -240,6 +283,7 @@ describe('Engine 按需调度', () => {
       physicsStepCount: 0,
       frameScheduled: false,
       rollSafety: ZERO_ROLL_SAFETY,
+      rollingShadow: ZERO_ROLLING_SHADOW,
     })
 
     engine.start()
@@ -259,6 +303,7 @@ describe('Engine 按需调度', () => {
       physicsStepCount: 0,
       frameScheduled: false,
       rollSafety: ZERO_ROLL_SAFETY,
+      rollingShadow: ZERO_ROLLING_SHADOW,
     })
 
     expect(runNextFrame(2000)).toBe(false)
@@ -280,6 +325,7 @@ describe('Engine 按需调度', () => {
       physicsStepCount: 0,
       frameScheduled: false,
       rollSafety: ZERO_ROLL_SAFETY,
+      rollingShadow: ZERO_ROLLING_SHADOW,
     })
 
     engine.invalidate()
@@ -348,11 +394,19 @@ describe('Engine 按需调度', () => {
     runNextFrame(5016.67)
     expect(worldStep).toHaveBeenCalledTimes(1)
     expect(worldStep).toHaveBeenLastCalledWith(expect.closeTo(0.01667, 5))
+    expect(engine.getDiagnostics().rollingShadow).toMatchObject({
+      rollingRenderFrameCount: 2,
+      rollingShadowUpdateRequestCount: 2,
+    })
 
     // 重开一轮时，即使 timestamp 间隔很大，也必须重新建立基准。
     engine.beginSettle()
     runNextFrame(50_000)
     expect(worldStep).toHaveBeenCalledTimes(1)
+    expect(engine.getDiagnostics().rollingShadow).toMatchObject({
+      rollingRenderFrameCount: 1,
+      rollingShadowUpdateRequestCount: 1,
+    })
 
     runNextFrame(50_020)
     expect(worldStep).toHaveBeenCalledTimes(2)
@@ -426,7 +480,7 @@ describe('Engine 按需调度', () => {
     expect(mesh.quaternion.z).toBeCloseTo(interpolatedQuaternion.z, 6)
     expect(mesh.quaternion.w).toBeCloseTo(interpolatedQuaternion.w, 6)
     expect(committedPositions.at(-1)).toEqual([1, 2, 3])
-    expect(sceneCtx.renderer.shadowMap.autoUpdate).toBe(true)
+    expect(sceneCtx.renderer.shadowMap.autoUpdate).toBe(false)
     expect(engine.getDiagnostics()).toMatchObject({
       mode: 'rolling',
       renderCount: 2,
@@ -434,6 +488,80 @@ describe('Engine 按需调度', () => {
       frameScheduled: true,
     })
     expect(pendingFrames.size).toBe(1)
+  })
+
+  it.each<[RollingShadowPreset | undefined, RollingShadowPreset, boolean[], number, number]>([
+    [undefined, 'every-frame', [true, true, true, true, true], 5, 0],
+    ['every-frame', 'every-frame', [true, true, true, true, true], 5, 0],
+    ['alternate', 'alternate', [true, false, true, false, true], 3, 1],
+    ['frozen-after-first', 'frozen-after-first', [true, false, false, false, false], 1, 4],
+  ])(
+    'rolling shadow preset=%s 只按真实 render 帧请求刷新',
+    (configuredPreset, expectedPreset, expectedRequests, requestCount, maxSkipped) => {
+      const dicePairs = makeDicePairs()
+      dicePairs[0].body.velocity.set(1, 0, 0)
+      dicePairs[0].body.angularVelocity.set(0, 1, 0)
+      const { engine, sceneCtx } = createFixture({
+        dicePairs,
+        rollingShadowPreset: configuredPreset,
+      })
+      const observedRequests: boolean[] = []
+      sceneCtx.renderer.render.mockImplementation(() => {
+        observedRequests.push(sceneCtx.renderer.shadowMap.needsUpdate)
+        // Three.js 在完成 shadow pass 后会消费全局 needsUpdate。
+        sceneCtx.renderer.shadowMap.needsUpdate = false
+      })
+
+      engine.start()
+      runNextFrame(900)
+      observedRequests.length = 0
+
+      engine.beginSettle()
+      for (const timestamp of [1000, 1016.67, 1033.34, 1050.01, 1066.68]) {
+        runNextFrame(timestamp)
+      }
+
+      expect(observedRequests).toEqual(expectedRequests)
+      expect(sceneCtx.renderer.shadowMap.autoUpdate).toBe(false)
+      expect(engine.getDiagnostics().rollingShadow).toEqual({
+        version: 1,
+        preset: expectedPreset,
+        rollingRenderFrameCount: expectedRequests.length,
+        rollingShadowUpdateRequestCount: requestCount,
+        maxConsecutiveRollingFramesWithoutShadowUpdateRequest: maxSkipped,
+      })
+    },
+  )
+
+  it('skip 帧保留 resize 等外部 needsUpdate 请求，但不冒充 rolling 策略请求', () => {
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    dicePairs[0].body.angularVelocity.set(0, 1, 0)
+    const { engine, sceneCtx } = createFixture({
+      dicePairs,
+      rollingShadowPreset: 'alternate',
+    })
+    const observedRequests: boolean[] = []
+    sceneCtx.renderer.render.mockImplementation(() => {
+      observedRequests.push(sceneCtx.renderer.shadowMap.needsUpdate)
+      sceneCtx.renderer.shadowMap.needsUpdate = false
+    })
+
+    engine.start()
+    runNextFrame(900)
+    observedRequests.length = 0
+    engine.beginSettle()
+    runNextFrame(1000)
+
+    sceneCtx.renderer.shadowMap.needsUpdate = true
+    runNextFrame(1016.67)
+
+    expect(observedRequests).toEqual([true, true])
+    expect(engine.getDiagnostics().rollingShadow).toMatchObject({
+      rollingRenderFrameCount: 2,
+      rollingShadowUpdateRequestCount: 1,
+      maxConsecutiveRollingFramesWithoutShadowUpdateRequest: 1,
+    })
   })
 
   it('settle 回调后以最终 raw 姿态渲染，并立即停止连续帧', () => {
@@ -454,6 +582,11 @@ describe('Engine 按需调度', () => {
       body.interpolatedQuaternion.set(0, 0, 0, 1)
     })
     const { engine, sceneCtx } = createFixture({ dicePairs, worldStep, onSettled })
+    const shadowUpdateRequests: boolean[] = []
+    sceneCtx.renderer.render.mockImplementation(() => {
+      shadowUpdateRequests.push(sceneCtx.renderer.shadowMap.needsUpdate)
+      sceneCtx.renderer.shadowMap.needsUpdate = false
+    })
 
     engine.start()
     engine.beginSettle()
@@ -472,7 +605,8 @@ describe('Engine 按需调度', () => {
     expect(mesh.quaternion.z).toBeCloseTo(finalQuaternion.z, 6)
     expect(mesh.quaternion.w).toBeCloseTo(finalQuaternion.w, 6)
     expect(sceneCtx.renderer.shadowMap.autoUpdate).toBe(false)
-    expect(sceneCtx.renderer.shadowMap.needsUpdate).toBe(true)
+    expect(sceneCtx.renderer.shadowMap.needsUpdate).toBe(false)
+    expect(shadowUpdateRequests).toEqual([true, true])
     expect(engine.getDiagnostics()).toEqual({
       mode: 'settled',
       renderCount: 2,
@@ -480,6 +614,11 @@ describe('Engine 按需调度', () => {
       frameScheduled: false,
       rollSafety: {
         ...ZERO_ROLL_SAFETY,
+      },
+      rollingShadow: {
+        ...ZERO_ROLLING_SHADOW,
+        rollingRenderFrameCount: 1,
+        rollingShadowUpdateRequestCount: 1,
       },
     })
     expect(pendingFrames.size).toBe(0)
@@ -512,6 +651,7 @@ describe('Engine 按需调度', () => {
       physicsStepCount: 0,
       frameScheduled: false,
       rollSafety: ZERO_ROLL_SAFETY,
+      rollingShadow: ZERO_ROLLING_SHADOW,
     })
 
     engine.invalidate()
@@ -519,6 +659,28 @@ describe('Engine 按需调度', () => {
     expect(runNextFrame(1000)).toBe(false)
     expect(worldStep).not.toHaveBeenCalled()
     expect(sceneCtx.renderer.render).not.toHaveBeenCalled()
+  })
+
+  it('stop 在已有 rolling render 后清空逐轮阴影调度诊断', () => {
+    const { engine } = createFixture()
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(1000)
+    runNextFrame(1016.67)
+
+    expect(engine.getDiagnostics().rollingShadow).toMatchObject({
+      rollingRenderFrameCount: 2,
+      rollingShadowUpdateRequestCount: 2,
+    })
+
+    engine.stop()
+
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'stopped',
+      frameScheduled: false,
+      rollingShadow: ZERO_ROLLING_SHADOW,
+    })
   })
 
   it('returnToIdle 从 settled 语义回到 idle，只安排静态帧', () => {

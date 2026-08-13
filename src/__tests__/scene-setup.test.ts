@@ -165,6 +165,26 @@ describe('场景 resize 与渲染失效', () => {
 
     const invalidate = vi.fn()
     context.setRenderInvalidationCallback?.(invalidate)
+
+    expect(context.getRenderQualityDiagnostics?.()).toEqual({
+      phase: 'static',
+      rollingDprPreset: 'baseline',
+      basePixelRatio: 1.5,
+      effectivePixelRatio: 1.5,
+      tier: 'full',
+      shadowMapSize: 1024,
+    })
+    context.setRenderPhase?.('rolling')
+    expect(renderer.setPixelRatio).toHaveBeenCalledOnce()
+    expect(renderer.setSize).toHaveBeenCalledOnce()
+    expect(invalidate).not.toHaveBeenCalled()
+    expect(context.getRenderQualityDiagnostics?.()).toMatchObject({
+      phase: 'rolling',
+      rollingDprPreset: 'baseline',
+      basePixelRatio: 1.5,
+      effectivePixelRatio: 1.5,
+    })
+
     observedCallback?.()
 
     expect(renderer.setSize).toHaveBeenCalledOnce()
@@ -242,6 +262,135 @@ describe('场景 resize 与渲染失效', () => {
 
     expect(renderer.setSize).toHaveBeenCalledTimes(2)
     expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1)
+    expect(invalidate).toHaveBeenCalledOnce()
+  })
+
+  it('生产 DPR preset 只在 reduced 基础质量档的 rolling 阶段切换为 1x', () => {
+    let width = 1280
+    let height = 720
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'clientWidth', { configurable: true, get: () => width })
+    Object.defineProperty(parent, 'clientHeight', { configurable: true, get: () => height })
+    const canvas = document.createElement('canvas')
+    parent.appendChild(canvas)
+
+    const context = createScene(canvas, { rollingDprPreset: 'cap-1x-reduced-tier' })
+    const renderer = threeMocks.rendererInstances[0]
+
+    context.setRenderPhase?.('rolling')
+    expect(renderer.setPixelRatio).toHaveBeenCalledOnce()
+    expect(context.getRenderQualityDiagnostics?.()).toEqual({
+      phase: 'rolling',
+      rollingDprPreset: 'cap-1x-reduced-tier',
+      basePixelRatio: 1.5,
+      effectivePixelRatio: 1.5,
+      tier: 'full',
+      shadowMapSize: 1024,
+    })
+
+    width = 1920
+    height = 1080
+    observedCallback?.()
+
+    const rollingQuality = context.getRenderQualityDiagnostics?.()
+    if (!rollingQuality) throw new Error('expected render quality diagnostics after resize')
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1)
+    expect(rollingQuality).toMatchObject({
+      phase: 'rolling',
+      rollingDprPreset: 'cap-1x-reduced-tier',
+      effectivePixelRatio: 1,
+      tier: 'reduced',
+      shadowMapSize: 512,
+    })
+    expect(rollingQuality.basePixelRatio).toBeGreaterThan(1)
+
+    context.setRenderPhase?.('static')
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(rollingQuality.basePixelRatio)
+  })
+
+  it('cap-1x 只在 rolling 切换 DPR，保持基础质量与阴影档位且不触发失效回调', () => {
+    let width = 1280
+    let height = 720
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'clientWidth', { configurable: true, get: () => width })
+    Object.defineProperty(parent, 'clientHeight', { configurable: true, get: () => height })
+    const canvas = document.createElement('canvas')
+    parent.appendChild(canvas)
+
+    const context = createScene(canvas, { rollingDprPreset: 'cap-1x' })
+    const renderer = threeMocks.rendererInstances[0]
+    const light = threeMocks.directionalLights[0]
+    const invalidate = vi.fn()
+    context.setRenderInvalidationCallback?.(invalidate)
+
+    expect(context.getRenderQualityDiagnostics?.()).toEqual({
+      phase: 'static',
+      rollingDprPreset: 'cap-1x',
+      basePixelRatio: 1.5,
+      effectivePixelRatio: 1.5,
+      tier: 'full',
+      shadowMapSize: 1024,
+    })
+
+    context.setRenderPhase?.('rolling')
+    expect(renderer.setPixelRatio).toHaveBeenCalledTimes(2)
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1)
+    expect(renderer.setSize).toHaveBeenCalledOnce()
+    expect(light.shadow.mapSize.set).toHaveBeenCalledOnce()
+    expect(invalidate).not.toHaveBeenCalled()
+    expect(context.getRenderQualityDiagnostics?.()).toEqual({
+      phase: 'rolling',
+      rollingDprPreset: 'cap-1x',
+      basePixelRatio: 1.5,
+      effectivePixelRatio: 1,
+      tier: 'full',
+      shadowMapSize: 1024,
+    })
+
+    context.setRenderPhase?.('rolling')
+    expect(renderer.setPixelRatio).toHaveBeenCalledTimes(2)
+    expect(renderer.setSize).toHaveBeenCalledOnce()
+
+    const oldShadowMap = { dispose: vi.fn() }
+    light.shadow.map = oldShadowMap
+    width = 1920
+    height = 1080
+    observedCallback?.()
+
+    expect(renderer.setPixelRatio).toHaveBeenCalledTimes(3)
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1)
+    expect(renderer.setSize).toHaveBeenCalledTimes(2)
+    expect(light.shadow.mapSize.set).toHaveBeenCalledTimes(2)
+    expect(light.shadow.mapSize.set).toHaveBeenLastCalledWith(512, 512)
+    expect(oldShadowMap.dispose).toHaveBeenCalledOnce()
+    expect(invalidate).toHaveBeenCalledOnce()
+
+    const rollingQuality = context.getRenderQualityDiagnostics?.()
+    if (!rollingQuality) throw new Error('expected render quality diagnostics after resize')
+    expect(rollingQuality).toMatchObject({
+      phase: 'rolling',
+      rollingDprPreset: 'cap-1x',
+      effectivePixelRatio: 1,
+      tier: 'reduced',
+      shadowMapSize: 512,
+    })
+    expect(rollingQuality.basePixelRatio).toBeGreaterThan(1)
+
+    context.setRenderPhase?.('static')
+    expect(renderer.setPixelRatio).toHaveBeenCalledTimes(4)
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(rollingQuality.basePixelRatio)
+    expect(renderer.setSize).toHaveBeenCalledTimes(2)
+    expect(light.shadow.mapSize.set).toHaveBeenCalledTimes(2)
+    expect(invalidate).toHaveBeenCalledOnce()
+    expect(context.getRenderQualityDiagnostics?.()).toEqual({
+      ...rollingQuality,
+      phase: 'static',
+      effectivePixelRatio: rollingQuality.basePixelRatio,
+    })
+
+    context.setRenderPhase?.('static')
+    expect(renderer.setPixelRatio).toHaveBeenCalledTimes(4)
+    expect(renderer.setSize).toHaveBeenCalledTimes(2)
     expect(invalidate).toHaveBeenCalledOnce()
   })
 })

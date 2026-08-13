@@ -24,6 +24,13 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
   idle = await waitForStaticQuiescence(page, idle)
   expect(idle.engine.physicsStepCount).toBe(0)
   expect(idle.engine.performanceProfile).toBeUndefined()
+  expect(idle.renderExperiment).toMatchObject({
+    explicit: false,
+    variant: 'rolling-dpr-reduced-tier',
+    rollingDprPreset: 'cap-1x-reduced-tier',
+    rollingShadowPreset: 'every-frame',
+  })
+  expect(idle.render.quality?.phase).toBe('static')
   await expectNoStaticFrames(page, idle)
 
   if (testInfo.project.name.startsWith('mobile')) {
@@ -64,6 +71,18 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
   expect(rolling.roll.seed).toBe(E2E_NEXT_SEED)
   expect(rolling.roll.placementPath).toMatch(/^(rejection|constructive|fallback)$/)
   expect(rolling.engine.physicsStepCount).toBeGreaterThanOrEqual(idle.engine.physicsStepCount)
+  expect(rolling.render.quality?.phase).toBe('rolling')
+  const expectedRollingPixelRatio =
+    rolling.render.quality?.tier === 'reduced'
+      ? BROWSER_BUDGETS.reducedTierRollingPixelRatio
+      : idle.render.pixelRatio
+  expect(rolling.render.pixelRatio).toBeCloseTo(expectedRollingPixelRatio, 8)
+  if (rolling.render.quality?.tier === 'reduced') {
+    expect(rolling.render.drawingBufferPixels).toBeLessThan(idle.render.drawingBufferPixels)
+  } else {
+    expect(rolling.render.drawingBufferPixels).toBe(idle.render.drawingBufferPixels)
+  }
+  expect(rolling.engine.rollingShadow.preset).toBe('every-frame')
 
   await waitForSettlementUi(page)
   await expect(page.locator('.result-panel [aria-label^="骰子点数 "]')).toHaveCount(6)
@@ -84,6 +103,8 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
   expect(settled.roll.seed).toBe(E2E_NEXT_SEED)
   expect(settled.roll.settleReason).not.toBeNull()
   expect(settled.engine.performanceProfile).toBeUndefined()
+  expect(settled.render.quality?.phase).toBe('static')
+  expect(settled.render.pixelRatio).toBeCloseTo(idle.render.pixelRatio, 8)
   await expectNoStaticFrames(page, settled)
 
   await page.getByRole('button', { name: '重置游戏' }).click()

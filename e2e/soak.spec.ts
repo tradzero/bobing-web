@@ -113,6 +113,16 @@ test.describe('@soak 连续多轮真实浏览器 soak', () => {
         frameScheduled: true,
       })
       expect(rolling.roll.seed, `round ${index + 1} seed queue`).toBe(expectedSeed)
+      expect(rolling.render.quality).toMatchObject({
+        phase: 'rolling',
+        rollingDprPreset: 'cap-1x-reduced-tier',
+      })
+      expect(rolling.render.quality?.effectivePixelRatio).toBeCloseTo(
+        rolling.render.quality?.tier === 'reduced'
+          ? BROWSER_BUDGETS.reducedTierRollingPixelRatio
+          : (rolling.render.quality?.basePixelRatio ?? Number.NaN),
+        8,
+      )
 
       const settled = await waitForPostRender(page, {
         mode: 'settled',
@@ -124,6 +134,14 @@ test.describe('@soak 连续多轮真实浏览器 soak', () => {
       await expect(page.locator('.result-panel')).toBeVisible()
       await expect(page.locator('.tilt-warning')).toHaveCount(0)
       expect(settled.roll.seed, `round ${index + 1} settled seed`).toBe(expectedSeed)
+      expect(settled.render.quality).toMatchObject({
+        phase: 'static',
+        rollingDprPreset: 'cap-1x-reduced-tier',
+      })
+      expect(settled.render.quality?.effectivePixelRatio).toBeCloseTo(
+        settled.render.quality?.basePixelRatio ?? Number.NaN,
+        8,
+      )
       expect(settled.roll.throwAlgorithmVersion).toBe(SOAK_SEED_PLAN.throwAlgorithmVersion)
       expect(settled.roll.settleAlgorithmVersion).toBe(SOAK_SEED_PLAN.settleAlgorithmVersion)
       // Browser rAF 的 wall-clock 分帧会让同一固定步轨迹在 natural/低速/姿态窗口间竞争；

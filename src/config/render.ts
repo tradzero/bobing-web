@@ -13,12 +13,35 @@ export const RENDER_QUALITY = {
 } as const
 
 export type RenderQualityTier = 'full' | 'reduced'
+export type RenderPhase = 'static' | 'rolling'
+export type RollingDprPreset = 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier'
 
 export interface RenderQuality {
   pixelRatio: number
   drawingBufferPixels: number
   tier: RenderQualityTier
   shadowMapSize: 1024 | 512
+}
+
+/**
+ * 只改变 rolling 主画布的有效 DPR，不反向参与基础质量与阴影档位计算。
+ * 这样 A/B 的唯一变量是 drawing buffer 分辨率，而不是伪造设备 DPR 后连带改变阴影。
+ */
+export function resolveRenderPhasePixelRatio(
+  basePixelRatio: number,
+  baseTier: RenderQualityTier,
+  phase: RenderPhase,
+  rollingDprPreset: RollingDprPreset,
+): number {
+  const shouldCapRollingDpr =
+    phase === 'rolling' &&
+    (rollingDprPreset === 'cap-1x' ||
+      (rollingDprPreset === 'cap-1x-reduced-tier' && baseTier === 'reduced'))
+
+  if (shouldCapRollingDpr) {
+    return Math.min(basePixelRatio, RENDER_QUALITY.minPixelRatio)
+  }
+  return basePixelRatio
 }
 
 function positiveFiniteOr(value: number, fallback: number): number {

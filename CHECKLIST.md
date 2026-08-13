@@ -40,9 +40,9 @@
 - [x] 1B.5 [实现] 实现 `scene/table.ts`：圆桌桌面 mesh（圆柱几何体 + 木纹色基础材质）
 - [x] 1B.6 [实现] 实现 `scene/bowl.ts`：海碗可视模型（Lathe 几何体或组合几何体，白瓷材质）
 - [x] 1B.7 [验收] 验证页面能稳定渲染桌面 + 海碗静态场景
-- [x] 1B.8 [实现] 新建 `config/render.ts`：DPR 限制为 1.0～1.5，以 3,500,000 drawing-buffer 像素为目标预算；保留最低 1x 的极端大视口例外
+- [x] 1B.8 [实现] 新建 `config/render.ts`：基础 DPR 限制为 1.0～1.5，以 3,500,000 drawing-buffer 像素为目标预算；生产仅在基础质量 reduced 档的 rolling 将有效 DPR 限为 1x，full 档保持基础 DPR，static 一律恢复基础 DPR
 - [x] 1B.9 [实现] 渲染质量分档：正常档使用 1024 阴影贴图，像素预算受限档降为 512；切档时释放旧 shadow map 并请求重建
-- [x] 1B.10 [实现] 静态场景关闭阴影自动更新并按需刷新；rolling 期间恢复逐帧阴影更新
+- [x] 1B.10 [实现] 阴影关闭自动更新；静态帧按需刷新一次，rolling 生产默认在每个真实 render 前显式请求更新
 - [x] 1B.11 [测试] 覆盖 DPR 上限、drawing-buffer 像素预算、1024/512 阴影档位、重复 resize 去重与 resize 失效通知
 - [x] 1B.12 [实现] 删除低价值 PMREM 路径：生成阶段桌面/海碗/骰子尚未加入 scene，且旧实现只保留 texture、丢失 render target 所有权；当前保持 `scene.environment = null`
 - [x] 1B.13 [测试] 场景 setup 测试锁定不构造 PMREMGenerator、environment 为空，并覆盖正常 dispose
@@ -142,23 +142,26 @@
 - [x] 1H.20 [验收] 验证全部测试通过
 - [x] 1H.21 [测试] Engine 调度测试：idle/settled 不常驻 rAF，rolling 独占连续 rAF，stop/dispose 取消待执行帧
 - [x] 1H.22 [测试] Engine 姿态测试：rolling 读取 interpolated pose，结算帧读取 controller 回调后的 raw pose
-- [x] 1H.23 [实现] diagnostics schema v4 区分 `mainPassCalls / mainPassTriangles` 主 pass 口径，并发布 CSS/drawing-buffer、DPR、renderer 资源、Engine 调度与逐步 rollSafety 计数
+- [x] 1H.23 [实现] diagnostics schema v5 区分 `mainPassCalls / mainPassTriangles` 主 pass 口径，并发布 CSS/drawing-buffer、DPR、renderer 资源、Engine 调度、逐步 rollSafety、渲染实验/质量与 rolling shadow 计数
 - [x] 1H.24 [测试] 锁定 diagnostics 字段命名与来源，避免将主 pass 数据误写成包含 shadow pass 的总 calls/triangles
 - [x] 1H.25 [实现] diagnostics 使用版本化 `post-render` 快照，只在真实 render 后发布；开发/e2e 支持 nextSeed 与版本化 nextSeeds 队列，隔离 e2e 另支持一次性强制 timeout outcome
-- [x] 1H.26 [测试] 锁定 schema v4 post-render revision、seed/队列消费、timeout seam 和 idle/settled 静态零帧语义
+- [x] 1H.26 [测试] 锁定 schema v5 post-render revision、seed/队列消费、timeout seam、渲染实验/质量/阴影字段和 idle/settled 静态零帧语义
 - [x] 1H.27 [实现/测试] 隔离 e2e 仅在 `perfProfile=1&perfProfileVersion=1` 时启用 rolling CPU profile v1；固定容量记录 rAF 原始/截断间隔、Cannon 实际 substep 与各 CPU 阶段，renderer 明确为 cpu-submit，生产和普通 e2e 零计时采样
+- [x] 1H.28 [实现/测试] render experiment v1 仅允许 baseline、rolling-dpr-1x、shadow-alternate、shadow-frozen 四个版本化 e2e preset；生产忽略 URL 参数，实验 rolling-dpr-1x 仍保持无条件 1x 以复现 durable A/B
+- [x] 1H.29 [实现/测试] 生产仅在基础质量 reduced 档应用 rolling 1x，full 档保持基础 DPR；该切换只改变主画布有效 DPR，不改变基础 1.0～1.5/350 万像素质量与 1024/512 阴影档，结算 raw render 前恢复 static DPR且不制造额外静态帧
+- [x] 1H.30 [实现/测试] rolling shadow scheduler v1 对 every-frame/alternate/frozen-after-first 逐真实 render 计数；生产保持 every-frame，skip 不清除 resize 等外部 needsUpdate
 
 ### 1I 阶段一集成验证
 
 - [x] 1I.1 [验收] 完整流程跑通：点击按钮 → 骰子投掷 → 翻滚 → 停稳 → 读数 → 判定 → 控制台输出完整 JudgeResult
-- [x] 1I.2 [验收] `pnpm test:e2e:soak` 桌面/移动各 20 轮 2/2 通过；最大穿透 0.054898m / 0.053635m，最大半径 0.656797m < 1m，boundary crossing / guard / non-finite 均为 0
+- [x] 1I.2 [验收] 最终 tier-aware 策略的 schema v5 `pnpm test:e2e:soak` 桌面/移动各 20 轮 2/2 通过；桌面 77.181s、17 natural/3 stable、最长 8.346s、最大半径/穿透 0.6567970953m/0.0548978013m，移动 55.144s、20 natural、最长 3.299s、最大半径/穿透 0.6555080668m/0.0536350029m；boundary/wall/guard/non-finite/页面错误为 0，资源每轮稳定为 1/8/6/10
 - [x] 1I.3 [验收] 点数读取准确（人工目视对照至少 10 轮）
 - [x] 1I.4 [测试] 物理烟雾测试：真实 cannon-es 世界 + 碗 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能结算或超时
 - [x] 1I.5 [验收] 奖级判定与点数组合匹配（人工核对）
 - [x] 1I.6 [验收] 全部单测通过：`pnpm test`
 - [x] 1I.7 [验收] `pnpm build` 通过，无编译错误
 - [x] 1I.8 [验收] `pnpm test:e2e` 在桌面/移动项目完成真实固定 seed 正常结算、timeout 不提交/同轮恢复、reset、静态零帧与移动布局验收；当前 4/4 通过
-- [x] 1I.9 [验收] `pnpm bench:browser` 锁定三阶段渲染结构、DPR/像素预算与静态零帧，并保留 JSON/截图 artifact；profile 只硬门禁字段完整、有限值、样本存在与每帧 substeps ≤ 8，毫秒分布仅记录不设跨硬件硬门槛；当前 2/2 通过
+- [x] 1I.9 [验收] 最终 tier-aware 策略的 schema v5 `pnpm bench:browser` 桌面/移动 2/2 通过；desktop reduced idle/settled 3,498,014px@1.445028、rolling 1,676,160px@1x，mobile full idle/rolling 562,185px@1.5x、settled 414,765px@1.5x；shadow 请求/rolling frames 为 17/17、19/19
 - [x] 1I.10 [实现] `physics/roll-runner.ts` 复用正式 throw/world/escape/settle/read-face 行为链，统一单 seed 复现、批量验收与 A/B 诊断
 - [x] 1I.11 [实现] variant schema v2 固定 historical、placement-control、placement-candidate、natural-control 与 current 的投掷/assist/pose 组合
 - [x] 1I.12 [测试] `pnpm test:physics:ab` 落地：按 seed 交替 A/B、B/A，分离 watch/batch cohort，并对每个非自然结果运行最多 20s 的同 seed natural continuation
@@ -170,6 +173,16 @@
 - [x] 1I.18 [实现/测试] floor-relaunch tracker v1 接入统一 `runRoll()`：0.5mm 支撑容差，先满足 2 步真实 floor contact 与 6 步 clean support，再对至少 2 步的二次离地同时门禁 clearance > 5mm 和 ordered world-Y rise > 5mm；首次外部接触前满足即锁存；sampler 对单一、无 shape offset/orientation 的 Box 与 Heightfield 契约 fail closed
 - [x] 1I.19 [门禁] acceptance report schema v3 / roll diagnostics schema v2 将 tracker unavailable/event 设为硬失败；A/B report schema v4 对 runtime 与 continuation 使用同一门禁
 - [x] 1I.20 [基线] 当前 200 seeds / 1200 颗骰子中 initial contact observed=1190、armed=1158，secondary episode=54、floor-only=2、event=0；最大 floor-only clearance/ordered rise=2.761mm/0，最大 pre-external clearance/ordered rise=7.795mm/0；coverage 与最大值只记录不硬门禁，事件要求两项同时 >5mm；171042、25042、146042 的旧无序高度极差已确认为误报回归
+- [x] 1I.21 [实现] `pnpm bench:browser:render-ab` 使用 5 个固定 seed、双方 warm-up 和逐 seed ABBA/BAAB，每个 project/comparison 共 20 measured rolls；投掷路径、稳定结果、物理安全、context/页面错误及静态零帧硬门禁，毫秒只记录；artifact 持久化至 `artifacts/render-ab/<project>-<comparison>.json`
+- [x] 1I.22 [A/B] durable SwiftShader rolling DPR：desktop ratio=`0.7943287446`、5/5 改善、noise=`0.04424385`、判据通过；mobile ratio=`0.8757462687`、3/5 改善、noise=`0.24015354`、判据未通过，方向偏改善但不确定；生产据此只在 reduced 档采用 rolling 1x，full 档保持基础 DPR，static 恢复基础 DPR
+- [x] 1I.23 [A/B] durable shadow frozen：desktop ratio=`1.001019368`、1/5 改善、noise=`0.01821229`；mobile ratio=`0.914913958`、4/5 改善、noise=`0.25185361`；两端判据均未通过，不推进 alternate，生产保持 every-frame shadow
+- [x] 1I.24 [补充观察] 交互 Chrome 单 seed rolling DPR candidate 约 17.6ms、baseline 约 33ms，并核对视觉与 static DPR 恢复；不宣称通用 GPU 结论
+- [x] 1I.25 [否决方案] `maxSubSteps` 8→4 裸降会在慢帧丢更多积压模拟时间，seed 25042 存在 cadence 分叉风险，不作为性能优化
+- [ ] 1I.26 [后续] 设计显式 accumulator，让 guard、逐步安全与 settle 在每个 Cannon 子步后运行，并以同 seed 多 cadence 验证结果、结算与安全
+- [x] 1I.27 [证据边界] schema v4 soak checkpoint 为 109.197s/52.950s，schema v5 为 83.527s/53.488s；只作环境观察，不把 wall-clock 差值设为性能门禁
+- [x] 1I.28 [门禁结果] durable render A/B 4/4 均为 behaviorViolation=0、schedulerSensitive=0；4/4 仅表示流程/正确性硬门禁通过，不代表四组性能判据都通过
+- [x] 1I.29 [验收] 最终 tier-aware 策略的 `pnpm test:e2e` 4/4、`pnpm bench:browser` 2/2 通过；确认 reduced 档 rolling=1x、full 档 rolling=base、static=base 并保留 artifact
+- [x] 1I.30 [验收] 最终 tier-aware 策略的 `pnpm test:e2e:soak` 桌面/移动各 20 轮 2/2 通过；逐轮提交、物理安全、静态调度与 WebGL 资源稳定
 
 ---
 

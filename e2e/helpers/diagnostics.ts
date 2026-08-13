@@ -9,7 +9,7 @@ export const E2E_NEXT_SEED = 42
  * 所有 browser bench 只消费此常量，渲染结构改变时避免散落修改断言。
  */
 export const BROWSER_BUDGETS = {
-  diagnosticsSchemaVersion: 4,
+  diagnosticsSchemaVersion: 5,
   mainPassCalls: 8,
   mainPassTriangles: 41_288,
   geometries: 8,
@@ -29,6 +29,7 @@ export const BROWSER_BUDGETS = {
   },
   minPixelRatio: 1,
   maxPixelRatio: 1.5,
+  reducedTierRollingPixelRatio: 1,
   maxDrawingBufferPixels: 3_500_000,
   desktopMinDrawingBufferPixels: 3_450_000,
   staticObservationMs: 300,
@@ -56,6 +57,13 @@ export interface DiceRuntimeDiagnostics {
       escapeGuardInterventionCount: number
       nonFiniteBodyStateDetected: boolean
     }
+    rollingShadow: {
+      version: number
+      preset: 'every-frame' | 'alternate' | 'frozen-after-first'
+      rollingRenderFrameCount: number
+      rollingShadowUpdateRequestCount: number
+      maxConsecutiveRollingFramesWithoutShadowUpdateRequest: number
+    }
     performanceProfile?: {
       version: number
       sampleKind: 'rolling-cpu'
@@ -79,6 +87,18 @@ export interface DiceRuntimeDiagnostics {
         { count: number; p50: number | null; p95: number | null; max: number | null }
       >
     }
+  }
+  renderExperiment: {
+    version: number
+    explicit: boolean
+    variant:
+      | 'baseline'
+      | 'rolling-dpr-1x'
+      | 'rolling-dpr-reduced-tier'
+      | 'shadow-alternate'
+      | 'shadow-frozen'
+    rollingDprPreset: 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier'
+    rollingShadowPreset: 'every-frame' | 'alternate' | 'frozen-after-first'
   }
   roll: {
     seed: number | null
@@ -118,6 +138,14 @@ export interface DiceRuntimeDiagnostics {
     geometries: number
     textures: number
     programs: number
+    quality: {
+      phase: 'static' | 'rolling'
+      rollingDprPreset: 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier'
+      basePixelRatio: number
+      effectivePixelRatio: number
+      tier: 'full' | 'reduced'
+      shadowMapSize: 1024 | 512
+    } | null
   }
 }
 
@@ -257,6 +285,12 @@ export function expectRenderBudgets(
   const { render, engine } = diagnostics
   const expectedWidth = Math.floor(render.cssWidth * render.pixelRatio)
   const expectedHeight = Math.floor(render.cssHeight * render.pixelRatio)
+  const expectedRenderPhase = engine.mode === 'rolling' ? 'rolling' : 'static'
+
+  expect(render.quality, `[${projectName}] render quality diagnostics`).not.toBeNull()
+  expect(render.quality!.phase).toBe(expectedRenderPhase)
+  expect(render.quality!.effectivePixelRatio).toBeCloseTo(render.pixelRatio, 8)
+  expect(render.quality!.shadowMapSize).toBe(render.quality!.tier === 'full' ? 1024 : 512)
 
   expect(render.pixelRatio, `[${projectName}] pixelRatio lower bound`).toBeGreaterThanOrEqual(
     BROWSER_BUDGETS.minPixelRatio,
@@ -276,7 +310,18 @@ export function expectRenderBudgets(
     render.drawingBufferPixels,
     `[${projectName}] drawing-buffer pixel budget`,
   ).toBeLessThanOrEqual(BROWSER_BUDGETS.maxDrawingBufferPixels)
-  if (projectName.startsWith('desktop')) {
+  if (engine.mode === 'rolling') {
+    const expectedRollingPixelRatio =
+      render.quality!.rollingDprPreset === 'cap-1x' ||
+      (render.quality!.rollingDprPreset === 'cap-1x-reduced-tier' &&
+        render.quality!.tier === 'reduced')
+        ? BROWSER_BUDGETS.reducedTierRollingPixelRatio
+        : render.quality!.basePixelRatio
+    expect(render.pixelRatio, `[${projectName}] rolling DPR preset`).toBeCloseTo(
+      expectedRollingPixelRatio,
+      8,
+    )
+  } else if (projectName.startsWith('desktop')) {
     expect(
       render.drawingBufferPixels,
       `[${projectName}] quality unexpectedly dropped below the desktop baseline`,

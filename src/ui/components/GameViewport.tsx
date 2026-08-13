@@ -12,10 +12,17 @@ import { createEngine, type EngineDiagnostics } from '@/game/engine'
 import { createGameStore } from '@/game/store'
 import { GameController } from '@/game/controller'
 import { SETTLE } from '@/config/settle'
+import {
+  DEFAULT_RUNTIME_RENDER_VARIANT_ID,
+  getRenderPerformanceVariant,
+  RENDER_PERFORMANCE_EXPERIMENT_VERSION,
+  resolveRenderPerformanceExperiment,
+  type RenderPerformanceVariant,
+} from '@/game/render-performance-experiment'
 import { GameControllerContext } from './GameControllerContext'
 import { GameStoreContext } from './GameStoreContext'
 
-const DIAGNOSTICS_SCHEMA_VERSION = 4
+const DIAGNOSTICS_SCHEMA_VERSION = 5
 const DIAGNOSTICS_ENABLED = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
 const E2E_SEED_PLAN_VERSION = '1'
 const E2E_SETTLEMENT_OVERRIDE_VERSION = '1'
@@ -30,6 +37,13 @@ interface DiceRuntimeDiagnostics {
   revision: number
   sampleKind: 'post-render'
   engine: EngineDiagnostics
+  renderExperiment: {
+    version: typeof RENDER_PERFORMANCE_EXPERIMENT_VERSION
+    explicit: boolean
+    variant: RenderPerformanceVariant['id']
+    rollingDprPreset: RenderPerformanceVariant['rollingDprPreset']
+    rollingShadowPreset: RenderPerformanceVariant['rollingShadowPreset']
+  }
   roll: ReturnType<GameController['getRollDiagnostics']>
   render: {
     cssWidth: number
@@ -44,6 +58,7 @@ interface DiceRuntimeDiagnostics {
     geometries: number
     textures: number
     programs: number
+    quality: ReturnType<NonNullable<ReturnType<typeof createScene>['getRenderQualityDiagnostics']>>
   }
 }
 
@@ -86,6 +101,15 @@ function readPerformanceProfile(): { now: () => number } | undefined {
   const params = new URLSearchParams(window.location.search)
   if (params.get('perfProfileVersion') !== E2E_PERFORMANCE_PROFILE_VERSION) return undefined
   return params.get('perfProfile') === '1' ? { now: () => performance.now() } : undefined
+}
+
+function readRenderPerformanceExperiment(): RenderPerformanceVariant | undefined {
+  if (import.meta.env.MODE !== 'e2e') return undefined
+  const params = new URLSearchParams(window.location.search)
+  return resolveRenderPerformanceExperiment(
+    params.get('renderExperimentVersion'),
+    params.get('renderVariant'),
+  )
 }
 
 /** 递归释放 scene 中所有 geometry / material / texture */
@@ -148,8 +172,14 @@ export function GameViewport({ children }: GameViewportProps) {
     canvas.style.display = 'block'
     canvasHost.appendChild(canvas)
 
+    const explicitRenderExperiment = readRenderPerformanceExperiment()
+    const renderVariant =
+      explicitRenderExperiment ?? getRenderPerformanceVariant(DEFAULT_RUNTIME_RENDER_VARIANT_ID)
+
     // 初始化场景
-    const sceneCtx = createScene(canvas)
+    const sceneCtx = createScene(canvas, {
+      rollingDprPreset: renderVariant.rollingDprPreset,
+    })
     const table = createTable()
     sceneCtx.scene.add(table)
     const bowl = createBowl()
@@ -190,6 +220,13 @@ export function GameViewport({ children }: GameViewportProps) {
         revision: ++diagnosticsRevision,
         sampleKind: 'post-render',
         engine: engineDiagnostics,
+        renderExperiment: {
+          version: RENDER_PERFORMANCE_EXPERIMENT_VERSION,
+          explicit: explicitRenderExperiment !== undefined,
+          variant: renderVariant.id,
+          rollingDprPreset: renderVariant.rollingDprPreset,
+          rollingShadowPreset: renderVariant.rollingShadowPreset,
+        },
         roll: ctrl.getRollDiagnostics(),
         render: {
           cssWidth: canvas.clientWidth,
@@ -203,6 +240,7 @@ export function GameViewport({ children }: GameViewportProps) {
           geometries: sceneCtx.renderer.info.memory.geometries,
           textures: sceneCtx.renderer.info.memory.textures,
           programs: sceneCtx.renderer.info.programs?.length ?? 0,
+          quality: sceneCtx.getRenderQualityDiagnostics?.() ?? null,
         },
       }
       canvas.dataset.diceDiagnostics = JSON.stringify(diagnostics)
@@ -222,6 +260,7 @@ export function GameViewport({ children }: GameViewportProps) {
         ctrl.onSettled(result)
       },
       onDiagnostics: DIAGNOSTICS_ENABLED ? publishDiagnostics : undefined,
+      rollingShadowPreset: renderVariant.rollingShadowPreset,
       performanceProfile: readPerformanceProfile(),
     })
 

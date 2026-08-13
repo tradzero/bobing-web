@@ -17,6 +17,11 @@ import {
   type RollingCpuFrameSample,
   type RollingCpuProfileSnapshot,
 } from './performance-profile'
+import {
+  createRollingShadowScheduler,
+  type RollingShadowPreset,
+  type RollingShadowScheduleDiagnostics,
+} from './rolling-shadow'
 
 export type EngineMode = 'idle' | 'rolling' | 'settled' | 'stopped'
 
@@ -36,6 +41,8 @@ export interface EngineDiagnostics {
     escapeGuardInterventionCount: number
     nonFiniteBodyStateDetected: boolean
   }
+  /** rolling 阴影调度请求；计数只说明引擎发出请求，不表示 GPU 已完成 shadow pass。 */
+  rollingShadow: RollingShadowScheduleDiagnostics
   /** 仅显式 e2e perf-profile 模式存在；字段同时包含 rAF 间隔、Cannon 子步数与主线程 CPU 耗时。 */
   performanceProfile?: RollingCpuProfileSnapshot
 }
@@ -48,6 +55,8 @@ export interface EngineOptions {
   onSettled: (result: SettleResult) => void
   /** 可选只读诊断订阅，用于开发环境/浏览器验收，不参与状态决策。 */
   onDiagnostics?: (diagnostics: EngineDiagnostics) => void
+  /** rolling 阴影刷新节奏；默认保持当前每个 rolling render 都请求刷新。 */
+  rollingShadowPreset?: RollingShadowPreset
   /** 仅供隔离 e2e 性能采样；普通开发与生产不得传入。 */
   performanceProfile?: {
     now: () => number
@@ -83,8 +92,16 @@ type ShadowMapControls = {
  * - 结算帧：先回调业务层冻结/提交，再同步 raw body 姿态渲染最后一帧。
  */
 export function createEngine(opts: EngineOptions): Engine {
-  const { sceneCtx, world, worldStep, dicePairs, onSettled, onDiagnostics, performanceProfile } =
-    opts
+  const {
+    sceneCtx,
+    world,
+    worldStep,
+    dicePairs,
+    onSettled,
+    onDiagnostics,
+    rollingShadowPreset,
+    performanceProfile,
+  } = opts
   const { scene, camera, renderer } = sceneCtx
   const bodies = dicePairs.map((pair) => pair.body)
 
@@ -104,6 +121,7 @@ export function createEngine(opts: EngineOptions): Engine {
     : null
   const profileNow = performanceProfile?.now
   let profileFrameInProgress = false
+  const rollingShadowScheduler = createRollingShadowScheduler(rollingShadowPreset)
 
   for (const body of bodies) {
     body.addEventListener('collide', soundManager.handleCollision)
@@ -118,8 +136,13 @@ export function createEngine(opts: EngineOptions): Engine {
   }
 
   function prepareRollingShadows(): void {
+    // 必须与真实 rolling renderer.render() 一一对应，不能在 tick/beginSettle 中预调用。
+    const requestUpdate = rollingShadowScheduler.requestForRollingRender()
     const shadowMap = getShadowMap()
-    if (shadowMap) shadowMap.autoUpdate = true
+    if (!shadowMap) return
+    shadowMap.autoUpdate = false
+    // resize 等外部失效请求优先保留；策略只能增加请求，不能把它清掉。
+    shadowMap.needsUpdate ||= requestUpdate
   }
 
   function prepareStaticShadows(): void {
@@ -160,6 +183,7 @@ export function createEngine(opts: EngineOptions): Engine {
   }
 
   function renderStaticFrame(): void {
+    sceneCtx.setRenderPhase?.('static')
     prepareStaticShadows()
     syncRawBodies()
     renderer.render(scene, camera)
@@ -167,6 +191,7 @@ export function createEngine(opts: EngineOptions): Engine {
   }
 
   function renderRollingFrame(): void {
+    sceneCtx.setRenderPhase?.('rolling')
     prepareRollingShadows()
     syncInterpolatedBodies()
     renderer.render(scene, camera)
@@ -226,6 +251,7 @@ export function createEngine(opts: EngineOptions): Engine {
       settleState = null
       previousRollingTimestamp = null
       onSettled(settleResult)
+      sceneCtx.setRenderPhase?.('static')
       prepareStaticShadows()
       sample.transformSyncCpuMs = measureCpu(syncRawBodies)
       sample.rendererSubmitCpuMs = measureCpu(() => renderer.render(scene, camera))
@@ -256,8 +282,6 @@ export function createEngine(opts: EngineOptions): Engine {
       notifyPostRenderDiagnostics()
       return
     }
-
-    prepareRollingShadows()
 
     // 每轮第一个 timestamp 只建立基准，避免首屏等待或跨轮间隔形成大 delta。
     if (previousRollingTimestamp === null) {
@@ -321,6 +345,8 @@ export function createEngine(opts: EngineOptions): Engine {
     mode = 'stopped'
     settleState = null
     previousRollingTimestamp = null
+    rollingShadowScheduler.reset()
+    sceneCtx.setRenderPhase?.('static')
   }
 
   function beginSettle(): void {
@@ -332,12 +358,13 @@ export function createEngine(opts: EngineOptions): Engine {
     settleState = createSettleState(0)
     resetRollSafety()
     rollingCpuProfile?.reset()
+    rollingShadowScheduler.reset()
     observeInitialRollSafety()
+    sceneCtx.setRenderPhase?.('rolling')
 
     // throwDice 已更新 raw body；先初始化插值字段，避免首个基准帧显示上一轮姿态。
     for (const body of bodies) syncBodyInterpolationState(body)
 
-    prepareRollingShadows()
     scheduleFrame()
   }
 
@@ -350,6 +377,8 @@ export function createEngine(opts: EngineOptions): Engine {
     settleState = null
     resetRollSafety()
     rollingCpuProfile?.reset()
+    rollingShadowScheduler.reset()
+    sceneCtx.setRenderPhase?.('static')
     prepareStaticShadows()
     scheduleFrame()
   }
@@ -375,6 +404,7 @@ export function createEngine(opts: EngineOptions): Engine {
         escapeGuardInterventionCount: rollEscapeGuardInterventionCount,
         nonFiniteBodyStateDetected: rollFrameDiagnostics.nanDetected,
       },
+      rollingShadow: rollingShadowScheduler.snapshot(),
     }
     if (rollingCpuProfile) {
       diagnostics.performanceProfile = rollingCpuProfile.snapshot(profileFrameInProgress)
