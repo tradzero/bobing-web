@@ -9,7 +9,7 @@ export const E2E_NEXT_SEED = 42
  * 所有 browser bench 只消费此常量，渲染结构改变时避免散落修改断言。
  */
 export const BROWSER_BUDGETS = {
-  diagnosticsSchemaVersion: 7,
+  diagnosticsSchemaVersion: 8,
   mainPassCalls: 8,
   mainPassTriangles: 41_288,
   geometries: 8,
@@ -37,6 +37,19 @@ export const BROWSER_BUDGETS = {
 } as const
 
 export type RuntimeEngineMode = 'idle' | 'rolling' | 'settled' | 'error' | 'stopped'
+
+export interface CanonicalBodyStateDiagnostics {
+  version: 1
+  floatEncoding: 'ieee754-float64-be'
+  hashAlgorithm: 'fnv1a64'
+  hash: string
+  bodies: Array<{
+    position: [number, number, number]
+    quaternion: [number, number, number, number]
+    velocity: [number, number, number]
+    angularVelocity: [number, number, number]
+  }>
+}
 
 export interface DiceRuntimeDiagnostics {
   schemaVersion: number
@@ -150,18 +163,8 @@ export interface DiceRuntimeDiagnostics {
     randomPlanVersion: number | null
     placementPath: 'rejection' | 'constructive' | 'fallback' | null
     fallbackLayout: 'ring6' | 'dual33' | 'center15' | null
-    initialState: {
-      version: 1
-      floatEncoding: 'ieee754-float64-be'
-      hashAlgorithm: 'fnv1a64'
-      hash: string
-      bodies: Array<{
-        position: [number, number, number]
-        quaternion: [number, number, number, number]
-        velocity: [number, number, number]
-        angularVelocity: [number, number, number]
-      }>
-    } | null
+    initialState: CanonicalBodyStateDiagnostics | null
+    finalState: CanonicalBodyStateDiagnostics | null
     settleAlgorithmVersion: number
     settleReason:
       | 'natural-sleep'

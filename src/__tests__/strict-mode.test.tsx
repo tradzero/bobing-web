@@ -289,7 +289,7 @@ describe('StrictMode 重挂载', () => {
     const canvas = container.querySelector('canvas')
     const diagnostics = JSON.parse(canvas?.dataset.diceDiagnostics ?? '{}')
     expect(diagnostics).toMatchObject({
-      schemaVersion: 7,
+      schemaVersion: 8,
       revision: 1,
       sampleKind: 'post-render',
       physicsSchedulerExperiment: {
@@ -317,6 +317,7 @@ describe('StrictMode 重挂载', () => {
         placementPath: null,
         fallbackLayout: null,
         initialState: null,
+        finalState: null,
         settleAlgorithmVersion: 4,
         settleReason: null,
         settleElapsed: null,

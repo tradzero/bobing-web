@@ -29,7 +29,7 @@ import {
 import { GameControllerContext } from './GameControllerContext'
 import { GameStoreContext } from './GameStoreContext'
 
-const DIAGNOSTICS_SCHEMA_VERSION = 7
+const DIAGNOSTICS_SCHEMA_VERSION = 8
 const DIAGNOSTICS_ENABLED = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
 const E2E_SEED_PLAN_VERSION = '1'
 const E2E_SETTLEMENT_OVERRIDE_VERSION = '1'

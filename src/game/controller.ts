@@ -14,6 +14,11 @@ import {
   cloneThrowInitialState,
   type ThrowInitialStateDiagnostics,
 } from '@/dice/throw-initial-state'
+import {
+  captureCanonicalBodyState,
+  cloneCanonicalBodyState,
+  type CanonicalBodyStateDiagnostics,
+} from '@/dice/canonical-body-state'
 import type { RollError } from './roll-error'
 
 export interface GameControllerDeps {
@@ -36,6 +41,8 @@ export interface GameRollDiagnostics {
   placementPath: ThrowDiagnostics['placementPath'] | null
   fallbackLayout: ThrowDiagnostics['fallbackLayout']
   initialState: ThrowInitialStateDiagnostics | null
+  /** 正常物理终态；在任何人工冻结前按 canonical 骰子顺序只读捕获。 */
+  finalState: CanonicalBodyStateDiagnostics | null
   settleAlgorithmVersion: typeof SETTLE_ALGORITHM_VERSION
   settleReason: SettleResult['reason'] | RollError['reason'] | 'external-call' | null
   settleElapsed: number | null
@@ -62,6 +69,7 @@ export class GameController {
     placementPath: null,
     fallbackLayout: null,
     initialState: null,
+    finalState: null,
     settleAlgorithmVersion: SETTLE_ALGORITHM_VERSION,
     settleReason: null,
     settleElapsed: null,
@@ -96,6 +104,7 @@ export class GameController {
       placementPath: placement.placementPath,
       fallbackLayout: placement.fallbackLayout,
       initialState,
+      finalState: null,
       settleAlgorithmVersion: SETTLE_ALGORITHM_VERSION,
       settleReason: null,
       settleElapsed: null,
@@ -131,8 +140,11 @@ export class GameController {
     }
 
     const bodies = this.dicePairs.map((p) => p.body)
+    // 终态必须代表 solver 交付的真实物理状态；先捕获，再执行下方产品层冻结。
+    const finalState = captureCanonicalBodyState(bodies)
     this.rollDiagnostics = {
       ...this.rollDiagnostics,
+      finalState,
       settleReason: settleResult?.reason ?? 'external-call',
       settleElapsed: settleResult?.elapsed ?? null,
     }
@@ -193,6 +205,8 @@ export class GameController {
 
     this.rollDiagnostics = {
       ...this.rollDiagnostics,
+      // 异常分支只冻结画面，不把截断姿态伪装成可提交的正常物理终态。
+      finalState: null,
       settleReason: error.reason,
       settleElapsed: error.reason === 'timeout' ? error.elapsed : error.simulationElapsed,
     }
@@ -247,6 +261,9 @@ export class GameController {
       ...this.rollDiagnostics,
       initialState: this.rollDiagnostics.initialState
         ? cloneThrowInitialState(this.rollDiagnostics.initialState)
+        : null,
+      finalState: this.rollDiagnostics.finalState
+        ? cloneCanonicalBodyState(this.rollDiagnostics.finalState)
         : null,
     }
   }

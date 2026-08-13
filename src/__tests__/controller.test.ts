@@ -170,6 +170,7 @@ describe('GameController 编排层集成测试', () => {
     expect(controller.getRollDiagnostics()).toMatchObject({
       settleReason: 'timeout',
       settleElapsed: 10,
+      finalState: null,
     })
     for (const { body } of dicePairs) {
       expect(body.velocity.length()).toBe(0)
@@ -216,6 +217,7 @@ describe('GameController 编排层集成测试', () => {
     expect(controller.getRollDiagnostics()).toMatchObject({
       settleReason: 'timing-overload',
       settleElapsed: 1 / 3,
+      finalState: null,
     })
     for (const { body } of dicePairs) {
       expect(body.velocity.length()).toBe(0)
@@ -230,6 +232,7 @@ describe('GameController 编排层集成测试', () => {
     expect(controller.getRollDiagnostics()).toMatchObject({
       settleReason: 'timing-overload',
       settleElapsed: 1 / 3,
+      finalState: null,
     })
     expect(readAllFacesDetailed).not.toHaveBeenCalled()
     expect(playWinSound).not.toHaveBeenCalled()
@@ -260,6 +263,7 @@ describe('GameController 编排层集成测试', () => {
     expect(controller.getRollDiagnostics()).toMatchObject({
       settleReason: null,
       settleElapsed: null,
+      finalState: null,
     })
   })
 
@@ -354,6 +358,7 @@ describe('GameController 编排层集成测试', () => {
           }),
         ]),
       },
+      finalState: null,
       settleAlgorithmVersion: 4,
       settleReason: null,
       settleElapsed: null,
@@ -391,14 +396,36 @@ describe('GameController 编排层集成测试', () => {
     controller.onSettled({ reason: 'natural-sleep', elapsed: 2.1 })
     expect(controller.getRollDiagnostics()).toMatchObject({
       seed: 42,
+      finalState: {
+        version: 1,
+        floatEncoding: 'ieee754-float64-be',
+        hashAlgorithm: 'fnv1a64',
+        hash: expect.stringMatching(/^[0-9a-f]{16}$/),
+        bodies: expect.arrayContaining([
+          expect.objectContaining({
+            position: expect.any(Array),
+            quaternion: expect.any(Array),
+            velocity: expect.any(Array),
+            angularVelocity: expect.any(Array),
+          }),
+        ]),
+      },
       settleReason: 'natural-sleep',
       settleElapsed: 2.1,
     })
+
+    const firstTerminalSnapshot = controller.getRollDiagnostics().finalState!
+    const originalTerminalX = firstTerminalSnapshot.bodies[0].position[0]
+    Reflect.set(firstTerminalSnapshot.bodies[0].position, 0, originalTerminalX + 100)
+    expect(controller.getRollDiagnostics().finalState!.bodies[0].position[0]).toBe(
+      originalTerminalX,
+    )
 
     const now = vi.spyOn(Date, 'now').mockReturnValue(123_456)
     controller.throw()
     expect(controller.getRollDiagnostics()).toMatchObject({
       seed: 123_456,
+      finalState: null,
       settleReason: null,
       settleElapsed: null,
     })
@@ -433,6 +460,15 @@ describe('GameController 编排层集成测试', () => {
     }
 
     settleFlat()
+
+    const finalState = controller.getRollDiagnostics().finalState
+    expect(finalState).not.toBeNull()
+    expect(finalState!.bodies).toHaveLength(6)
+    for (const body of finalState!.bodies) {
+      // diagnostics 捕获 solver 终态，而不是下方产品层人工冻结后的零速度。
+      expect(body.velocity).toEqual([1, 2, 3])
+      expect(body.angularVelocity).toEqual([4, 5, 6])
+    }
 
     for (const { body } of dicePairs) {
       expect(body.velocity.length(), '线速度应为 0').toBe(0)

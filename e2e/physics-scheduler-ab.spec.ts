@@ -19,7 +19,7 @@ import {
   type DiceRuntimeDiagnostics,
 } from './helpers/diagnostics'
 
-const PHYSICS_SCHEDULER_BROWSER_AB_SCHEMA_VERSION = 1
+const PHYSICS_SCHEDULER_BROWSER_AB_SCHEMA_VERSION = 2
 const PHYSICS_SCHEDULER_EXPERIMENT_VERSION = 1
 const PROFILE_VERSION = 1
 const SEEDS = [50_000, 55_000, 60_000, 65_000, 70_000] as const
@@ -45,33 +45,54 @@ interface RunObservation {
   rolling: DiceRuntimeDiagnostics
   settled: DiceRuntimeDiagnostics
   contextLossCount: number
+  safetyHardGatePassed: true
 }
 
 interface SeedComparison {
   seed: number
   order: SchedulerVariant[]
-  legacyStable: boolean
-  exactStable: boolean
-  legacyTrajectoryProxyStable: boolean
-  exactTrajectoryProxyStable: boolean
-  schedulerSensitive: boolean
+  throwPlanEquivalent: boolean
+  initialStateEquivalent: boolean
+  legacyResultStable: boolean
+  exactResultStable: boolean
+  behaviorSensitive: boolean
+  legacyFinalStateStable: boolean
+  exactFinalStateStable: boolean
+  trajectoryEquivalent: boolean | null
+  trajectorySensitive: boolean
   settlementPathSensitive: boolean
   resultEquivalent: boolean | null
   behaviorComparable: boolean
+  allRunsSafetyHardGatePassed: boolean
   performanceComparable: boolean
   performanceExclusionReasons: string[]
-  equivalenceConclusion:
+  behaviorConclusion:
     | 'result-equivalent-with-stable-repeats'
     | 'different-stable-results'
-    | 'inconclusive-scheduler-sensitive'
+    | 'inconclusive-result-unstable'
+    | 'invalid-input-drift'
+  trajectoryConclusion:
+    | 'trajectory-equivalent-with-stable-repeats'
+    | 'different-stable-final-state'
+    | 'inconclusive-final-state-unstable'
   rafP95Ratio: number | null
   settleWallRatio: number
   legacyRepeatNoise: number | null
   exactRepeatNoise: number | null
+  rawSafetyExtremaObservation: {
+    legacy: RawSafetyExtrema[]
+    exact: RawSafetyExtrema[]
+    candidateMinusBaselineMedian: RawSafetyExtrema
+  }
   executionEvidence: {
     legacy: RunExecutionEvidence[]
     exact: RunExecutionEvidence[]
   }
+}
+
+interface RawSafetyExtrema {
+  maxRadius: number
+  maxContactPenetration: number
 }
 
 interface RunExecutionEvidence {
@@ -116,17 +137,47 @@ function resultSignature(observation: RunObservation): string {
   })
 }
 
-function trajectoryProxySignature(observation: RunObservation): string {
+function canonicalStateSignature(
+  state: NonNullable<DiceRuntimeDiagnostics['roll']['finalState']>,
+): string {
+  // hash 锁定位级 Float64，完整 arrays 同时保留可审计的逐 body 证据。
+  return JSON.stringify({ hash: state.hash, bodies: state.bodies })
+}
+
+function rawSafetyExtrema(observation: RunObservation): RawSafetyExtrema {
   const { rollSafety } = observation.settled.engine
-  return JSON.stringify({
-    settleReason: observation.settleReason,
+  return {
     maxRadius: rollSafety.maxRadius,
-    conservativeBoundaryCrossings: rollSafety.conservativeBoundaryCrossings,
-    wallCenterCrossings: rollSafety.wallCenterCrossings,
     maxContactPenetration: rollSafety.maxContactPenetration,
-    escapeGuardInterventionCount: rollSafety.escapeGuardInterventionCount,
-    nonFiniteBodyStateDetected: rollSafety.nonFiniteBodyStateDetected,
+  }
+}
+
+function expectFinalCanonicalState(diagnostics: DiceRuntimeDiagnostics, context: string): void {
+  const finalState = diagnostics.roll.finalState
+  expect(finalState, `${context} final canonical state must be published`).not.toBeNull()
+  if (!finalState) throw new Error(`${context} final canonical state is missing`)
+  expect(finalState).toMatchObject({
+    version: 1,
+    floatEncoding: 'ieee754-float64-be',
+    hashAlgorithm: 'fnv1a64',
+    hash: expect.stringMatching(/^[0-9a-f]{16}$/),
   })
+  expect(finalState.bodies, `${context} final canonical body count`).toHaveLength(6)
+  for (const [bodyIndex, body] of finalState.bodies.entries()) {
+    const fields = [
+      ['position', body.position, 3],
+      ['quaternion', body.quaternion, 4],
+      ['velocity', body.velocity, 3],
+      ['angularVelocity', body.angularVelocity, 3],
+    ] as const
+    for (const [field, values, length] of fields) {
+      expect(values, `${context} body ${bodyIndex} ${field} tuple length`).toHaveLength(length)
+      expect(
+        values.every(Number.isFinite),
+        `${context} body ${bodyIndex} ${field} must be finite`,
+      ).toBe(true)
+    }
+  }
 }
 
 function expectProfile(diagnostics: DiceRuntimeDiagnostics, variant: SchedulerVariant): void {
@@ -338,6 +389,7 @@ async function runVariant(
   const settleWallMs = performance.now() - settleStartedAt
   expectSchedulerTiming(settled, variant)
   expectRollSafety(settled)
+  expectFinalCanonicalState(settled, `${variant} seed ${seed}`)
   expectRenderContract(settled, 'static')
   expectRenderBudgets(settled, testInfo.project.name)
   expectProfile(settled, variant)
@@ -379,6 +431,7 @@ async function runVariant(
         (window as typeof window & { __diceWebglContextLossCount?: number })
           .__diceWebglContextLossCount ?? 0,
     ),
+    safetyHardGatePassed: true,
   }
 
   expect(observation.contextLossCount).toBe(0)
@@ -392,17 +445,31 @@ function compareSeed(
   seed: number,
   order: SchedulerVariant[],
   observations: readonly RunObservation[],
+  inputEquivalence: {
+    throwPlanEquivalent: boolean
+    initialStateEquivalent: boolean
+  },
 ): SeedComparison {
   const legacy = observations.filter(({ variant }) => variant === 'legacy-batched')
   const exact = observations.filter(({ variant }) => variant === 'exact-cap6')
   const legacySignatures = legacy.map(resultSignature)
   const exactSignatures = exact.map(resultSignature)
-  const legacyStable = new Set(legacySignatures).size === 1
-  const exactStable = new Set(exactSignatures).size === 1
-  const legacyTrajectoryProxyStable = new Set(legacy.map(trajectoryProxySignature)).size === 1
-  const exactTrajectoryProxyStable = new Set(exact.map(trajectoryProxySignature)).size === 1
+  const legacyResultStable = new Set(legacySignatures).size === 1
+  const exactResultStable = new Set(exactSignatures).size === 1
   const resultEquivalent =
-    legacyStable && exactStable ? legacySignatures[0] === exactSignatures[0] : null
+    legacyResultStable && exactResultStable ? legacySignatures[0] === exactSignatures[0] : null
+
+  const finalStateSignature = (run: RunObservation) =>
+    canonicalStateSignature(run.settled.roll.finalState!)
+  const legacyFinalStateSignatures = legacy.map(finalStateSignature)
+  const exactFinalStateSignatures = exact.map(finalStateSignature)
+  const legacyFinalStateStable = new Set(legacyFinalStateSignatures).size === 1
+  const exactFinalStateStable = new Set(exactFinalStateSignatures).size === 1
+  const trajectoryEquivalent =
+    legacyFinalStateStable && exactFinalStateStable
+      ? legacyFinalStateSignatures[0] === exactFinalStateSignatures[0]
+      : null
+
   const profileP95 = (run: RunObservation) =>
     run.settled.engine.performanceProfile?.metrics.rafRawDeltaMs.p95 ?? null
   const legacyP95 = legacy.map(profileP95).filter((value): value is number => value !== null)
@@ -418,45 +485,68 @@ function compareSeed(
     settlementReasons(exact).size !== 1 ||
     legacy[0].settleReason !== exact[0].settleReason
   const behaviorComparable =
-    legacyStable &&
-    exactStable &&
-    legacyTrajectoryProxyStable &&
-    exactTrajectoryProxyStable &&
+    inputEquivalence.throwPlanEquivalent &&
+    inputEquivalence.initialStateEquivalent &&
+    legacyResultStable &&
+    exactResultStable &&
     resultEquivalent === true
+  const allRunsSafetyHardGatePassed = observations.every(
+    ({ safetyHardGatePassed }) => safetyHardGatePassed,
+  )
   const performanceExclusionReasons = [
-    ...(!legacyStable ? ['legacy-result-unstable'] : []),
-    ...(!exactStable ? ['exact-result-unstable'] : []),
-    ...(!legacyTrajectoryProxyStable ? ['legacy-trajectory-proxy-unstable'] : []),
-    ...(!exactTrajectoryProxyStable ? ['exact-trajectory-proxy-unstable'] : []),
+    ...(!inputEquivalence.throwPlanEquivalent ? ['throw-plan-drift'] : []),
+    ...(!inputEquivalence.initialStateEquivalent ? ['initial-state-drift'] : []),
+    ...(!legacyResultStable ? ['legacy-result-unstable'] : []),
+    ...(!exactResultStable ? ['exact-result-unstable'] : []),
     ...(resultEquivalent === false ? ['stable-result-mismatch'] : []),
+    ...(!allRunsSafetyHardGatePassed ? ['per-run-safety-hard-gate-failed'] : []),
     ...(settlementPathSensitive ? ['settlement-path-sensitive'] : []),
   ]
-  const equivalenceConclusion =
-    !legacyStable || !exactStable || !legacyTrajectoryProxyStable || !exactTrajectoryProxyStable
-      ? 'inconclusive-scheduler-sensitive'
-      : resultEquivalent
-        ? 'result-equivalent-with-stable-repeats'
-        : 'different-stable-results'
+  const behaviorConclusion =
+    !inputEquivalence.throwPlanEquivalent || !inputEquivalence.initialStateEquivalent
+      ? 'invalid-input-drift'
+      : !legacyResultStable || !exactResultStable
+        ? 'inconclusive-result-unstable'
+        : resultEquivalent
+          ? 'result-equivalent-with-stable-repeats'
+          : 'different-stable-results'
+  const trajectoryConclusion =
+    !legacyFinalStateStable || !exactFinalStateStable
+      ? 'inconclusive-final-state-unstable'
+      : trajectoryEquivalent
+        ? 'trajectory-equivalent-with-stable-repeats'
+        : 'different-stable-final-state'
+  const legacyRawExtrema = legacy.map(rawSafetyExtrema)
+  const exactRawExtrema = exact.map(rawSafetyExtrema)
+  const medianExtrema = (values: readonly RawSafetyExtrema[]): RawSafetyExtrema => ({
+    maxRadius: median(values.map(({ maxRadius }) => maxRadius))!,
+    maxContactPenetration: median(
+      values.map(({ maxContactPenetration }) => maxContactPenetration),
+    )!,
+  })
+  const legacyMedianExtrema = medianExtrema(legacyRawExtrema)
+  const exactMedianExtrema = medianExtrema(exactRawExtrema)
 
   return {
     seed,
     order,
-    legacyStable,
-    exactStable,
-    legacyTrajectoryProxyStable,
-    exactTrajectoryProxyStable,
-    schedulerSensitive:
-      !legacyStable ||
-      !exactStable ||
-      !legacyTrajectoryProxyStable ||
-      !exactTrajectoryProxyStable ||
-      resultEquivalent === false,
+    ...inputEquivalence,
+    legacyResultStable,
+    exactResultStable,
+    behaviorSensitive: !behaviorComparable,
+    legacyFinalStateStable,
+    exactFinalStateStable,
+    trajectoryEquivalent,
+    trajectorySensitive: trajectoryEquivalent !== true,
     settlementPathSensitive,
     resultEquivalent,
     behaviorComparable,
-    performanceComparable: behaviorComparable && !settlementPathSensitive,
+    allRunsSafetyHardGatePassed,
+    performanceComparable:
+      behaviorComparable && allRunsSafetyHardGatePassed && !settlementPathSensitive,
     performanceExclusionReasons,
-    equivalenceConclusion,
+    behaviorConclusion,
+    trajectoryConclusion,
     rafP95Ratio:
       legacyMedian === null || legacyMedian === 0 || exactMedian === null
         ? null
@@ -464,6 +554,15 @@ function compareSeed(
     settleWallRatio: exactWall / legacyWall,
     legacyRepeatNoise: relativeRepeatNoise(legacyP95),
     exactRepeatNoise: relativeRepeatNoise(exactP95),
+    rawSafetyExtremaObservation: {
+      legacy: legacyRawExtrema,
+      exact: exactRawExtrema,
+      candidateMinusBaselineMedian: {
+        maxRadius: exactMedianExtrema.maxRadius - legacyMedianExtrema.maxRadius,
+        maxContactPenetration:
+          exactMedianExtrema.maxContactPenetration - legacyMedianExtrema.maxContactPenetration,
+      },
+    },
     executionEvidence: {
       legacy: legacy.map(runExecutionEvidence),
       exact: exact.map(runExecutionEvidence),
@@ -487,16 +586,21 @@ test('@physics-scheduler-ab legacy-batched vs exact-cap6', async ({ page, browse
       seedCount: SEEDS.length,
       minimumBehaviorComparableSeeds: MIN_BEHAVIOR_COMPARABLE_SEEDS,
       behaviorComparableRequires:
-        'both repeats result-stable and trajectory-proxy-stable, with equivalent final result',
-      performanceComparableAdditionallyRequires: 'same settlement path across all four runs',
+        'identical throw plan and initial canonical state; both repeats UI-result-stable; equivalent faces/prize/carry/tilt across schedulers',
+      performanceComparableAdditionallyRequires:
+        'all per-run hard safety gates pass and the settlement path matches across all four runs; final trajectory equivalence is reported separately and is not required',
     },
     performancePolicy: 'observational-only-no-cross-machine-threshold',
     equivalencePolicy: {
-      hard: 'identical initial state; stable repeated result must match across schedulers',
-      inconclusive:
-        'within-side result instability is schedulerSensitive and is not reported as equivalence',
-      trajectoryProxy:
-        'repeated settle reason plus roll-safety envelope; browser diagnostics do not expose final canonical body state',
+      inputHardGate: 'identical versioned throw plan and complete initial canonical body state',
+      behavior:
+        'stable repeated UI result on each side and equivalent faces/prize/carry/tilt across schedulers',
+      behaviorInconclusive:
+        'within-side UI result instability is excluded from the behavior and performance cohorts',
+      trajectory:
+        'complete final canonical body hash and arrays must be stable within each side and equal across schedulers to claim trajectory equivalence',
+      rawSafetyExtrema:
+        'maxRadius and maxContactPenetration deltas are observational only; every run retains the unchanged hard safety gates',
     },
   }
   const repositoryStateAtStart = readRepositoryState()
@@ -540,7 +644,8 @@ test('@physics-scheduler-ab legacy-batched vs exact-cap6', async ({ page, browse
           fallback: settled.roll.fallbackLayout,
         }),
       )
-      expect(new Set(throwPlanSignatures).size, `seed ${seed} throw plan drift`).toBe(1)
+      const throwPlanEquivalent = new Set(throwPlanSignatures).size === 1
+      expect(throwPlanEquivalent, `seed ${seed} throw plan drift`).toBe(true)
 
       const initialStateSignatures = seedRuns.map(({ settled }) => {
         const initialState = settled.roll.initialState
@@ -554,9 +659,13 @@ test('@physics-scheduler-ab legacy-batched vs exact-cap6', async ({ page, browse
         expect(initialState!.bodies).toHaveLength(6)
         return JSON.stringify(initialState)
       })
-      expect(new Set(initialStateSignatures).size, `seed ${seed} initial state drift`).toBe(1)
+      const initialStateEquivalent = new Set(initialStateSignatures).size === 1
+      expect(initialStateEquivalent, `seed ${seed} initial state drift`).toBe(true)
 
-      const pair = compareSeed(seed, order, seedRuns)
+      const pair = compareSeed(seed, order, seedRuns, {
+        throwPlanEquivalent,
+        initialStateEquivalent,
+      })
       pairs.push(pair)
     }
 
@@ -591,8 +700,23 @@ test('@physics-scheduler-ab legacy-batched vs exact-cap6', async ({ page, browse
       performanceComparableSeedCount: performanceComparablePairs.length,
       performanceComparableSeeds: performanceComparablePairs.map(({ seed }) => seed),
       performanceExcludedSeeds,
-      schedulerSensitiveSeeds: pairs
-        .filter(({ schedulerSensitive }) => schedulerSensitive)
+      behaviorSensitiveSeeds: pairs
+        .filter(({ behaviorSensitive }) => behaviorSensitive)
+        .map(({ seed }) => seed),
+      trajectoryEquivalentSeeds: pairs
+        .filter(({ trajectoryEquivalent }) => trajectoryEquivalent === true)
+        .map(({ seed }) => seed),
+      trajectoryEquivalentSeedCount: pairs.filter(
+        ({ trajectoryEquivalent }) => trajectoryEquivalent === true,
+      ).length,
+      trajectoryStableMismatchSeeds: pairs
+        .filter(({ trajectoryEquivalent }) => trajectoryEquivalent === false)
+        .map(({ seed }) => seed),
+      trajectoryInconclusiveSeeds: pairs
+        .filter(({ trajectoryEquivalent }) => trajectoryEquivalent === null)
+        .map(({ seed }) => seed),
+      trajectorySensitiveSeeds: pairs
+        .filter(({ trajectorySensitive }) => trajectorySensitive)
         .map(({ seed }) => seed),
       settlementPathSensitiveSeeds: pairs
         .filter(({ settlementPathSensitive }) => settlementPathSensitive)
@@ -636,7 +760,7 @@ test('@physics-scheduler-ab legacy-batched vs exact-cap6', async ({ page, browse
     const durableDirectory = resolve(process.cwd(), 'artifacts/physics-scheduler-ab')
     await mkdir(durableDirectory, { recursive: true })
     await writeFile(
-      resolve(durableDirectory, `${testInfo.project.name}-legacy-vs-exact-cap6.json`),
+      resolve(durableDirectory, `${testInfo.project.name}-legacy-vs-exact-cap6-v2.json`),
       `${JSON.stringify(artifact, null, 2)}\n`,
       'utf8',
     )
