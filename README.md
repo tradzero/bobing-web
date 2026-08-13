@@ -26,7 +26,7 @@
 - 投掷 layout/dynamics 使用独立可复现随机子流；普通运行由时间种子 mulberry32 驱动，不使用 `Math.random`
 - 奖级规则数据驱动，支持状元子级优先级与带数规则
 - React + Zustand DOM overlay UI，业务写入集中在 GameController
-- 开发/e2e 使用 schema v5 post-render diagnostics，记录引擎调度、投掷版本/路径、渲染实验/质量/阴影、结构与逐步物理安全包络；隔离 bench 可显式启用 rolling CPU profile v1
+- 开发/e2e 使用 schema v6 post-render diagnostics，记录引擎调度、投掷计划、throw 后 6-body 初始 pose/速度的 Float64 位级签名、渲染实验/质量/阴影、结构与逐步物理安全包络；隔离 bench 可显式启用 rolling CPU profile v1
 
 ## 技术栈
 
@@ -118,11 +118,13 @@ http://127.0.0.1:5173
 
 `bench:browser` 只在隔离 e2e URL 显式使用 `perfProfile=1&perfProfileVersion=1` 时启用固定容量的 rolling CPU profile v1，记录 rAF 原始/截断间隔、Cannon 实际 substep，以及 world step、guard、roll safety、settle、transform sync、renderer submit、diagnostics publish 和 tick total 的 count/p50/p95/max。renderer 指标仅为同步 CPU submit，不代表 GPU；门禁只要求字段完整、数值有限、样本存在和每帧 substeps ≤ 8，毫秒数据只进入 artifact，不设置跨机器阈值。
 
-`bench:browser:render-ab` 使用 render experiment v1 的预注册 `baseline / rolling-dpr-1x / shadow-alternate / shadow-frozen`，每侧先 warm-up，再对 5 个固定 seed 按 ABBA/BAAB 交替，每个 project/comparison 记录 20 个 measured rolls。投掷路径、稳定结果、物理安全、页面/context 错误和静态零帧是硬门禁；rAF p95、wall time 和重复噪声只作同环境观测。durable artifact 位于 `artifacts/render-ab/<project>-<comparison>.json`。
+`bench:browser:render-ab` 使用 render experiment v1 的预注册 `baseline / rolling-dpr-1x / shadow-alternate / shadow-frozen`，每侧先 warm-up，再对 5 个固定 seed 按 ABBA/BAAB 交替，每个 project/comparison 记录 20 个 measured rolls。投掷计划与 throw 后、首个物理步前的 6-body position/quaternion/velocity/angularVelocity 数组和 Float64 位级签名必须一致；稳定结果、物理安全、页面/context 错误和静态零帧也是硬门禁。render A/B artifact schema v2 同时记录完整 HEAD、工作树 dirty 状态、porcelain 哈希与 tracked diff 状态/SHA-256，并校验长跑前后 repo state 未变，不能把 dirty 实验只归因于 HEAD commit。rAF p95、wall time 和重复噪声只作同环境观测；durable artifact 位于 `artifacts/render-ab/<project>-<comparison>.json`。
 
 当前 SwiftShader durable A/B 4/4 通过流程/正确性硬门禁，四组均为 `behaviorViolation=0`、`schedulerSensitive=0`；这不表示四组性能都达标。桌面 rolling DPR 的 rAF p95 比值中位数为 `0.7943287446`，5/5 改善，repeat noise `0.04424385`，达到预设判据；移动为 `0.8757462687`，仅 3/5 改善，noise `0.24015354`，未达判据，只能视为方向偏改善但不确定。shadow frozen 桌面为 `1.001019368`、1/5 改善、noise `0.01821229`，移动为 `0.914913958`、4/5 改善、noise `0.25185361`，两端都未达判据。生产因此只在基础质量 `reduced` 档应用 rolling 1x，`full` 档 rolling 保持基础 DPR，static 一律恢复基础 DPR；阴影保持 every-frame，不推进 alternate。实验 v1 的 `rolling-dpr-1x` 仍是无条件 1x 候选，不能把它与 tier-aware 生产策略混为一谈。交互 Chrome 单 seed 的 17.6ms vs 33ms 与视觉/static 恢复核对只是补充观察，不是通用 GPU 结论。
 
 `maxSubSteps` 从 8 裸降到 4 已被排除：慢帧下会丢弃更多积压模拟时间，seed 25042 暴露了 cadence 分叉风险。后续物理追帧优化应改为显式 accumulator，并在每个 Cannon 子步执行 guard、roll safety 与 settle 检测，再以固定 seed 的多种帧调度序列验收。
+
+仓库已加入未接入生产的 fixed-step accumulator v1 纯状态机，用单元测试锁定 wall-time 分类、backlog 守恒、cap4 跨帧追赶、early-stop、pause、插值余量和显式 overload。当前运行时仍使用原 Engine/Cannon 批处理链路；只有 exact-step cap6/cap4 的多 cadence A/B、异常流程和浏览器门禁全部通过后，才会考虑切换生产默认。
 
 最终 tier-aware 策略的 schema v5 浏览器门禁已重跑：`test:e2e` 4/4、`bench:browser` 桌面/移动 2/2 通过。桌面 `reduced` 档从 idle/settled 的 3,498,014 pixels、DPR `1.445028` 降至 rolling 的 1,676,160 pixels、DPR 1；移动 `full` 档 idle/rolling 均为 562,185 pixels、DPR 1.5，settled 仅因 CSS 布局变化为 414,765 pixels，DPR 仍为 1.5。rolling shadow 请求与真实渲染帧一致，桌面 17/17、移动 19/19。`test:e2e:soak` 桌面/移动各 20 轮 2/2 通过：桌面 77.181s、17 natural / 3 stable、最长 8.346s、最大半径/穿透 0.6567970953m/0.0548978013m；移动 55.144s、20 natural、最长 3.299s、最大半径/穿透 0.6555080668m/0.0536350029m。两端 boundary/wall/guard/non-finite/页面错误均为 0，资源每轮稳定为 `1/8/6/10`。wall time 只作本次环境观察；此前全视口 rolling 1x 与 schema v4 数据仅为历史 checkpoint。
 

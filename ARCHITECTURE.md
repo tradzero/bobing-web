@@ -43,6 +43,7 @@ src/
 │
 ├── game/
 │   ├── engine.ts               # 运行时：按需 rAF 状态机、物理步进、插值/最终姿态渲染、停稳检测、dispose
+│   ├── fixed-step-accumulator.ts # 显式 fixed-step backlog/守恒/overload 纯状态机；尚未接入生产 Engine
 │   ├── performance-profile.ts  # 隔离 e2e rolling CPU profile v1：固定容量的阶段分布聚合
 │   ├── render-performance-experiment.ts # 版本化渲染 A/B preset 与生产默认选择
 │   ├── rolling-shadow.ts       # rolling shadow 请求节奏与可观测计数
@@ -70,6 +71,7 @@ src/
 │   ├── create.ts               # DiceSet：单材质 atlas InstancedMesh + 6 个姿态代理/body + 显式资源释放
 │   ├── dice-body.ts            # 骰子物理 body：box / chamfer 形状切换与 FACE_NORMALS
 │   ├── throw.ts                # 投掷 v3：六槽分层环、layout/dynamics 子流、命名历史采样器
+│   ├── throw-initial-state.ts  # throw 后初始刚体 pose/速度 Float64 快照与 FNV-1a 64 签名
 │   ├── rest.ts                 # 首屏/重置静态姿态：贴合碗底、同步插值历史并休眠
 │   ├── settle.ts               # 停稳检测：返回结构化 SettleResult | null（不自持轮询）
 │   ├── contact-cluster-assist.ts # 历史尾段接触簇冻结辅助；运行时默认关闭，仅 A/B 显式开启
@@ -141,7 +143,7 @@ e2e/
 ├── soak.spec.ts                # 版本化 seed 队列连续 20 轮状态、安全与资源断言
 ├── browser-bench.spec.ts       # 三阶段渲染结构、DPR/像素与静态零帧预算
 ├── render-performance-ab.spec.ts # 五 seed、双 warm-up、ABBA/BAAB 渲染配对 A/B
-└── helpers/diagnostics.ts      # schema v5 类型、结构/profile 预算与 post-render 读取 helper
+└── helpers/diagnostics.ts      # schema v6 类型、结构/profile 预算与 post-render 读取 helper
 
 sweep/                          # 独立长时间运行脚本（按需手动执行，不在 pnpm test 中）
 ├── lib/
@@ -264,7 +266,7 @@ error 状态由 RollErrorPanel 明确说明“本轮未结算”，用户可在�
 - 阴影档位只由基础质量决定：未触发像素预算限制时使用 `1024 × 1024`，触发限制时使用 `512 × 512`，切档时释放旧 shadow map 并请求重建。rolling DPR 不反向改变基础档位，避免 A/B 同时修改两个变量。
 - 阴影 map 始终关闭 `autoUpdate`。生产 rolling preset 保持 `every-frame`，Engine 在每个真正进入 `renderer.render()` 的 rolling 帧显式请求一次 `needsUpdate`；idle/settled 静态帧也只请求一次。版本化实验另有 `alternate` 与 `frozen-after-first`，但不作为生产默认。
 - `scene/setup.ts` 只在 CSS 尺寸或设备 DPR 实际变化时重算 renderer 尺寸、基础 DPR、camera preset/aspect 和阴影档位。Engine 紧邻真实渲染切换 static/rolling 有效 DPR，phase 切换本身不回调 invalidate，因此不产生额外静态帧；`GameViewport` 仍将 resize 失效回调绑定到 `engine.invalidate()`，cleanup 时解绑。
-- 开发环境与隔离的 e2e 构建把 diagnostics 写入 canvas 的 `data-dice-diagnostics`；普通生产构建不发布该数据集。当前 schema v5 的每份快照带 `schemaVersion / revision / sampleKind: 'post-render'`，且只在一次真实 `renderer.render()` 完成后发布，避免把上一帧的 `renderer.info` 与新引擎状态错误配对。schema v5 新增版本化 render experiment、static/rolling 质量快照和 rolling shadow 请求计数。
+- 开发环境与隔离的 e2e 构建把 diagnostics 写入 canvas 的 `data-dice-diagnostics`；普通生产构建不发布该数据集。当前 schema v6 的每份快照带 `schemaVersion / revision / sampleKind: 'post-render'`，且只在一次真实 `renderer.render()` 完成后发布，避免把上一帧的 `renderer.info` 与新引擎状态错误配对。schema v6 在既有实验/质量/阴影字段上增加 throw 后、首个物理步前的 initial-state v1：按 6 个 body 固定顺序记录 position/quaternion/velocity/angularVelocity 原始数值，并对 IEEE-754 Float64 大端字节生成 FNV-1a 64 签名。
 - `mainPassCalls / mainPassTriangles` 明确表示 renderer 主 pass 的调用数和三角形数，不冒充包含 shadow pass 的总量；`geometries / textures` 来自 `renderer.info.memory`，并附带当前 `programs` 数量、CSS/drawing-buffer 尺寸、DPR 与 Engine 调度计数。投掷诊断同时记录实际 seed、投掷路径、停稳原因与模拟耗时；Engine 还逐物理步累计最大半径、保守/墙中心越界、最大接触穿透、非有限状态与 escape-guard 介入，避免飞出或穿透后落回被终态掩盖。
 - Playwright 的 `test:e2e` 在 `1920×873@2x` 桌面项目和 `390×844@3x` 移动项目中执行真实 `throwDice()` 的固定 seed 正常流程、timeout 不提交/同轮恢复、reset 与静态零帧验收，最终 tier-aware 策略当前 4/4 通过。`test:e2e:soak` 在两种项目各执行 20 个版本化 seed，逐轮检查单次提交、最近 5 轮历史、无倾斜/assist/timeout、逐步安全包络、static DPR 恢复、静态零帧、单 canvas 与 geometry/texture/program 不增长，并写出逐轮 JSON artifact。当前桌面/移动 2/2 通过：桌面 77.181s、17 natural / 3 stable、单轮最长 8.346s、`maxRadius=0.6567970953m`、`maxContactPenetration=0.0548978013m`；移动 55.144s、20 natural、单轮最长 3.299s、`maxRadius=0.6555080668m`、`maxContactPenetration=0.0536350029m`。两端 boundary/wall/guard/non-finite/页面错误均为 0，canvas/geometry/texture/program 每轮稳定为 `1/8/6/10`。浏览器调度下 natural/low-speed/pose 三种无介入结算路径可能竞争，soak 不把其差异或 wall time 误设为跨环境硬门槛。
 - `bench:browser` 对三种引擎阶段锁定 8 个主 pass calls、41,288 个三角形、8 个 geometry、最多 6 个 texture、DPR/3.5MP drawing-buffer 预算和分平台 shader program 上限。它只在隔离 e2e URL 显式带上 `perfProfile=1&perfProfileVersion=1` 时创建 rolling CPU profile v1；普通生产与普通 e2e 不采样计时。profile 以固定容量聚合 rAF 原始/截断间隔、Cannon `stepnumber` 的实际 substep 差，以及 world step、guard、roll safety、settle、transform sync、renderer submit、diagnostics publish、tick total 各 CPU 阶段的 count/p50/p95/max。`rendererSubmitCpuMs` 是 `renderer.render()` 同步 CPU submit 时间，不是 GPU 时间；当前帧在 post-render 发布之后才完成记录，因此快照明确标记不含发布中的当前帧。
@@ -274,7 +276,7 @@ error 状态由 RollErrorPanel 明确说明“本轮未结算”，用户可在�
 ### 渲染性能实验与当前结论
 
 - render experiment v1 只在隔离 e2e 构建读取版本化 URL 参数，并只允许 `baseline / rolling-dpr-1x / shadow-alternate / shadow-frozen` 四个注册 variant。其中实验 `rolling-dpr-1x` 仍无条件在 rolling 限为 1x，用于保持 durable A/B 可复现；它不等同于生产的 tier-aware 策略。生产构建忽略参数，只在基础质量 `reduced` 档应用 rolling 1x，`full` 档保持基础 DPR，static 一律恢复基础 DPR，阴影保持 `every-frame`。
-- `bench:browser:render-ab` 使用 5 个固定 seed。每个候选与 baseline 先各自 warm-up 一轮，再按 seed 交替执行 ABBA 或 BAAB，每个 project/comparison 共 20 个 measured rolls；同 seed 两侧必须保持初始投掷路径、可稳定复现的最终点数/奖级、轨迹安全、context、页面错误和静态零帧契约。rAF p95、settlement wall time 与重复噪声只记录为观测，不能单凭毫秒让行为或安全回归过门。持久化结果位于 `artifacts/render-ab/<project>-<comparison>.json`。
+- `bench:browser:render-ab` 使用 5 个固定 seed。每个候选与 baseline 先各自 warm-up 一轮，再按 seed 交替执行 ABBA 或 BAAB，每个 project/comparison 共 20 个 measured rolls；同 seed 两侧必须保持投掷计划字段以及真实初始 6-body pose/线速度/角速度签名与数组完全一致，同时门禁可稳定复现的最终点数/奖级、轨迹安全、context、页面错误和静态零帧。render A/B artifact schema v2 还记录完整 HEAD、`worktreeDirty`、porcelain 状态哈希与 HEAD-relative tracked diff 状态/SHA-256，并要求一次长跑前后 repository state 不变；dirty 实验不得写成单一 commit 证据。rAF p95、settlement wall time 与重复噪声只记录为观测。持久化结果位于 `artifacts/render-ab/<project>-<comparison>.json`。
 - 当前 SwiftShader durable A/B 四组的 `behaviorViolation=0`、`schedulerSensitive=0`，所以 4/4 通过表示流程与正确性硬门禁通过，不表示四个性能候选都达标。桌面 `rolling-dpr-1x` 的 rAF p95 候选/基线比值中位数为 `0.7943287446`，5/5 seeds 改善，repeat-noise 中位数 `0.04424385`，达到预设性能判据；移动为 `0.8757462687`，仅 3/5 改善，repeat noise `0.24015354`，未达判据，方向偏改善但证据不确定。桌面 `shadow-frozen` 为 `1.001019368`，1/5 改善、noise `0.01821229`；移动为 `0.914913958`，4/5 改善、noise `0.25185361`，两端均未达判据。该证据支持只在高像素、基础质量 `reduced` 的生产视口采用 rolling 1x，而不在 `full` 档无条件降级；阴影仍逐 rolling render 请求，不推进 `shadow-alternate`。
 - 交互 Chrome 的补充单 seed 观察约为 candidate 17.6ms、baseline 33ms，并人工核对了 rolling 画面和 settled 后基础 DPR 恢复。这支持继续保留候选，但不是系统 GPU timer、不是多 seed 样本，也不能外推为通用 GPU 性能结论。
 - 将 Cannon `maxSubSteps` 从 8 直接降到 4 的尝试已排除：慢帧会丢弃更多待模拟时间，seed 25042 已显示结果对 cadence 分叉的风险。后续若优化追帧，应实现显式 accumulator，让 guard、逐步 roll safety 与 settle 在每个 Cannon 子步后运行，并用固定 seed + 多种帧调度序列验证结果/安全，而不是裸改 `maxSubSteps`。
@@ -457,8 +459,8 @@ interface GameState {
 | 骰子实例与资源生命周期 | `dice/create.ts` + `GameViewport.tsx`                   | 单材质 atlas InstancedMesh、6 个 body/proxy、矩阵索引同步、dispose 幂等、StrictMode 重挂载不复用已释放贴图                                                                      | Three 对象断言 + dispose spy + React StrictMode 重挂载        |
 | 渲染质量与 resize      | `config/render.ts` + `scene/setup.ts`                   | 基础 DPR 1.5 上限/350 万像素预算、仅 reduced 档 rolling 1x、full 档保持基础 DPR、static 恢复、1024/512 阴影档位、重复 resize 去重、phase 切换无额外失效、不创建 PMREM           | 纯质量函数 + mock WebGLRenderer/ResizeObserver/PMREMGenerator |
 | 阴影调度               | `game/rolling-shadow.ts` + `game/engine.ts`             | every-frame/alternate/frozen 的逐真实 render 请求序列、首帧刷新、跨轮 reset、外部 needsUpdate 不被 skip 清除                                                                    | 纯 scheduler + mock renderer.shadowMap                        |
-| 开发态渲染诊断         | `GameViewport.tsx` + `game/performance-profile.ts`      | schema v5 post-render revision；实验/质量/阴影、主 pass/资源/DPR/rollSafety；显式 e2e profile v1 的 rAF、实际 substep 与 CPU 阶段聚合；生产态与普通 e2e 不计时                  | mock renderer.info/dataset/时钟 + 固定容量聚合断言            |
-| 浏览器渲染 A/B         | `e2e/render-performance-ab.spec.ts`                     | 5 seeds、双方 warm-up、ABBA/BAAB；投掷路径、结果、轨迹安全、context/页面错误与静态零帧硬门禁；rAF p95/wall time/repeat noise 仅观测                                             | Playwright 桌面/移动项目 + JSON/video/trace artifact          |
+| 开发态渲染诊断         | `GameViewport.tsx` + `game/performance-profile.ts`      | schema v6 post-render；新增 initial-state v1，保留实验/质量/阴影、结构、安全与可选 profile                                                                                      | mock renderer.info/dataset/时钟 + 固定容量聚合断言            |
+| 浏览器渲染 A/B         | `e2e/render-performance-ab.spec.ts`                     | 5 seeds、warm-up、ABBA/BAAB；投掷计划、初始 6-body 状态、repo provenance、结果与安全硬门禁；毫秒仅观测                                                                          | Playwright 桌面/移动项目 + JSON/video/trace artifact          |
 | CSS 合成降级契约       | `ui/styles/game.css`                                    | 桌面 backdrop/光晕规则仍在；移动端与 slow-update 对 tilt/error/result 等大面积面板关闭 blur/动画；reduced-motion 单独关闭运动且保留静态视觉                                     | 读取 CSS 文本并限定媒体查询块断言                             |
 | 编排与异常状态         | `game/controller.ts` + `store.ts`                       | 仅 rolling 首个结算回调生效；timeout 不读面/提交/播放/推进，error 同轮重掷或重置；history 上限、reset 保留 soundEnabled、中奖音只在正式提交后一次触发                           | mock dice/engine/sound + 直接 store 断言                      |
 | 倾斜确认流程           | `game/controller.ts` + `store.ts`                       | onSettled 倾斜检测→tilt-confirm、35° 靠壁正常姿态不触发、pending 隔离（不写 history/prizeRecord/round）、acceptTilted 提交完整内容并播放一次、rethrow/reset 不播放 pending 结果 | 构造已知四元数 mock DicePair，settleWithoutThrow 跳过随机投掷 |

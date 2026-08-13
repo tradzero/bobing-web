@@ -9,6 +9,11 @@ import type { createGameStore } from './store'
 import type { Engine } from './engine'
 import { SETTLE_ALGORITHM_VERSION, type SettleResult } from '@/dice/settle'
 import { placeDiceAtRest } from '@/dice/rest'
+import {
+  captureThrowInitialState,
+  cloneThrowInitialState,
+  type ThrowInitialStateDiagnostics,
+} from '@/dice/throw-initial-state'
 
 export interface GameControllerDeps {
   store: ReturnType<typeof createGameStore>
@@ -29,6 +34,7 @@ export interface GameRollDiagnostics {
   randomPlanVersion: ThrowDiagnostics['randomPlanVersion']
   placementPath: ThrowDiagnostics['placementPath'] | null
   fallbackLayout: ThrowDiagnostics['fallbackLayout']
+  initialState: ThrowInitialStateDiagnostics | null
   settleAlgorithmVersion: typeof SETTLE_ALGORITHM_VERSION
   settleReason: SettleResult['reason'] | 'external-call' | null
   settleElapsed: number | null
@@ -54,6 +60,7 @@ export class GameController {
     randomPlanVersion: null,
     placementPath: null,
     fallbackLayout: null,
+    initialState: null,
     settleAlgorithmVersion: SETTLE_ALGORITHM_VERSION,
     settleReason: null,
     settleElapsed: null,
@@ -75,6 +82,8 @@ export class GameController {
     }
     const seed = reseed(injectedSeed)
     const placement = throwDice(this.dicePairs, { seed })
+    // 必须在 throwDice 返回后、engine.beginSettle 前只读捕获，锁住真实初始动力学状态。
+    const initialState = captureThrowInitialState(this.dicePairs.map(({ body }) => body))
     this.rollDiagnostics = {
       seed,
       throwAlgorithmVersion: THROW_ALGORITHM_VERSION,
@@ -85,6 +94,7 @@ export class GameController {
       randomPlanVersion: placement.randomPlanVersion,
       placementPath: placement.placementPath,
       fallbackLayout: placement.fallbackLayout,
+      initialState,
       settleAlgorithmVersion: SETTLE_ALGORITHM_VERSION,
       settleReason: null,
       settleElapsed: null,
@@ -210,8 +220,13 @@ export class GameController {
     soundManager.setMuted(!soundEnabled)
   }
 
-  /** 返回独立快照，供浏览器门禁与本地诊断记录实际投掷路径。 */
+  /** 返回独立快照，供浏览器门禁记录投掷计划、真实初始刚体状态与结算路径。 */
   getRollDiagnostics(): GameRollDiagnostics {
-    return { ...this.rollDiagnostics }
+    return {
+      ...this.rollDiagnostics,
+      initialState: this.rollDiagnostics.initialState
+        ? cloneThrowInitialState(this.rollDiagnostics.initialState)
+        : null,
+    }
   }
 }

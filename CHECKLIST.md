@@ -150,6 +150,7 @@
 - [x] 1H.28 [实现/测试] render experiment v1 仅允许 baseline、rolling-dpr-1x、shadow-alternate、shadow-frozen 四个版本化 e2e preset；生产忽略 URL 参数，实验 rolling-dpr-1x 仍保持无条件 1x 以复现 durable A/B
 - [x] 1H.29 [实现/测试] 生产仅在基础质量 reduced 档应用 rolling 1x，full 档保持基础 DPR；该切换只改变主画布有效 DPR，不改变基础 1.0～1.5/350 万像素质量与 1024/512 阴影档，结算 raw render 前恢复 static DPR且不制造额外静态帧
 - [x] 1H.30 [实现/测试] rolling shadow scheduler v1 对 every-frame/alternate/frozen-after-first 逐真实 render 计数；生产保持 every-frame，skip 不清除 resize 等外部 needsUpdate
+- [x] 1H.31 [实现/测试] diagnostics schema v6 在 throw 返回后、首个物理步前捕获 initial-state v1；按 6-body canonical 顺序记录 pose/线速度/角速度，并对 Float64 大端字节生成 FNV-1a 64 签名，不消费随机数或写物理状态
 
 ### 1I 阶段一集成验证
 
@@ -183,6 +184,10 @@
 - [x] 1I.28 [门禁结果] durable render A/B 4/4 均为 behaviorViolation=0、schedulerSensitive=0；4/4 仅表示流程/正确性硬门禁通过，不代表四组性能判据都通过
 - [x] 1I.29 [验收] 最终 tier-aware 策略的 `pnpm test:e2e` 4/4、`pnpm bench:browser` 2/2 通过；确认 reduced 档 rolling=1x、full 档 rolling=base、static=base 并保留 artifact
 - [x] 1I.30 [验收] 最终 tier-aware 策略的 `pnpm test:e2e:soak` 桌面/移动各 20 轮 2/2 通过；逐轮提交、物理安全、静态调度与 WebGL 资源稳定
+- [x] 1I.31 [证据门禁] render A/B artifact schema v2 记录完整 HEAD、worktree dirty、porcelain 哈希和 HEAD-relative tracked diff 状态/SHA-256，并校验长跑前后 repo state 未变化；同 seed 同时硬门禁完整 initial-state v1 数组/签名
+- [ ] 1I.32 [验收] 在 checkpoint commit 后以 clean worktree 重跑 schema v6 / render A/B schema v2 长浏览器门禁；此前 schema v5 durable 数值仅保留为历史候选依据
+- [x] 1I.33 [实验基础] 新增未接入生产的 fixed-step accumulator v1：显式记录 accepted/paused/discarded wall time、逐步消费 backlog、cap4 跨帧追赶、插值余量与锁存 overload；单元测试锁定守恒和 early-stop，不改变当前 Engine 调度
+- [ ] 1I.34 [后续] 用 exact `world.step(fixed)`、逐子步安全/settle、显式插值与 visibility suspend 构建 cap6/cap4 cadence A/B；通过 watch+batch 与浏览器门禁前不得替换生产调度
 
 ---
 

@@ -2,6 +2,11 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {
+  readRepositoryState,
+  sameRepositoryState,
+  type RepositoryState,
+} from '../tooling/repository-state'
+import {
   BROWSER_BUDGETS,
   collectBrowserIssues,
   expectNoStaticFrames,
@@ -14,7 +19,7 @@ import {
   type DiceRuntimeDiagnostics,
 } from './helpers/diagnostics'
 
-const RENDER_AB_SCHEMA_VERSION = 1
+const RENDER_AB_SCHEMA_VERSION = 2
 const RENDER_EXPERIMENT_VERSION = 1
 const PROFILE_VERSION = 1
 const SEEDS = [50_000, 55_000, 60_000, 65_000, 70_000] as const
@@ -347,6 +352,9 @@ for (const comparison of COMPARISONS) {
       seeds: SEEDS,
       executionPattern: 'ABBA/BAAB alternating by seed',
     }
+    const repositoryStateAtStart = readRepositoryState()
+    let repositoryStateAtEnd: RepositoryState | null = null
+    artifact.repository = { start: repositoryStateAtStart }
     let completed = false
 
     try {
@@ -372,7 +380,7 @@ for (const comparison of COMPARISONS) {
           runs.push(observation)
         }
 
-        const placementSignatures = seedRuns.map(({ settled }) =>
+        const throwPlanSignatures = seedRuns.map(({ settled }) =>
           JSON.stringify({
             seed: settled.roll.seed,
             throwAlgorithmVersion: settled.roll.throwAlgorithmVersion,
@@ -385,7 +393,24 @@ for (const comparison of COMPARISONS) {
             fallback: settled.roll.fallbackLayout,
           }),
         )
-        expect(new Set(placementSignatures).size, `seed ${seed} initial placement drift`).toBe(1)
+        expect(new Set(throwPlanSignatures).size, `seed ${seed} throw plan drift`).toBe(1)
+
+        const initialStateSignatures = seedRuns.map(({ settled }) => {
+          const initialState = settled.roll.initialState
+          expect(initialState, `seed ${seed} initial body state must be published`).not.toBeNull()
+          expect(initialState).toMatchObject({
+            version: 1,
+            floatEncoding: 'ieee754-float64-be',
+            hashAlgorithm: 'fnv1a64',
+            hash: expect.stringMatching(/^[0-9a-f]{16}$/),
+          })
+          expect(initialState!.bodies).toHaveLength(6)
+          return JSON.stringify(initialState)
+        })
+        expect(
+          new Set(initialStateSignatures).size,
+          `seed ${seed} initial body pose/velocity drift`,
+        ).toBe(1)
         pairs.push(compareSeed(seed, order, seedRuns, comparison.candidate))
       }
 
@@ -423,8 +448,24 @@ for (const comparison of COMPARISONS) {
       expect(behaviorViolations, 'render candidate changed a stable baseline result').toEqual([])
       expect(issues.pageErrors, 'uncaught page errors').toEqual([])
       expect(issues.consoleErrors, 'browser console errors').toEqual([])
+      repositoryStateAtEnd = readRepositoryState()
+      artifact.repository = {
+        start: repositoryStateAtStart,
+        end: repositoryStateAtEnd,
+        unchangedDuringRun: sameRepositoryState(repositoryStateAtStart, repositoryStateAtEnd),
+      }
+      expect(
+        sameRepositoryState(repositoryStateAtStart, repositoryStateAtEnd),
+        'repository state changed during render A/B run',
+      ).toBe(true)
       completed = true
     } finally {
+      repositoryStateAtEnd ??= readRepositoryState()
+      artifact.repository = {
+        start: repositoryStateAtStart,
+        end: repositoryStateAtEnd,
+        unchangedDuringRun: sameRepositoryState(repositoryStateAtStart, repositoryStateAtEnd),
+      }
       artifact.result = { status: completed ? 'passed' : 'failed', pairs, runs, issues }
       const durableDirectory = resolve(process.cwd(), 'artifacts/render-ab')
       await mkdir(durableDirectory, { recursive: true })

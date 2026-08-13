@@ -1,6 +1,6 @@
 import { expect, type Page, type TestInfo } from '@playwright/test'
-import { execFileSync } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
+import { readRepositoryState } from '../../tooling/repository-state'
 
 export const E2E_NEXT_SEED = 42
 
@@ -9,7 +9,7 @@ export const E2E_NEXT_SEED = 42
  * 所有 browser bench 只消费此常量，渲染结构改变时避免散落修改断言。
  */
 export const BROWSER_BUDGETS = {
-  diagnosticsSchemaVersion: 5,
+  diagnosticsSchemaVersion: 6,
   mainPassCalls: 8,
   mainPassTriangles: 41_288,
   geometries: 8,
@@ -115,6 +115,18 @@ export interface DiceRuntimeDiagnostics {
     randomPlanVersion: number | null
     placementPath: 'rejection' | 'constructive' | 'fallback' | null
     fallbackLayout: 'ring6' | 'dual33' | 'center15' | null
+    initialState: {
+      version: 1
+      floatEncoding: 'ieee754-float64-be'
+      hashAlgorithm: 'fnv1a64'
+      hash: string
+      bodies: Array<{
+        position: [number, number, number]
+        quaternion: [number, number, number, number]
+        velocity: [number, number, number]
+        angularVelocity: [number, number, number]
+      }>
+    } | null
     settleAlgorithmVersion: number
     settleReason:
       | 'natural-sleep'
@@ -400,17 +412,13 @@ export async function readBrowserMetadata(page: Page): Promise<Record<string, un
     }
   })
 
-  return { ...metadata, commit: currentCommit(), node: process.version }
-}
-
-function currentCommit(): string {
-  try {
-    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
-  } catch {
-    return 'unknown'
+  const repository = readRepositoryState()
+  return {
+    ...metadata,
+    // commit 保留兼容旧 artifact；repository 才是能区分 dirty 实验的完整证据。
+    commit: repository.head,
+    repository,
+    node: process.version,
   }
 }
 

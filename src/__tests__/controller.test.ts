@@ -240,6 +240,10 @@ describe('GameController 编排层集成测试', () => {
 
   it('一次性 nextSeed 和实际投掷/停稳路径可诊断', () => {
     controller = new GameController({ store, dicePairs, nextSeed: 42 })
+    let diagnosticsAtBeginSettle: ReturnType<GameController['getRollDiagnostics']> | null = null
+    engine.beginSettle = vi.fn(() => {
+      diagnosticsAtBeginSettle = controller.getRollDiagnostics()
+    })
     controller.setEngine(engine)
 
     controller.throw()
@@ -252,9 +256,51 @@ describe('GameController 编排层集成测试', () => {
       placementGroupAttempts: expect.any(Number),
       randomPlanVersion: 1,
       placementPath: 'constructive',
+      initialState: {
+        version: 1,
+        floatEncoding: 'ieee754-float64-be',
+        hashAlgorithm: 'fnv1a64',
+        hash: expect.stringMatching(/^[0-9a-f]{16}$/),
+        bodies: expect.arrayContaining([
+          expect.objectContaining({
+            position: expect.any(Array),
+            quaternion: expect.any(Array),
+            velocity: expect.any(Array),
+            angularVelocity: expect.any(Array),
+          }),
+        ]),
+      },
       settleAlgorithmVersion: 4,
       settleReason: null,
       settleElapsed: null,
+    })
+    expect(diagnosticsAtBeginSettle).not.toBeNull()
+    expect(diagnosticsAtBeginSettle!.initialState).toEqual(
+      controller.getRollDiagnostics().initialState,
+    )
+    expect(diagnosticsAtBeginSettle!.initialState!.bodies).toHaveLength(6)
+    expect(diagnosticsAtBeginSettle!.initialState!.bodies[0]).toEqual({
+      position: [
+        dicePairs[0].body.position.x,
+        dicePairs[0].body.position.y,
+        dicePairs[0].body.position.z,
+      ],
+      quaternion: [
+        dicePairs[0].body.quaternion.x,
+        dicePairs[0].body.quaternion.y,
+        dicePairs[0].body.quaternion.z,
+        dicePairs[0].body.quaternion.w,
+      ],
+      velocity: [
+        dicePairs[0].body.velocity.x,
+        dicePairs[0].body.velocity.y,
+        dicePairs[0].body.velocity.z,
+      ],
+      angularVelocity: [
+        dicePairs[0].body.angularVelocity.x,
+        dicePairs[0].body.angularVelocity.y,
+        dicePairs[0].body.angularVelocity.z,
+      ],
     })
 
     for (const { body } of dicePairs) body.quaternion.set(0, 0, 0, 1)
