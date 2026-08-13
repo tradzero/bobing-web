@@ -13,6 +13,13 @@ import type { RollingShadowPreset } from '@/game/rolling-shadow'
 import type { SceneContext } from '@/scene/setup'
 import type { RenderPhase } from '@/config/render'
 import { CONSERVATIVE_DICE_CENTER_RADIUS, WALL_INNER_RADIUS } from '@/physics/roll-diagnostics'
+import { PHYSICS } from '@/config/physics'
+import {
+  getPhysicsSchedulerVariant,
+  type PhysicsSchedulerVariant,
+  type PhysicsSchedulerVariantId,
+} from '@/game/physics-scheduler-experiment'
+import type { RollError } from '@/game/roll-error'
 
 type MockSceneContext = Omit<SceneContext, 'renderer' | 'setRenderPhase'> & {
   setRenderPhase: ReturnType<typeof vi.fn<(phase: RenderPhase) => void>>
@@ -42,6 +49,27 @@ const ZERO_ROLLING_SHADOW = {
   rollingRenderFrameCount: 0,
   rollingShadowUpdateRequestCount: 0,
   maxConsecutiveRollingFramesWithoutShadowUpdateRequest: 0,
+} as const
+
+const ZERO_PHYSICS_TIMING = {
+  version: 1,
+  preset: 'legacy-batched',
+  kind: 'legacy-batched',
+  maxStepsPerFrame: null,
+  fixedStepMs: PHYSICS.fixedTimeStep * 1000,
+  simulationStep: null,
+  simulationTime: null,
+  totalRawWallDeltaMs: 0,
+  totalAcceptedWallDeltaMs: 0,
+  totalPausedWallDeltaMs: 0,
+  totalDiscardedWallDeltaMs: 0,
+  totalExecutedSteps: 0,
+  queuedMs: 0,
+  queuedWholeSteps: 0,
+  interpolationAlpha: 0,
+  overload: { active: false, highWaterMs: 250 },
+  terminalAbandoned: null,
+  suspended: false,
 } as const
 
 function mockSceneCtx(): MockSceneContext {
@@ -109,7 +137,12 @@ describe('Engine 按需调度', () => {
     dicePairs?: DicePair[]
     world?: CANNON.World
     worldStep?: (dt: number) => void
+    stepExact?: () => void
     onSettled?: (result: SettleResult) => void
+    onRollError?: (error: RollError) => void
+    physicsSchedulerVariant?: Readonly<PhysicsSchedulerVariant>
+    clock?: () => number
+    initiallyHidden?: boolean
     onDiagnostics?: (diagnostics: EngineDiagnostics) => void
     rollingShadowPreset?: RollingShadowPreset
     performanceProfile?: { now: () => number; capacity?: number }
@@ -123,8 +156,13 @@ describe('Engine 按需调度', () => {
       sceneCtx,
       world,
       worldStep,
+      stepExact: options?.stepExact,
       dicePairs,
       onSettled,
+      onRollError: options?.onRollError,
+      physicsSchedulerVariant: options?.physicsSchedulerVariant,
+      clock: options?.clock,
+      initiallyHidden: options?.initiallyHidden,
       onDiagnostics: options?.onDiagnostics,
       rollingShadowPreset: options?.rollingShadowPreset,
       performanceProfile: options?.performanceProfile,
@@ -132,6 +170,310 @@ describe('Engine 按需调度', () => {
     engines.push(engine)
     return { engine, sceneCtx, dicePairs, worldStep, onSettled }
   }
+
+  function createExactFixture(options?: {
+    variant?: Extract<PhysicsSchedulerVariantId, 'exact-cap6' | 'exact-cap4'>
+    dicePairs?: DicePair[]
+    clock?: () => number
+    onSettled?: (result: SettleResult) => void
+    onRollError?: (error: RollError) => void
+    onDiagnostics?: (diagnostics: EngineDiagnostics) => void
+    performanceProfile?: { now: () => number; capacity?: number }
+  }) {
+    const world = new CANNON.World()
+    world.gravity.set(0, 0, 0)
+    world.allowSleep = true
+    const dicePairs = options?.dicePairs ?? makeDicePairs()
+    for (const { body } of dicePairs) world.addBody(body)
+    const onRollError = options?.onRollError ?? vi.fn()
+    const fixture = createFixture({
+      world,
+      dicePairs,
+      worldStep: vi.fn(),
+      stepExact: () => world.step(PHYSICS.fixedTimeStep),
+      onSettled: options?.onSettled,
+      onRollError,
+      physicsSchedulerVariant: getPhysicsSchedulerVariant(options?.variant ?? 'exact-cap4'),
+      clock: options?.clock ?? (() => 0),
+      onDiagnostics: options?.onDiagnostics,
+      performanceProfile: options?.performanceProfile,
+    })
+    return { ...fixture, world, onRollError }
+  }
+
+  it('exact scheduler 缺少 stepExact 或 onRollError 时拒绝构造', () => {
+    const sceneCtx = mockSceneCtx()
+    const world = new CANNON.World()
+    const dicePairs = makeDicePairs()
+    const base = {
+      sceneCtx,
+      world,
+      worldStep: vi.fn(),
+      dicePairs,
+      onSettled: vi.fn(),
+      physicsSchedulerVariant: getPhysicsSchedulerVariant('exact-cap4'),
+    }
+
+    expect(() => createEngine({ ...base, onRollError: vi.fn() })).toThrow(/stepExact/)
+    expect(() => createEngine({ ...base, stepExact: vi.fn() })).toThrow(/onRollError/)
+  })
+
+  it('exact cap4 连续六个 100ms 帧在第六帧显式 overload，且不走正常结算', () => {
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.allowSleep = false
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    const onSettled = vi.fn()
+    const onRollError = vi.fn()
+    const { engine, worldStep } = createExactFixture({ dicePairs, onSettled, onRollError })
+
+    engine.start()
+    engine.beginSettle()
+    for (const timestamp of [100, 200, 300, 400, 500, 600]) runNextFrame(timestamp)
+
+    expect(worldStep).not.toHaveBeenCalled()
+    expect(onSettled).not.toHaveBeenCalled()
+    expect(onRollError).toHaveBeenCalledOnce()
+    expect(onRollError).toHaveBeenCalledWith({
+      reason: 'timing-overload',
+      simulationElapsed: 20 * PHYSICS.fixedTimeStep,
+      queuedMs: expect.closeTo(800 / 3, 8),
+      highWaterMs: 250,
+      executedSteps: 20,
+    })
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'error',
+      physicsStepCount: 20,
+      frameScheduled: false,
+      physicsTiming: {
+        preset: 'exact-cap4',
+        simulationStep: 20,
+        simulationTime: 20 * PHYSICS.fixedTimeStep,
+        totalRawWallDeltaMs: 600,
+        totalAcceptedWallDeltaMs: 600,
+        totalDiscardedWallDeltaMs: 0,
+        totalExecutedSteps: 20,
+        queuedMs: expect.closeTo(800 / 3, 8),
+        queuedWholeSteps: 16,
+        overload: { active: true, highWaterMs: 250 },
+        terminalAbandoned: {
+          reason: 'timing-overload',
+          queuedMs: expect.closeTo(800 / 3, 8),
+          queuedWholeSteps: 16,
+        },
+      },
+    })
+    expect(pendingFrames.size).toBe(0)
+  })
+
+  it('exact settle 只消费真实完成的步，并把同帧剩余 backlog 记为 abandoned', () => {
+    const dicePairs = makeDicePairs(1, true)
+    const onSettled = vi.fn()
+    const { engine } = createExactFixture({
+      variant: 'exact-cap6',
+      dicePairs,
+      onSettled,
+    })
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(100)
+
+    expect(onSettled).toHaveBeenCalledOnce()
+    expect(onSettled).toHaveBeenCalledWith({
+      reason: 'natural-sleep',
+      elapsed: PHYSICS.fixedTimeStep,
+    })
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'settled',
+      physicsStepCount: 1,
+      frameScheduled: false,
+      physicsTiming: {
+        simulationStep: 1,
+        totalExecutedSteps: 1,
+        queuedMs: expect.closeTo(100 - 1000 / 60, 8),
+        terminalAbandoned: {
+          reason: 'settled',
+          queuedMs: expect.closeTo(100 - 1000 / 60, 8),
+          queuedWholeSteps: 5,
+        },
+      },
+    })
+  })
+
+  it('exact timeout 走错误回调，不读作普通 settled', () => {
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.allowSleep = false
+    dicePairs[0].body.angularVelocity.set(0, 1, 0)
+    const onSettled = vi.fn()
+    const onRollError = vi.fn()
+    const { engine } = createExactFixture({
+      variant: 'exact-cap6',
+      dicePairs,
+      onSettled,
+      onRollError,
+    })
+
+    engine.start()
+    engine.beginSettle()
+    for (let frame = 1; frame <= 100 && pendingFrames.size > 0; frame++) {
+      runNextFrame(frame * 100)
+    }
+
+    expect(onSettled).not.toHaveBeenCalled()
+    expect(onRollError).toHaveBeenCalledWith({
+      reason: 'timeout',
+      elapsed: expect.closeTo(10, 8),
+    })
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'error',
+      physicsStepCount: 600,
+      physicsTiming: {
+        simulationStep: 600,
+        terminalAbandoned: { reason: 'timeout' },
+      },
+    })
+  })
+
+  it('exact visibility 将 hidden 时间只记为 paused，并在 resume 后排空既有 backlog', () => {
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.allowSleep = false
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    const { engine } = createExactFixture({ dicePairs })
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(100)
+    expect(engine.getDiagnostics().physicsTiming).toMatchObject({
+      simulationStep: 4,
+      queuedMs: expect.closeTo(100 / 3, 8),
+    })
+
+    engine.setPageVisibility?.(true, 100)
+    expect(pendingFrames.size).toBe(0)
+    engine.setPageVisibility?.(false, 5_100)
+    expect(engine.getDiagnostics().physicsTiming).toMatchObject({
+      simulationStep: 4,
+      totalRawWallDeltaMs: 5_100,
+      totalAcceptedWallDeltaMs: 100,
+      totalPausedWallDeltaMs: 5_000,
+      totalDiscardedWallDeltaMs: 5_000,
+      queuedMs: expect.closeTo(100 / 3, 8),
+      suspended: false,
+    })
+
+    runNextFrame(5_100)
+    expect(engine.getDiagnostics().physicsTiming).toMatchObject({
+      simulationStep: 6,
+      totalAcceptedWallDeltaMs: 100,
+      queuedMs: 0,
+    })
+  })
+
+  it('visibility 时钟回退不把回退差额补算到 paused 时间', () => {
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.allowSleep = false
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    const { engine } = createExactFixture({ dicePairs, clock: () => 100 })
+
+    engine.start()
+    engine.beginSettle()
+    engine.setPageVisibility?.(true, 90)
+    engine.setPageVisibility?.(false, 200)
+
+    expect(engine.getDiagnostics().physicsTiming).toMatchObject({
+      totalRawWallDeltaMs: 100,
+      totalAcceptedWallDeltaMs: 0,
+      totalPausedWallDeltaMs: 100,
+      totalDiscardedWallDeltaMs: 100,
+    })
+  })
+
+  it('hidden 尾段触发 settle 时不渲染，恢复后才提交唯一静态帧', () => {
+    const dicePairs = makeDicePairs(1, true)
+    const onDiagnostics = vi.fn()
+    const onSettled = vi.fn()
+    const { engine, sceneCtx } = createExactFixture({
+      variant: 'exact-cap6',
+      dicePairs,
+      onSettled,
+      onDiagnostics,
+    })
+
+    engine.start()
+    engine.beginSettle()
+    engine.setPageVisibility?.(true, 20)
+
+    expect(onSettled).toHaveBeenCalledOnce()
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'settled',
+      renderCount: 0,
+      frameScheduled: false,
+      physicsTiming: { suspended: true },
+    })
+    expect(sceneCtx.renderer.render).not.toHaveBeenCalled()
+    expect(onDiagnostics).not.toHaveBeenCalled()
+
+    engine.setPageVisibility?.(false, 1_020)
+    runNextFrame(1_020)
+    expect(sceneCtx.renderer.render).toHaveBeenCalledOnce()
+    expect(onDiagnostics).toHaveBeenCalledOnce()
+  })
+
+  it('exact stop/dispose 保留 terminal backlog 原因，且多轮物理步计数单调累计', () => {
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.allowSleep = false
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    const { engine } = createExactFixture({ dicePairs })
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(100)
+    engine.stop()
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'stopped',
+      physicsStepCount: 4,
+      physicsTiming: { terminalAbandoned: { reason: 'stopped' } },
+    })
+
+    engine.start()
+    engine.beginSettle()
+    runNextFrame(200)
+    expect(engine.getDiagnostics().physicsStepCount).toBe(8)
+    engine.dispose()
+    expect(engine.getDiagnostics()).toMatchObject({
+      mode: 'stopped',
+      physicsStepCount: 8,
+      physicsTiming: { terminalAbandoned: { reason: 'disposed' } },
+    })
+  })
+
+  it('exact 重复 beginSettle 会拒绝，profile 开关不改变固定步轨迹', () => {
+    const run = (profiled: boolean) => {
+      const dicePairs = makeDicePairs(1, true)
+      let profileClock = 0
+      const { engine } = createExactFixture({
+        variant: 'exact-cap6',
+        dicePairs,
+        performanceProfile: profiled
+          ? {
+              now: () => {
+                profileClock += 0.1
+                return profileClock
+              },
+            }
+          : undefined,
+      })
+      engine.start()
+      engine.beginSettle()
+      expect(() => engine.beginSettle()).toThrow(/不能重复/)
+      runNextFrame(100)
+      const diagnostics = { ...engine.getDiagnostics() }
+      delete diagnostics.performanceProfile
+      return diagnostics
+    }
+
+    expect(run(true)).toEqual(run(false))
+  })
 
   it('未显式启用 profile 时 rolling 不读取 performance.now', () => {
     const now = vi.spyOn(performance, 'now')
@@ -282,6 +624,7 @@ describe('Engine 按需调度', () => {
       renderCount: 0,
       physicsStepCount: 0,
       frameScheduled: false,
+      physicsTiming: ZERO_PHYSICS_TIMING,
       rollSafety: ZERO_ROLL_SAFETY,
       rollingShadow: ZERO_ROLLING_SHADOW,
     })
@@ -302,6 +645,7 @@ describe('Engine 按需调度', () => {
       renderCount: 1,
       physicsStepCount: 0,
       frameScheduled: false,
+      physicsTiming: ZERO_PHYSICS_TIMING,
       rollSafety: ZERO_ROLL_SAFETY,
       rollingShadow: ZERO_ROLLING_SHADOW,
     })
@@ -324,6 +668,7 @@ describe('Engine 按需调度', () => {
       renderCount: 1,
       physicsStepCount: 0,
       frameScheduled: false,
+      physicsTiming: ZERO_PHYSICS_TIMING,
       rollSafety: ZERO_ROLL_SAFETY,
       rollingShadow: ZERO_ROLLING_SHADOW,
     })
@@ -612,6 +957,7 @@ describe('Engine 按需调度', () => {
       renderCount: 2,
       physicsStepCount: 1,
       frameScheduled: false,
+      physicsTiming: ZERO_PHYSICS_TIMING,
       rollSafety: {
         ...ZERO_ROLL_SAFETY,
       },
@@ -650,6 +996,7 @@ describe('Engine 按需调度', () => {
       renderCount: 0,
       physicsStepCount: 0,
       frameScheduled: false,
+      physicsTiming: ZERO_PHYSICS_TIMING,
       rollSafety: ZERO_ROLL_SAFETY,
       rollingShadow: ZERO_ROLLING_SHADOW,
     })

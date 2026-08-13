@@ -34,6 +34,12 @@ type DiagnosticSnapshot = {
 const diagnosticPublishers: Array<(diagnostics: DiagnosticSnapshot) => void> = []
 const enginePerformanceProfiles: unknown[] = []
 const engineRollingShadowPresets: unknown[] = []
+const engineSchedulerVariants: unknown[] = []
+const engineStepExactCallbacks: unknown[] = []
+const engineRollErrorCallbacks: unknown[] = []
+const engineClocks: unknown[] = []
+const engineInitiallyHidden: unknown[] = []
+const engineVisibilityCalls: Array<{ id: number; hidden: boolean; timestampMs: number }> = []
 let callCounter = 0
 let diceSetCallCounter = 0
 
@@ -85,6 +91,7 @@ vi.mock('@/physics/world', () => ({
       step: vi.fn(),
     },
     step: vi.fn(),
+    stepExact: vi.fn(),
     dispose: vi.fn(),
   }),
 }))
@@ -139,12 +146,22 @@ vi.mock('@/game/engine', () => ({
     onDiagnostics?: (diagnostics: DiagnosticSnapshot) => void
     performanceProfile?: unknown
     rollingShadowPreset?: unknown
+    physicsSchedulerVariant?: unknown
+    stepExact?: unknown
+    onRollError?: unknown
+    clock?: unknown
+    initiallyHidden?: unknown
   }) => {
     const id = ++callCounter
     engineCreateCalls.push(id)
     if (options.onDiagnostics) diagnosticPublishers.push(options.onDiagnostics)
     enginePerformanceProfiles.push(options.performanceProfile)
     engineRollingShadowPresets.push(options.rollingShadowPreset)
+    engineSchedulerVariants.push(options.physicsSchedulerVariant)
+    engineStepExactCallbacks.push(options.stepExact)
+    engineRollErrorCallbacks.push(options.onRollError)
+    engineClocks.push(options.clock)
+    engineInitiallyHidden.push(options.initiallyHidden)
     return {
       start: vi.fn(),
       stop: vi.fn(),
@@ -155,6 +172,9 @@ vi.mock('@/game/engine', () => ({
       returnToIdle: vi.fn(),
       invalidate: vi.fn(),
       getDiagnostics: vi.fn(),
+      setPageVisibility: (hidden: boolean, timestampMs: number) => {
+        engineVisibilityCalls.push({ id, hidden, timestampMs })
+      },
     }
   },
 }))
@@ -169,6 +189,12 @@ beforeEach(() => {
   diagnosticPublishers.length = 0
   enginePerformanceProfiles.length = 0
   engineRollingShadowPresets.length = 0
+  engineSchedulerVariants.length = 0
+  engineStepExactCallbacks.length = 0
+  engineRollErrorCallbacks.length = 0
+  engineClocks.length = 0
+  engineInitiallyHidden.length = 0
+  engineVisibilityCalls.length = 0
 })
 
 describe('StrictMode 重挂载', () => {
@@ -263,9 +289,16 @@ describe('StrictMode 重挂载', () => {
     const canvas = container.querySelector('canvas')
     const diagnostics = JSON.parse(canvas?.dataset.diceDiagnostics ?? '{}')
     expect(diagnostics).toMatchObject({
-      schemaVersion: 6,
+      schemaVersion: 7,
       revision: 1,
       sampleKind: 'post-render',
+      physicsSchedulerExperiment: {
+        version: 1,
+        explicit: false,
+        variant: 'legacy-batched',
+        kind: 'legacy-batched',
+        maxStepsPerFrame: null,
+      },
       renderExperiment: {
         version: 1,
         explicit: false,
@@ -300,7 +333,33 @@ describe('StrictMode 重挂载', () => {
     expect(diagnostics.engine.performanceProfile).toBeUndefined()
     expect(enginePerformanceProfiles.every((profile) => profile === undefined)).toBe(true)
     expect(engineRollingShadowPresets.every((preset) => preset === 'every-frame')).toBe(true)
+    expect(engineSchedulerVariants).not.toHaveLength(0)
+    expect(engineSchedulerVariants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'legacy-batched', kind: 'legacy-batched' }),
+      ]),
+    )
+    expect(engineStepExactCallbacks.every((callback) => typeof callback === 'function')).toBe(true)
+    expect(engineRollErrorCallbacks.every((callback) => typeof callback === 'function')).toBe(true)
+    expect(engineClocks.every((clock) => typeof clock === 'function')).toBe(true)
+    expect(engineInitiallyHidden.every((hidden) => hidden === document.hidden)).toBe(true)
 
     unmount()
+  })
+
+  it('visibilitychange 只通知当前 engine，卸载后不残留 listener', () => {
+    const { unmount } = render(<GameViewport />)
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    expect(engineVisibilityCalls).toHaveLength(1)
+    expect(engineVisibilityCalls[0]).toMatchObject({
+      id: engineCreateCalls.at(-1),
+      hidden: document.hidden,
+    })
+    expect(Number.isFinite(engineVisibilityCalls[0].timestampMs)).toBe(true)
+
+    unmount()
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(engineVisibilityCalls).toHaveLength(1)
   })
 })

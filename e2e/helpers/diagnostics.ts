@@ -9,7 +9,7 @@ export const E2E_NEXT_SEED = 42
  * 所有 browser bench 只消费此常量，渲染结构改变时避免散落修改断言。
  */
 export const BROWSER_BUDGETS = {
-  diagnosticsSchemaVersion: 6,
+  diagnosticsSchemaVersion: 7,
   mainPassCalls: 8,
   mainPassTriangles: 41_288,
   geometries: 8,
@@ -36,7 +36,7 @@ export const BROWSER_BUDGETS = {
   settlementWallTimeoutMs: 20_000,
 } as const
 
-export type RuntimeEngineMode = 'idle' | 'rolling' | 'settled' | 'stopped'
+export type RuntimeEngineMode = 'idle' | 'rolling' | 'settled' | 'error' | 'stopped'
 
 export interface DiceRuntimeDiagnostics {
   schemaVersion: number
@@ -47,6 +47,34 @@ export interface DiceRuntimeDiagnostics {
     renderCount: number
     physicsStepCount: number
     frameScheduled: boolean
+    physicsTiming: {
+      version: 1
+      preset: 'legacy-batched' | 'exact-cap6' | 'exact-cap4'
+      kind: 'legacy-batched' | 'exact-accumulator'
+      maxStepsPerFrame: number | null
+      fixedStepMs: number
+      simulationStep: number | null
+      simulationTime: number | null
+      totalRawWallDeltaMs: number
+      totalAcceptedWallDeltaMs: number
+      totalPausedWallDeltaMs: number
+      totalDiscardedWallDeltaMs: number
+      totalExecutedSteps: number
+      queuedMs: number
+      queuedWholeSteps: number
+      interpolationAlpha: number
+      overload: {
+        active: boolean
+        highWaterMs: number
+      }
+      terminalAbandoned: {
+        reason: 'settled' | 'timeout' | 'timing-overload' | 'stopped' | 'disposed'
+        queuedMs: number
+        queuedWholeSteps: number
+        interpolationAlpha: number
+      } | null
+      suspended: boolean
+    }
     rollSafety: {
       maxRadius: number
       containmentRadius: number
@@ -87,6 +115,13 @@ export interface DiceRuntimeDiagnostics {
         { count: number; p50: number | null; p95: number | null; max: number | null }
       >
     }
+  }
+  physicsSchedulerExperiment: {
+    version: 1
+    explicit: boolean
+    variant: 'legacy-batched' | 'exact-cap6' | 'exact-cap4'
+    kind: 'legacy-batched' | 'exact-accumulator'
+    maxStepsPerFrame: number | null
   }
   renderExperiment: {
     version: number
@@ -355,10 +390,12 @@ export function expectRenderBudgets(
   expect(render.programs, `[${projectName}][${engine.mode}] compiled programs`).toBeGreaterThan(0)
   if (engine.mode !== 'stopped') {
     const platform = projectName.startsWith('mobile') ? 'mobile' : 'desktop'
+    // error 画面已经冻结为 static，与 settled 共享同一套 shader/resource 预算。
+    const budgetPhase = engine.mode === 'error' ? 'settled' : engine.mode
     expect(
       render.programs,
       `[${projectName}][${engine.mode}] compiled programs`,
-    ).toBeLessThanOrEqual(BROWSER_BUDGETS.maxPrograms[platform][engine.mode])
+    ).toBeLessThanOrEqual(BROWSER_BUDGETS.maxPrograms[platform][budgetPhase])
   }
 }
 

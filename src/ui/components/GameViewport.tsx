@@ -19,10 +19,17 @@ import {
   resolveRenderPerformanceExperiment,
   type RenderPerformanceVariant,
 } from '@/game/render-performance-experiment'
+import {
+  DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID,
+  getPhysicsSchedulerVariant,
+  PHYSICS_SCHEDULER_EXPERIMENT_VERSION,
+  resolvePhysicsSchedulerExperiment,
+  type PhysicsSchedulerVariant,
+} from '@/game/physics-scheduler-experiment'
 import { GameControllerContext } from './GameControllerContext'
 import { GameStoreContext } from './GameStoreContext'
 
-const DIAGNOSTICS_SCHEMA_VERSION = 6
+const DIAGNOSTICS_SCHEMA_VERSION = 7
 const DIAGNOSTICS_ENABLED = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
 const E2E_SEED_PLAN_VERSION = '1'
 const E2E_SETTLEMENT_OVERRIDE_VERSION = '1'
@@ -37,6 +44,13 @@ interface DiceRuntimeDiagnostics {
   revision: number
   sampleKind: 'post-render'
   engine: EngineDiagnostics
+  physicsSchedulerExperiment: {
+    version: typeof PHYSICS_SCHEDULER_EXPERIMENT_VERSION
+    explicit: boolean
+    variant: PhysicsSchedulerVariant['id']
+    kind: PhysicsSchedulerVariant['kind']
+    maxStepsPerFrame: number | null
+  }
   renderExperiment: {
     version: typeof RENDER_PERFORMANCE_EXPERIMENT_VERSION
     explicit: boolean
@@ -112,6 +126,16 @@ function readRenderPerformanceExperiment(): RenderPerformanceVariant | undefined
   )
 }
 
+function readPhysicsSchedulerExperiment(): PhysicsSchedulerVariant | undefined {
+  // exact scheduler 尚处于隔离验收阶段；生产构建即使带同名 query 也必须保持 legacy。
+  if (import.meta.env.MODE !== 'e2e') return undefined
+  const params = new URLSearchParams(window.location.search)
+  return resolvePhysicsSchedulerExperiment(
+    params.get('physicsSchedulerExperimentVersion'),
+    params.get('physicsSchedulerVariant'),
+  )
+}
+
 /** 递归释放 scene 中所有 geometry / material / texture */
 function disposeSceneResources(scene: THREE.Scene) {
   const disposedGeometries = new Set<THREE.BufferGeometry>()
@@ -175,6 +199,10 @@ export function GameViewport({ children }: GameViewportProps) {
     const explicitRenderExperiment = readRenderPerformanceExperiment()
     const renderVariant =
       explicitRenderExperiment ?? getRenderPerformanceVariant(DEFAULT_RUNTIME_RENDER_VARIANT_ID)
+    const explicitPhysicsSchedulerExperiment = readPhysicsSchedulerExperiment()
+    const physicsSchedulerVariant =
+      explicitPhysicsSchedulerExperiment ??
+      getPhysicsSchedulerVariant(DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID)
 
     // 初始化场景
     const sceneCtx = createScene(canvas, {
@@ -220,6 +248,13 @@ export function GameViewport({ children }: GameViewportProps) {
         revision: ++diagnosticsRevision,
         sampleKind: 'post-render',
         engine: engineDiagnostics,
+        physicsSchedulerExperiment: {
+          version: PHYSICS_SCHEDULER_EXPERIMENT_VERSION,
+          explicit: explicitPhysicsSchedulerExperiment !== undefined,
+          variant: physicsSchedulerVariant.id,
+          kind: physicsSchedulerVariant.kind,
+          maxStepsPerFrame: physicsSchedulerVariant.maxStepsPerFrame,
+        },
         renderExperiment: {
           version: RENDER_PERFORMANCE_EXPERIMENT_VERSION,
           explicit: explicitRenderExperiment !== undefined,
@@ -250,6 +285,7 @@ export function GameViewport({ children }: GameViewportProps) {
       sceneCtx,
       world: physics.world,
       worldStep: physics.step,
+      stepExact: physics.stepExact,
       dicePairs,
       onSettled: (result) => {
         if (nextSettlementOverride === 'timeout') {
@@ -259,6 +295,10 @@ export function GameViewport({ children }: GameViewportProps) {
         }
         ctrl.onSettled(result)
       },
+      onRollError: (error) => ctrl.onRollError(error),
+      physicsSchedulerVariant,
+      clock: () => performance.now(),
+      initiallyHidden: document.hidden,
       onDiagnostics: DIAGNOSTICS_ENABLED ? publishDiagnostics : undefined,
       rollingShadowPreset: renderVariant.rollingShadowPreset,
       performanceProfile: readPerformanceProfile(),
@@ -267,6 +307,11 @@ export function GameViewport({ children }: GameViewportProps) {
     // 注入 engine（解决循环依赖）
     ctrl.setEngine(engine)
     sceneCtx.setRenderInvalidationCallback?.(engine.invalidate)
+
+    const handleVisibilityChange = () => {
+      engine.setPageVisibility?.(document.hidden, performance.now())
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     engine.start()
     let active = true
@@ -279,6 +324,7 @@ export function GameViewport({ children }: GameViewportProps) {
     return () => {
       active = false
       sceneCtx.clearRenderInvalidationCallback?.()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       delete canvas.dataset.diceDiagnostics
       engine.dispose()
       // DiceSet 独占其 instance buffer 和共享骰子资源；先移出 scene，避免通用遍历重复 dispose。

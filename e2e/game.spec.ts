@@ -189,3 +189,156 @@ test('timeout 不提交结果，并可在同一轮恢复投掷', async ({ page }
   expect(issues.pageErrors, 'uncaught page errors').toEqual([])
   expect(issues.consoleErrors, 'browser console errors').toEqual([])
 })
+
+test('exact-cap6 使用逐固定步真值完成正常结算并满足时间守恒', async ({ page }) => {
+  const issues = collectBrowserIssues(page)
+  const query = new URLSearchParams({
+    nextSeed: String(E2E_NEXT_SEED),
+    physicsSchedulerExperimentVersion: '1',
+    physicsSchedulerVariant: 'exact-cap6',
+  })
+  await page.goto(`/?${query}`)
+
+  let idle = await waitForPostRender(page, { mode: 'idle', frameScheduled: false })
+  idle = await waitForStaticQuiescence(page, idle)
+  expect(idle.physicsSchedulerExperiment).toEqual({
+    version: 1,
+    explicit: true,
+    variant: 'exact-cap6',
+    kind: 'exact-accumulator',
+    maxStepsPerFrame: 6,
+  })
+  expect(idle.engine.physicsTiming).toMatchObject({
+    preset: 'exact-cap6',
+    kind: 'exact-accumulator',
+    simulationStep: null,
+    totalExecutedSteps: 0,
+    overload: { active: false, highWaterMs: 250 },
+  })
+
+  await page.getByRole('button', { name: '掷骰' }).click()
+  const rolling = await waitForPostRender(page, {
+    mode: 'rolling',
+    afterRevision: idle.revision,
+    afterRenderCount: idle.engine.renderCount,
+    frameScheduled: true,
+  })
+  expect(rolling.roll.seed).toBe(E2E_NEXT_SEED)
+  expect(rolling.engine.physicsTiming.preset).toBe('exact-cap6')
+
+  await waitForSettlementUi(page)
+  const settled = await waitForPostRender(page, {
+    mode: 'settled',
+    afterRevision: rolling.revision,
+    afterRenderCount: rolling.engine.renderCount,
+    frameScheduled: false,
+    timeout: BROWSER_BUDGETS.settlementWallTimeoutMs,
+  })
+  const timing = settled.engine.physicsTiming
+  expect(settled.roll.settleReason).toMatch(/^(natural-sleep|stable-window|pose-stable-window)$/)
+  expect(timing.simulationStep).toBeGreaterThan(0)
+  expect(timing.totalExecutedSteps).toBe(timing.simulationStep)
+  expect(timing.simulationTime).toBeCloseTo(
+    timing.totalExecutedSteps * (timing.fixedStepMs / 1000),
+    9,
+  )
+  expect(timing.totalRawWallDeltaMs).toBeCloseTo(
+    timing.totalAcceptedWallDeltaMs + timing.totalDiscardedWallDeltaMs,
+    8,
+  )
+  expect(timing.terminalAbandoned).toMatchObject({ reason: 'settled' })
+  expect(timing.totalAcceptedWallDeltaMs).toBeCloseTo(
+    timing.totalExecutedSteps * timing.fixedStepMs + timing.terminalAbandoned!.queuedMs,
+    7,
+  )
+  expect(timing.overload.active).toBe(false)
+  expect(settled.engine.rollSafety).toMatchObject({
+    conservativeBoundaryCrossings: 0,
+    wallCenterCrossings: 0,
+    escapeGuardInterventionCount: 0,
+    nonFiniteBodyStateDetected: false,
+  })
+  await expect(page.locator('.result-panel [aria-label^="骰子点数 "]')).toHaveCount(6)
+  await expectNoStaticFrames(page, settled)
+
+  expect(issues.pageErrors, 'uncaught page errors').toEqual([])
+  expect(issues.consoleErrors, 'browser console errors').toEqual([])
+})
+
+test('exact-cap4 六个 100ms 慢帧进入显式 overload，绝不提交结果', async ({ page }) => {
+  const issues = collectBrowserIssues(page)
+  await page.clock.install({ time: new Date('2026-08-13T00:00:00Z') })
+  const query = new URLSearchParams({
+    nextSeed: String(E2E_NEXT_SEED),
+    physicsSchedulerExperimentVersion: '1',
+    physicsSchedulerVariant: 'exact-cap4',
+  })
+  await page.goto(`/?${query}`)
+
+  let idle = await waitForPostRender(page, { mode: 'idle', frameScheduled: false })
+  idle = await waitForStaticQuiescence(page, idle)
+  const pauseTime = await page.evaluate(() => Date.now())
+  // Date.now() 只有整数毫秒，而 Clock 内部可能已前进到同毫秒的小数部分；向前留出
+  // 明确余量再 pause，避免把舍入后的整数误判为回拨。
+  await page.clock.pauseAt(pauseTime + 1_000)
+
+  await page.getByRole('button', { name: '掷骰' }).click()
+  await expect(page.getByRole('button', { name: '骰子翻滚中' })).toBeDisabled()
+  for (let frame = 0; frame < 6; frame++) await page.clock.fastForward(100)
+
+  const errored = await waitForPostRender(page, {
+    mode: 'error',
+    afterRevision: idle.revision,
+    afterRenderCount: idle.engine.renderCount,
+    frameScheduled: false,
+  })
+  expect(errored.physicsSchedulerExperiment).toEqual({
+    version: 1,
+    explicit: true,
+    variant: 'exact-cap4',
+    kind: 'exact-accumulator',
+    maxStepsPerFrame: 4,
+  })
+  expect(errored.roll.settleReason).toBe('timing-overload')
+  expect(errored.engine.physicsStepCount).toBe(20)
+  expect(errored.engine.physicsTiming).toMatchObject({
+    preset: 'exact-cap4',
+    simulationStep: 20,
+    simulationTime: 20 / 60,
+    totalRawWallDeltaMs: 600,
+    totalAcceptedWallDeltaMs: 600,
+    totalPausedWallDeltaMs: 0,
+    totalDiscardedWallDeltaMs: 0,
+    totalExecutedSteps: 20,
+    queuedMs: expect.closeTo(800 / 3, 7),
+    queuedWholeSteps: 16,
+    overload: { active: true, highWaterMs: 250 },
+    terminalAbandoned: {
+      reason: 'timing-overload',
+      queuedMs: expect.closeTo(800 / 3, 7),
+      queuedWholeSteps: 16,
+    },
+  })
+  await expect(page.getByRole('alert')).toContainText('本轮未结算')
+  await expect(page.getByRole('alert')).toContainText('物理模拟积压超过安全上限')
+  await expect(page.getByRole('alert')).toContainText('已模拟 0.33 秒 / 20 步')
+  await expect(page.locator('.result-panel')).toHaveCount(0)
+  await expect(page.locator('.history-item')).toHaveCount(0)
+  await expect(page.locator('.round-display-value')).toHaveText('第 1 轮')
+  await expectNoStaticFrames(page, errored)
+
+  await page.getByRole('alert').getByRole('button', { name: '重置', exact: true }).click()
+  await page.clock.fastForward(20)
+  const resetIdle = await waitForPostRender(page, {
+    mode: 'idle',
+    afterRevision: errored.revision,
+    afterRenderCount: errored.engine.renderCount,
+    frameScheduled: false,
+  })
+  expect(resetIdle.engine.physicsTiming.totalExecutedSteps).toBe(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.locator('.round-display-value')).toHaveText('第 1 轮')
+
+  expect(issues.pageErrors, 'uncaught page errors').toEqual([])
+  expect(issues.consoleErrors, 'browser console errors').toEqual([])
+})

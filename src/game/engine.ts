@@ -1,8 +1,17 @@
 import type * as CANNON from 'cannon-es'
+import { PHYSICS } from '@/config/physics'
+import {
+  PHYSICS_CADENCE_MAX_ACCEPTED_WALL_DELTA_MS,
+  PHYSICS_CADENCE_OVERLOAD_HIGH_WATER_MS,
+} from '@/config/physics-cadence'
 import type { DicePair } from '@/dice/create'
 import { checkSettled, createSettleState, type SettleResult, type SettleState } from '@/dice/settle'
 import { applyEscapeGuard } from '@/physics/escape-guard'
-import { copyBodyTransformToObject, syncBodyInterpolationState } from '@/physics/body-transform'
+import {
+  copyBodyTransformToObject,
+  interpolateBodyTransform,
+  syncBodyInterpolationState,
+} from '@/physics/body-transform'
 import {
   CONSERVATIVE_DICE_CENTER_RADIUS,
   WALL_INNER_RADIUS,
@@ -10,8 +19,20 @@ import {
   sampleRollBodyDiagnostics,
   sampleRollFrameDiagnostics,
 } from '@/physics/roll-diagnostics'
+import {
+  createRollStepSession,
+  type RollStepSession,
+  type RollStepSessionSnapshot,
+} from '@/physics/roll-step-session'
 import { soundManager } from '@/audio/sound'
 import type { SceneContext } from '@/scene/setup'
+import { createFixedStepAccumulator, type FixedStepAccumulator } from './fixed-step-accumulator'
+import {
+  DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID,
+  getPhysicsSchedulerVariant,
+  type PhysicsSchedulerVariant,
+} from './physics-scheduler-experiment'
+import type { RollError } from './roll-error'
 import {
   createRollingCpuProfileAccumulator,
   type RollingCpuFrameSample,
@@ -23,13 +44,43 @@ import {
   type RollingShadowScheduleDiagnostics,
 } from './rolling-shadow'
 
-export type EngineMode = 'idle' | 'rolling' | 'settled' | 'stopped'
+export type EngineMode = 'idle' | 'rolling' | 'settled' | 'error' | 'stopped'
+
+export interface EnginePhysicsTimingDiagnostics {
+  version: PhysicsSchedulerVariant['version']
+  preset: PhysicsSchedulerVariant['id']
+  kind: PhysicsSchedulerVariant['kind']
+  maxStepsPerFrame: number | null
+  fixedStepMs: number
+  simulationStep: number | null
+  simulationTime: number | null
+  totalRawWallDeltaMs: number
+  totalAcceptedWallDeltaMs: number
+  totalPausedWallDeltaMs: number
+  totalDiscardedWallDeltaMs: number
+  totalExecutedSteps: number
+  queuedMs: number
+  queuedWholeSteps: number
+  interpolationAlpha: number
+  overload: {
+    active: boolean
+    highWaterMs: number
+  }
+  terminalAbandoned: {
+    reason: 'settled' | 'timeout' | 'timing-overload' | 'stopped' | 'disposed'
+    queuedMs: number
+    queuedWholeSteps: number
+    interpolationAlpha: number
+  } | null
+  suspended: boolean
+}
 
 export interface EngineDiagnostics {
   mode: EngineMode
   renderCount: number
   physicsStepCount: number
   frameScheduled: boolean
+  physicsTiming: EnginePhysicsTimingDiagnostics
   /** 当前轮逐物理步累计的安全包络；用于发现飞出后落回或 guard 掩盖。 */
   rollSafety: {
     maxRadius: number
@@ -51,8 +102,15 @@ export interface EngineOptions {
   sceneCtx: SceneContext
   world: CANNON.World
   worldStep: (dt: number) => void
+  /** exact 实验只允许单参数固定步；production 默认仍使用 worldStep。 */
+  stepExact?: () => void
   dicePairs: DicePair[]
   onSettled: (result: SettleResult) => void
+  onRollError?: (error: RollError) => void
+  physicsSchedulerVariant?: Readonly<PhysicsSchedulerVariant>
+  /** 用于 beginSettle/visibility 事件建立墙钟基准；不参与物理真值。 */
+  clock?: () => number
+  initiallyHidden?: boolean
   /** 可选只读诊断订阅，用于开发环境/浏览器验收，不参与状态决策。 */
   onDiagnostics?: (diagnostics: EngineDiagnostics) => void
   /** rolling 阴影刷新节奏；默认保持当前每个 rolling render 都请求刷新。 */
@@ -77,6 +135,8 @@ export interface Engine {
   invalidate: () => void
   /** 获取不修改引擎状态的轻量诊断快照。 */
   getDiagnostics: () => EngineDiagnostics
+  /** 页面生命周期由调用方显式注入，避免 hidden 墙钟污染物理 backlog。 */
+  setPageVisibility?: (hidden: boolean, timestampMs: number) => void
 }
 
 type ShadowMapControls = {
@@ -96,12 +156,25 @@ export function createEngine(opts: EngineOptions): Engine {
     sceneCtx,
     world,
     worldStep,
+    stepExact,
     dicePairs,
     onSettled,
+    onRollError,
     onDiagnostics,
     rollingShadowPreset,
     performanceProfile,
   } = opts
+  const physicsSchedulerVariant =
+    opts.physicsSchedulerVariant ??
+    getPhysicsSchedulerVariant(DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID)
+  const exactScheduler = physicsSchedulerVariant.kind === 'exact-accumulator'
+  if (exactScheduler && !stepExact) {
+    throw new Error(`physics scheduler ${physicsSchedulerVariant.id} 必须提供 stepExact`)
+  }
+  if (exactScheduler && !onRollError) {
+    throw new Error(`physics scheduler ${physicsSchedulerVariant.id} 必须提供 onRollError`)
+  }
+  const clock = opts.clock ?? (() => performance.now())
   const { scene, camera, renderer } = sceneCtx
   const bodies = dicePairs.map((pair) => pair.body)
 
@@ -113,6 +186,13 @@ export function createEngine(opts: EngineOptions): Engine {
   let renderCount = 0
   let physicsStepCount = 0
   let disposed = false
+  let suspended = opts.initiallyHidden ?? false
+  let hiddenSinceTimestamp: number | null = null
+  let exactAccumulator: FixedStepAccumulator | null = null
+  let exactSession: RollStepSession | null = null
+  let exactLastSessionSnapshot: RollStepSessionSnapshot | null = null
+  let exactTerminalAbandoned: EnginePhysicsTimingDiagnostics['terminalAbandoned'] = null
+  let exactProfileSample: RollingCpuFrameSample | null = null
   let rollFrameDiagnostics = createRollFrameDiagnostics()
   let rollEscapeGuardInterventionCount = 0
   const rollSafetyEnabled = onDiagnostics !== undefined
@@ -166,6 +246,10 @@ export function createEngine(opts: EngineOptions): Engine {
     }
   }
 
+  function interpolateExactBodies(alpha: number): void {
+    for (const { body } of dicePairs) interpolateBodyTransform(body, alpha)
+  }
+
   function resetRollSafety(): void {
     rollFrameDiagnostics = createRollFrameDiagnostics()
     rollEscapeGuardInterventionCount = 0
@@ -199,7 +283,7 @@ export function createEngine(opts: EngineOptions): Engine {
   }
 
   function scheduleFrame(): void {
-    if (disposed || rafId !== null || mode === 'stopped') return
+    if (disposed || suspended || rafId !== null || mode === 'stopped') return
     rafId = requestAnimationFrame(tick)
   }
 
@@ -211,6 +295,24 @@ export function createEngine(opts: EngineOptions): Engine {
     const startedAt = profileNow!()
     action()
     return profileNow!() - startedAt
+  }
+
+  function measureExactPhase(
+    metric:
+      | 'worldStepCpuMs'
+      | 'guardCpuMs'
+      | 'rollSafetyCpuMs'
+      | 'settleCpuMs'
+      | 'transformSyncCpuMs'
+      | 'rendererSubmitCpuMs'
+      | 'diagnosticsPublishCpuMs',
+    action: () => void,
+  ): void {
+    if (!exactProfileSample) {
+      action()
+      return
+    }
+    exactProfileSample[metric] += measureCpu(action)
   }
 
   function recordProfiledRollingFrame(rawDeltaMs: number, clampedDeltaMs: number): void {
@@ -272,6 +374,158 @@ export function createEngine(opts: EngineOptions): Engine {
     profileFrameInProgress = false
   }
 
+  function exactSessionSnapshot(): RollStepSessionSnapshot | null {
+    return exactSession?.snapshot() ?? exactLastSessionSnapshot
+  }
+
+  function saveTerminalAbandoned(
+    reason: NonNullable<EnginePhysicsTimingDiagnostics['terminalAbandoned']>['reason'],
+  ): void {
+    if (!exactAccumulator) return
+    const timing = exactAccumulator.snapshot()
+    exactTerminalAbandoned = {
+      reason,
+      queuedMs: timing.queuedMs,
+      queuedWholeSteps: timing.queuedWholeSteps,
+      interpolationAlpha: timing.interpolationAlpha,
+    }
+  }
+
+  function finishExactSession(): RollStepSessionSnapshot | null {
+    if (!exactSession) return exactLastSessionSnapshot
+    exactLastSessionSnapshot = exactSession.finish()
+    exactSession = null
+    return exactLastSessionSnapshot
+  }
+
+  function renderExactRollingFrame(alpha: number): void {
+    sceneCtx.setRenderPhase?.('rolling')
+    prepareRollingShadows()
+    measureExactPhase('transformSyncCpuMs', () => {
+      interpolateExactBodies(alpha)
+      syncInterpolatedBodies()
+    })
+    measureExactPhase('rendererSubmitCpuMs', () => renderer.render(scene, camera))
+    renderCount++
+  }
+
+  function renderExactStaticFrame(): void {
+    sceneCtx.setRenderPhase?.('static')
+    prepareStaticShadows()
+    measureExactPhase('transformSyncCpuMs', syncRawBodies)
+    measureExactPhase('rendererSubmitCpuMs', () => renderer.render(scene, camera))
+    renderCount++
+  }
+
+  function publishExactPostRenderDiagnostics(): void {
+    measureExactPhase('diagnosticsPublishCpuMs', notifyPostRenderDiagnostics)
+  }
+
+  /**
+   * exact scheduler 的唯一逐帧入口。frame plan 只负责时间守恒；每个真实物理步的
+   * 安全采样、guard 与 settle 顺序全部委托给 roll-step session。
+   */
+  function processExactFrame(rawDeltaMs: number, renderAfter: boolean): void {
+    if (
+      !exactAccumulator ||
+      !exactSession ||
+      physicsSchedulerVariant.kind !== 'exact-accumulator'
+    ) {
+      throw new Error('exact scheduler 尚未初始化')
+    }
+
+    const plan = exactAccumulator.planFrame({
+      rawWallDeltaMs: Math.max(rawDeltaMs, 0),
+      paused: false,
+      maxSteps: physicsSchedulerVariant.maxStepsPerFrame,
+    })
+    let settlement: SettleResult | null = null
+
+    for (let step = 0; step < plan.maxExecutableSteps; step++) {
+      const advance = exactSession.advanceExactStep()
+      // 只在 exact step 连同逐步观察全部成功后扣减 backlog。
+      exactAccumulator.consumeStep()
+      physicsStepCount++
+      if (advance.settled) {
+        settlement = advance.settled
+        break
+      }
+    }
+
+    const frame = exactAccumulator.finishFrame()
+
+    if (plan.overload.active) {
+      saveTerminalAbandoned('timing-overload')
+      const session = finishExactSession()
+      mode = 'error'
+      previousRollingTimestamp = null
+      onRollError!({
+        reason: 'timing-overload',
+        simulationElapsed: session?.simulationTime ?? 0,
+        queuedMs: frame.queuedMs,
+        highWaterMs: plan.overload.highWaterMs,
+        executedSteps: session?.simulationStep ?? 0,
+      })
+      if (renderAfter) {
+        renderExactStaticFrame()
+        publishExactPostRenderDiagnostics()
+      }
+      return
+    }
+
+    if (settlement) {
+      const timedOut = settlement.reason === 'timeout'
+      saveTerminalAbandoned(timedOut ? 'timeout' : 'settled')
+      finishExactSession()
+      mode = timedOut ? 'error' : 'settled'
+      previousRollingTimestamp = null
+      if (timedOut) onRollError!({ reason: 'timeout', elapsed: settlement.elapsed })
+      else onSettled(settlement)
+      if (renderAfter) {
+        renderExactStaticFrame()
+        publishExactPostRenderDiagnostics()
+      }
+      return
+    }
+
+    if (renderAfter) {
+      renderExactRollingFrame(frame.interpolationAlpha)
+      scheduleFrame()
+      publishExactPostRenderDiagnostics()
+    }
+  }
+
+  function recordProfiledExactFrame(rawDeltaMs: number): void {
+    const tickStartedAt = profileNow!()
+    const stepnumberBefore = world.stepnumber
+    exactProfileSample = {
+      rafRawDeltaMs: rawDeltaMs,
+      rafClampedDeltaMs: Math.min(
+        Math.max(rawDeltaMs, 0),
+        PHYSICS_CADENCE_MAX_ACCEPTED_WALL_DELTA_MS,
+      ),
+      cannonStepnumberDelta: 0,
+      worldStepCpuMs: 0,
+      guardCpuMs: 0,
+      rollSafetyCpuMs: 0,
+      settleCpuMs: 0,
+      transformSyncCpuMs: 0,
+      rendererSubmitCpuMs: 0,
+      diagnosticsPublishCpuMs: 0,
+      tickTotalCpuMs: 0,
+    }
+    profileFrameInProgress = true
+    try {
+      processExactFrame(rawDeltaMs, true)
+      exactProfileSample.cannonStepnumberDelta = world.stepnumber - stepnumberBefore
+      exactProfileSample.tickTotalCpuMs = profileNow!() - tickStartedAt
+      rollingCpuProfile!.record(exactProfileSample)
+    } finally {
+      exactProfileSample = null
+      profileFrameInProgress = false
+    }
+  }
+
   function tick(timestamp: number): void {
     // 当前回调已被消费；只有本帧末尾明确需要继续时才重新安排。
     rafId = null
@@ -280,6 +534,17 @@ export function createEngine(opts: EngineOptions): Engine {
     if (mode !== 'rolling') {
       renderStaticFrame()
       notifyPostRenderDiagnostics()
+      return
+    }
+
+    if (exactScheduler) {
+      const previous = previousRollingTimestamp ?? timestamp
+      // rAF 与 visibility 都应来自同一 monotonic time origin；回退时不移动基准。
+      const effectiveTimestamp = Math.max(timestamp, previous)
+      previousRollingTimestamp = effectiveTimestamp
+      const rawDeltaMs = effectiveTimestamp - previous
+      if (rollingCpuProfile) recordProfiledExactFrame(rawDeltaMs)
+      else processExactFrame(rawDeltaMs, true)
       return
     }
 
@@ -338,9 +603,17 @@ export function createEngine(opts: EngineOptions): Engine {
   }
 
   function stop(): void {
+    stopInternal('stopped')
+  }
+
+  function stopInternal(reason: 'stopped' | 'disposed'): void {
     if (rafId !== null) {
       cancelAnimationFrame(rafId)
       rafId = null
+    }
+    if (exactScheduler && mode === 'rolling') {
+      saveTerminalAbandoned(reason)
+      finishExactSession()
     }
     mode = 'stopped'
     settleState = null
@@ -351,11 +624,14 @@ export function createEngine(opts: EngineOptions): Engine {
 
   function beginSettle(): void {
     if (disposed) return
+    if (exactScheduler && mode === 'rolling') {
+      throw new Error('exact scheduler 已在 rolling，不能重复 beginSettle')
+    }
 
     mode = 'rolling'
     rollingElapsed = 0
     previousRollingTimestamp = null
-    settleState = createSettleState(0)
+    settleState = exactScheduler ? null : createSettleState(0)
     resetRollSafety()
     rollingCpuProfile?.reset()
     rollingShadowScheduler.reset()
@@ -365,16 +641,56 @@ export function createEngine(opts: EngineOptions): Engine {
     // throwDice 已更新 raw body；先初始化插值字段，避免首个基准帧显示上一轮姿态。
     for (const body of bodies) syncBodyInterpolationState(body)
 
+    if (exactScheduler) {
+      exactAccumulator = createFixedStepAccumulator({
+        fixedStepMs: PHYSICS.fixedTimeStep * 1000,
+        maxAcceptedWallDeltaMs: PHYSICS_CADENCE_MAX_ACCEPTED_WALL_DELTA_MS,
+        overloadHighWaterMs: PHYSICS_CADENCE_OVERLOAD_HIGH_WATER_MS,
+      })
+      exactLastSessionSnapshot = null
+      exactTerminalAbandoned = null
+      exactSession = createRollStepSession({
+        world,
+        bodies,
+        stepExact: stepExact!,
+        settlementPolicy: 'runtime',
+        runPhase: rollingCpuProfile
+          ? (phase, action) => {
+              const metric =
+                phase === 'world-step'
+                  ? 'worldStepCpuMs'
+                  : phase === 'roll-safety'
+                    ? 'rollSafetyCpuMs'
+                    : phase === 'escape-guard'
+                      ? 'guardCpuMs'
+                      : phase === 'settle'
+                        ? 'settleCpuMs'
+                        : null
+              if (metric) measureExactPhase(metric, action)
+              else action()
+            }
+          : undefined,
+      })
+      const startedAt = clock()
+      previousRollingTimestamp = suspended ? null : startedAt
+      hiddenSinceTimestamp = suspended ? startedAt : null
+    }
+
     scheduleFrame()
   }
 
   function returnToIdle(): void {
     if (disposed) return
+    if (exactScheduler && mode === 'rolling') return
 
     mode = 'idle'
     rollingElapsed = 0
     previousRollingTimestamp = null
     settleState = null
+    exactAccumulator = null
+    exactSession = null
+    exactLastSessionSnapshot = null
+    exactTerminalAbandoned = null
     resetRollSafety()
     rollingCpuProfile?.reset()
     rollingShadowScheduler.reset()
@@ -388,21 +704,126 @@ export function createEngine(opts: EngineOptions): Engine {
     scheduleFrame()
   }
 
+  function setPageVisibility(hidden: boolean, timestampMs: number): void {
+    if (!Number.isFinite(timestampMs)) {
+      throw new RangeError(`visibility timestamp 必须是有限数字，收到 ${timestampMs}`)
+    }
+    if (disposed || hidden === suspended) return
+
+    if (hidden) {
+      const effectiveTimestamp =
+        mode === 'rolling' && previousRollingTimestamp !== null
+          ? Math.max(timestampMs, previousRollingTimestamp)
+          : timestampMs
+      const visibleTailMs =
+        mode === 'rolling' && previousRollingTimestamp !== null
+          ? effectiveTimestamp - previousRollingTimestamp
+          : null
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+      suspended = true
+      hiddenSinceTimestamp = effectiveTimestamp
+
+      // hide 事件发生前的尾段仍属于可见墙钟；只推进物理，不提交 rolling render。
+      if (
+        exactScheduler &&
+        visibleTailMs !== null &&
+        visibleTailMs > 0 &&
+        exactAccumulator &&
+        exactSession
+      ) {
+        previousRollingTimestamp = effectiveTimestamp
+        processExactFrame(visibleTailMs, false)
+      }
+      previousRollingTimestamp = null
+      return
+    }
+
+    const resumeTimestamp =
+      hiddenSinceTimestamp === null ? timestampMs : Math.max(timestampMs, hiddenSinceTimestamp)
+
+    if (exactScheduler && mode === 'rolling' && exactAccumulator && hiddenSinceTimestamp !== null) {
+      const pausedMs = resumeTimestamp - hiddenSinceTimestamp
+      exactAccumulator.planFrame({ rawWallDeltaMs: pausedMs, paused: true, maxSteps: 0 })
+      exactAccumulator.finishFrame()
+    }
+
+    suspended = false
+    hiddenSinceTimestamp = null
+    // exact 从 resume timestamp 开始接纳新墙钟；legacy 保持首帧只重建基准的旧语义。
+    previousRollingTimestamp = exactScheduler && mode === 'rolling' ? resumeTimestamp : null
+    scheduleFrame()
+  }
+
   function getDiagnostics(): EngineDiagnostics {
+    const exactTiming = exactAccumulator?.snapshot()
+    const exactRoll = exactSessionSnapshot()
+    const physicsTiming: EnginePhysicsTimingDiagnostics = exactScheduler
+      ? {
+          version: physicsSchedulerVariant.version,
+          preset: physicsSchedulerVariant.id,
+          kind: physicsSchedulerVariant.kind,
+          maxStepsPerFrame: physicsSchedulerVariant.maxStepsPerFrame,
+          fixedStepMs: PHYSICS.fixedTimeStep * 1000,
+          simulationStep: exactRoll?.simulationStep ?? null,
+          simulationTime: exactRoll?.simulationTime ?? null,
+          totalRawWallDeltaMs: exactTiming?.totalRawWallDeltaMs ?? 0,
+          totalAcceptedWallDeltaMs: exactTiming?.totalAcceptedWallDeltaMs ?? 0,
+          totalPausedWallDeltaMs: exactTiming?.totalPausedWallDeltaMs ?? 0,
+          totalDiscardedWallDeltaMs: exactTiming?.totalDiscardedWallDeltaMs ?? 0,
+          totalExecutedSteps: exactTiming?.totalExecutedSteps ?? 0,
+          queuedMs: exactTiming?.queuedMs ?? 0,
+          queuedWholeSteps: exactTiming?.queuedWholeSteps ?? 0,
+          interpolationAlpha: exactTiming?.interpolationAlpha ?? 0,
+          overload: exactTiming?.overload ?? {
+            active: false,
+            highWaterMs: PHYSICS_CADENCE_OVERLOAD_HIGH_WATER_MS,
+          },
+          terminalAbandoned: exactTerminalAbandoned,
+          suspended,
+        }
+      : {
+          version: physicsSchedulerVariant.version,
+          preset: physicsSchedulerVariant.id,
+          kind: physicsSchedulerVariant.kind,
+          maxStepsPerFrame: null,
+          fixedStepMs: PHYSICS.fixedTimeStep * 1000,
+          simulationStep: null,
+          simulationTime: null,
+          totalRawWallDeltaMs: 0,
+          totalAcceptedWallDeltaMs: 0,
+          totalPausedWallDeltaMs: 0,
+          totalDiscardedWallDeltaMs: 0,
+          totalExecutedSteps: 0,
+          queuedMs: 0,
+          queuedWholeSteps: 0,
+          interpolationAlpha: 0,
+          overload: { active: false, highWaterMs: PHYSICS_CADENCE_OVERLOAD_HIGH_WATER_MS },
+          terminalAbandoned: null,
+          suspended,
+        }
     const diagnostics: EngineDiagnostics = {
       mode,
       renderCount,
       physicsStepCount,
       frameScheduled: rafId !== null,
+      physicsTiming,
       rollSafety: {
-        maxRadius: rollFrameDiagnostics.maxRadius,
+        maxRadius: exactRoll?.maxRadius ?? rollFrameDiagnostics.maxRadius,
         containmentRadius: WALL_INNER_RADIUS,
         conservativeContainmentRadius: CONSERVATIVE_DICE_CENTER_RADIUS,
-        conservativeBoundaryCrossings: rollFrameDiagnostics.conservativeBoundaryCrossings,
-        wallCenterCrossings: rollFrameDiagnostics.wallCenterCrossings,
-        maxContactPenetration: rollFrameDiagnostics.maxContactPenetration,
-        escapeGuardInterventionCount: rollEscapeGuardInterventionCount,
-        nonFiniteBodyStateDetected: rollFrameDiagnostics.nanDetected,
+        conservativeBoundaryCrossings:
+          exactRoll?.conservativeBoundaryCrossings ??
+          rollFrameDiagnostics.conservativeBoundaryCrossings,
+        wallCenterCrossings:
+          exactRoll?.wallCenterCrossings ?? rollFrameDiagnostics.wallCenterCrossings,
+        maxContactPenetration:
+          exactRoll?.maxContactPenetration ?? rollFrameDiagnostics.maxContactPenetration,
+        escapeGuardInterventionCount:
+          exactRoll?.escapeGuardInterventionCount ?? rollEscapeGuardInterventionCount,
+        nonFiniteBodyStateDetected: exactRoll?.nanDetected ?? rollFrameDiagnostics.nanDetected,
       },
       rollingShadow: rollingShadowScheduler.snapshot(),
     }
@@ -414,7 +835,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
   function dispose(): void {
     if (disposed) return
-    stop()
+    stopInternal('disposed')
     disposed = true
 
     for (const body of bodies) {
@@ -431,5 +852,6 @@ export function createEngine(opts: EngineOptions): Engine {
     returnToIdle,
     invalidate,
     getDiagnostics,
+    setPageVisibility,
   }
 }
