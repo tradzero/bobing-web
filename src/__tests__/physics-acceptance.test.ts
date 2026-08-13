@@ -57,6 +57,29 @@ describe('真实物理验收', () => {
     },
   )
 
+  it('seed 25042: exact-step checkpoint 保持自然停稳、骰面与逐步安全事实', () => {
+    const seed = 25_042
+    const reproduce = 'pnpm test:seed -- --seed=25042'
+    const result = runRoll({ seed })
+
+    expect(result.settleReason, reproduce).toBe('natural-sleep')
+    expect(result.settleFrame, reproduce).toBe(460)
+    expect(result.simulationStep, reproduce).toBe(result.settleFrame)
+    expect(result.simulationTime, reproduce).toBeCloseTo(result.settleTime, 12)
+    expect(result.settleTime, reproduce).toBeCloseTo(460 * PHYSICS.fixedTimeStep, 12)
+    expect(
+      result.finalFaces.map(({ value }) => value),
+      reproduce,
+    ).toEqual([2, 1, 2, 1, 4, 5])
+    expect(result.nanDetected, reproduce).toBe(false)
+    expect(result.conservativeBoundaryCrossings, reproduce).toBe(0)
+    expect(result.wallCenterCrossings, reproduce).toBe(0)
+    expect(result.escapeGuardInterventionCount, reproduce).toBe(0)
+    expect(result.assistInterventionCount, reproduce).toBe(0)
+    expect(result.floorRelaunch.available, reproduce).toBe(true)
+    expect(result.floorRelaunch.relaunchEventCount, reproduce).toBe(0)
+  })
+
   it('seed 41042: 首次正常落碗反弹不计为异常二次弹跳', { timeout: 30_000 }, () => {
     const seed = 41_042
     const result = runRoll({ seed })

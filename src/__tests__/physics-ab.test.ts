@@ -46,6 +46,8 @@ function makeResult(seed: number, overrides: Partial<RollRunResult> = {}): RollR
     nanDetected: false,
     settleReason: 'natural-sleep',
     settleTime: 2,
+    simulationStep: 120,
+    simulationTime: 2,
     settleFrame: 120,
     stableBrokenCount: 0,
     poseStableBrokenCount: 0,

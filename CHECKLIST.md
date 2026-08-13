@@ -172,22 +172,23 @@
 - [x] 1I.16 [产品/验收] timeout 进入显式 error 与 RollErrorPanel；不读面、不判奖、不播放中奖音、不推进 round/history/prizeRecord，可同轮重新掷骰或重置
 - [x] 1I.17 [实现] `test:e2e:soak`、版本化 20-seed 队列、逐步安全/状态/静态调度/WebGL 资源断言与逐轮 JSON artifact 已落地；不以命令存在替代 1I.2 的最终运行验收
 - [x] 1I.18 [实现/测试] floor-relaunch tracker v1 接入统一 `runRoll()`：0.5mm 支撑容差，先满足 2 步真实 floor contact 与 6 步 clean support，再对至少 2 步的二次离地同时门禁 clearance > 5mm 和 ordered world-Y rise > 5mm；首次外部接触前满足即锁存；sampler 对单一、无 shape offset/orientation 的 Box 与 Heightfield 契约 fail closed
-- [x] 1I.19 [门禁] acceptance report schema v3 / roll diagnostics schema v2 将 tracker unavailable/event 设为硬失败；A/B report schema v4 对 runtime 与 continuation 使用同一门禁
+- [x] 1I.19 [门禁] acceptance report schema v3 / roll diagnostics schema v3 将 tracker unavailable/event 设为硬失败；A/B report schema v4 对 runtime 与 continuation 使用同一门禁
 - [x] 1I.20 [基线] 当前 200 seeds / 1200 颗骰子中 initial contact observed=1190、armed=1158，secondary episode=54、floor-only=2、event=0；最大 floor-only clearance/ordered rise=2.761mm/0，最大 pre-external clearance/ordered rise=7.795mm/0；coverage 与最大值只记录不硬门禁，事件要求两项同时 >5mm；171042、25042、146042 的旧无序高度极差已确认为误报回归
 - [x] 1I.21 [实现] `pnpm bench:browser:render-ab` 使用 5 个固定 seed、双方 warm-up 和逐 seed ABBA/BAAB，每个 project/comparison 共 20 measured rolls；投掷路径、稳定结果、物理安全、context/页面错误及静态零帧硬门禁，毫秒只记录；artifact 持久化至 `artifacts/render-ab/<project>-<comparison>.json`
 - [x] 1I.22 [A/B] clean durable SwiftShader rolling DPR：desktop ratio=`0.7864364941630467`、5/5 改善、noise=`0.06133911408891464`、判据通过；mobile ratio=`0.6095156450921579`、5/5 改善、noise=`0.14689147459021826`、判据通过；生产仍只在 reduced 档采用 rolling 1x，full 档保持基础 DPR，static 恢复基础 DPR
 - [x] 1I.23 [A/B] clean durable `shadow-upper-bound`：desktop ratio=`1.0494708050897847`、1/5 改善、noise=`0.07463589364039669`；mobile ratio=`0.8414403032217315`、4/5 改善、noise=`0.419728670053531`；两端判据均未通过，不推进 alternate，生产保持 every-frame shadow
 - [x] 1I.24 [补充观察] 交互 Chrome 单 seed rolling DPR candidate 约 17.6ms、baseline 约 33ms，并核对视觉与 static DPR 恢复；不宣称通用 GPU 结论
 - [x] 1I.25 [否决方案] `maxSubSteps` 8→4 裸降会在慢帧丢更多积压模拟时间，seed 25042 存在 cadence 分叉风险，不作为性能优化
-- [ ] 1I.26 [后续] 设计显式 accumulator，让 guard、逐步安全与 settle 在每个 Cannon 子步后运行，并以同 seed 多 cadence 验证结果、结算与安全
+- [x] 1I.26 [实验基础] `runRoll()` 改用共享 exact-step session：每个 Cannon 步后按固定顺序采样安全/contact/floor、guard、settle 与 sleep/stable 诊断，roll diagnostics 升 v3 并记录 `simulationStep / simulationTime`；seed 25042 锁定 step 460、7.6667s、骰面 `2,1,2,1,4,5`
 - [x] 1I.27 [证据边界] schema v4 soak checkpoint 为 109.197s/52.950s，schema v5 为 83.527s/53.488s；只作环境观察，不把 wall-clock 差值设为性能门禁
 - [x] 1I.28 [门禁结果] durable render A/B 4/4 均为 behaviorViolation=0、schedulerSensitive=0；4/4 仅表示流程/正确性硬门禁通过，不代表四组性能判据都通过
 - [x] 1I.29 [验收] 最终 tier-aware 策略的 `pnpm test:e2e` 4/4、`pnpm bench:browser` 2/2 通过；确认 reduced 档 rolling=1x、full 档 rolling=base、static=base 并保留 artifact
 - [x] 1I.30 [验收] 最终 tier-aware 策略的 `pnpm test:e2e:soak` 桌面/移动各 20 轮 2/2 通过；逐轮提交、物理安全、静态调度与 WebGL 资源稳定
-- [x] 1I.31 [证据门禁] render A/B artifact schema v2 记录完整 HEAD、worktree dirty、porcelain 哈希和 HEAD-relative tracked diff 状态/SHA-256，并校验长跑前后 repo state 未变化；同 seed 同时硬门禁完整 initial-state v1 数组/签名。当前 provenance 不哈希运行开始前既有 untracked 文件内容，因此正式可归因证据必须从 clean worktree 开始，dirty 运行只作探索
+- [x] 1I.31 [证据门禁] render A/B artifact schema v2 记录完整 HEAD、worktree dirty、porcelain 哈希和 HEAD-relative tracked diff 状态/SHA-256，并校验长跑前后 repo state 未变化；同 seed 同时硬门禁完整 initial-state v1 数组/签名。repository-state schema v2 同时哈希未跟踪普通文件内容与 symlink 目标、排除 ignored artifact；正式证据仍要求从 clean worktree 开始，dirty 运行只作探索
 - [x] 1I.32 [验收] clean checkpoint `6901f4d90e7557f2bdcf2081abffb37952c2f6f5` 已完成 schema v6 / render A/B artifact schema v2 长浏览器门禁 4/4；四组均 start clean、end unchanged、behaviorViolation=0、schedulerSensitive=0。普通 `bench:browser` / soak 仍沿用此前 schema v5 checkpoint 证据，未在本次重跑
 - [x] 1I.33 [实验基础] 新增未接入生产的 fixed-step accumulator v1：显式记录 accepted/paused/discarded wall time、逐步消费 backlog、cap4 跨帧追赶、插值余量与锁存 overload；单元测试锁定守恒和 early-stop，不改变当前 Engine 调度
-- [ ] 1I.34 [后续] 用 exact `world.step(fixed)`、逐子步安全/settle、显式插值与 visibility suspend 构建 cap6/cap4 cadence A/B；通过 watch+batch 与浏览器门禁前不得替换生产调度
+- [x] 1I.34 [实验基础] `PhysicsWorld.stepExact()`、previous→raw 显式插值和共享 `roll-step-session` 已落地；session 具有 stepnumber delta=1 硬契约、非破坏 snapshot、可选 floor/stable 扩展与通用阶段计时接缝
+- [ ] 1I.35 [后续] 用 fixed-step accumulator + shared session 构建 cap6/cap4 cadence A/B，再接仅 e2e 可开启的 Engine timing experiment、visibility suspend 与独立 timing-overload 错误；通过 watch+batch 与浏览器门禁前不得替换生产调度
 
 ---
 
