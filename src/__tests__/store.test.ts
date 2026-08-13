@@ -27,6 +27,41 @@ describe('GameStore 异常状态契约', () => {
     expect(state.prizeRecord[Prize.SanHong]).toBe(1)
   })
 
+  it('timing-overload 保留完整调度诊断，清除异常后仍在同一轮 rolling', () => {
+    const store = createGameStore()
+    store.getState().setPhase('rolling')
+
+    store.getState().setRollError({
+      reason: 'timing-overload',
+      simulationElapsed: 1 / 3,
+      queuedMs: 800 / 3,
+      highWaterMs: 250,
+      executedSteps: 20,
+    })
+
+    expect(store.getState()).toMatchObject({
+      phase: 'error',
+      round: 1,
+      diceValues: [],
+      currentResult: null,
+      pendingSettlement: null,
+      rollError: {
+        reason: 'timing-overload',
+        simulationElapsed: 1 / 3,
+        queuedMs: 800 / 3,
+        highWaterMs: 250,
+        executedSteps: 20,
+      },
+    })
+
+    store.getState().clearRollError()
+    expect(store.getState()).toMatchObject({
+      phase: 'rolling',
+      round: 1,
+      rollError: null,
+    })
+  })
+
   it('resetState 清空异常和游戏记录，但保留当前音效设置', () => {
     const store = createGameStore()
     store.getState().toggleSound()

@@ -152,7 +152,6 @@ describe('GameController 编排层集成测试', () => {
       body.quaternion.set(Number.NaN, 0, 0, 1)
       body.wakeUp()
     }
-
     controller.onSettled({ reason: 'timeout', elapsed: 10 })
 
     const state = store.getState()
@@ -177,6 +176,91 @@ describe('GameController 编排层集成测试', () => {
       expect(body.angularVelocity.length()).toBe(0)
       expect(body.sleepState).toBe(CANNON.Body.SLEEPING)
     }
+  })
+
+  it('timing-overload 进入显式 error，只冻结一次且不读取或提交业务结果', () => {
+    const playWinSound = vi.spyOn(soundManager, 'playWinSound')
+    const readAllFacesDetailed = vi.spyOn(readFace, 'readAllFacesDetailed')
+    controller.throw()
+    for (const { body } of dicePairs) {
+      body.velocity.set(1, 2, 3)
+      body.angularVelocity.set(4, 5, 6)
+      // 非有限姿态可证明错误分支没有提前读面。
+      body.quaternion.set(Number.NaN, 0, 0, 1)
+      body.wakeUp()
+    }
+    const sleepSpies = dicePairs.map(({ body }) => vi.spyOn(body, 'sleep'))
+    const error = {
+      reason: 'timing-overload' as const,
+      simulationElapsed: 1 / 3,
+      queuedMs: 800 / 3,
+      highWaterMs: 250,
+      executedSteps: 20,
+    }
+
+    controller.onRollError(error)
+
+    const firstState = store.getState()
+    expect(firstState).toMatchObject({
+      phase: 'error',
+      round: UI.INITIAL_ROUND,
+      diceValues: [],
+      currentResult: null,
+      history: [],
+      pendingSettlement: null,
+      rollError: error,
+    })
+    expect(Object.values(firstState.prizeRecord).every((count) => count === 0)).toBe(true)
+    expect(readAllFacesDetailed).not.toHaveBeenCalled()
+    expect(playWinSound).not.toHaveBeenCalled()
+    expect(controller.getRollDiagnostics()).toMatchObject({
+      settleReason: 'timing-overload',
+      settleElapsed: 1 / 3,
+    })
+    for (const { body } of dicePairs) {
+      expect(body.velocity.length()).toBe(0)
+      expect(body.angularVelocity.length()).toBe(0)
+      expect(body.sleepState).toBe(CANNON.Body.SLEEPING)
+    }
+
+    // 第一个错误已经终止本轮；任何迟到错误或 settle 都不得覆盖诊断或提交结果。
+    controller.onRollError({ reason: 'timeout', elapsed: 10 })
+    controller.onSettled({ reason: 'natural-sleep', elapsed: 2 })
+    expect(store.getState().rollError).toEqual(error)
+    expect(controller.getRollDiagnostics()).toMatchObject({
+      settleReason: 'timing-overload',
+      settleElapsed: 1 / 3,
+    })
+    expect(readAllFacesDetailed).not.toHaveBeenCalled()
+    expect(playWinSound).not.toHaveBeenCalled()
+    for (const sleep of sleepSpies) expect(sleep).toHaveBeenCalledTimes(1)
+  })
+
+  it('timing-overload 可在同一轮重新掷骰并清空错误诊断状态', () => {
+    controller.throw()
+    controller.onRollError({
+      reason: 'timing-overload',
+      simulationElapsed: 1 / 3,
+      queuedMs: 800 / 3,
+      highWaterMs: 250,
+      executedSteps: 20,
+    })
+    const roundBefore = store.getState().round
+
+    controller.rethrow()
+
+    expect(store.getState()).toMatchObject({
+      phase: 'rolling',
+      round: roundBefore,
+      rollError: null,
+      diceValues: [],
+      currentResult: null,
+    })
+    expect(engine.beginSettle).toHaveBeenCalledTimes(2)
+    expect(controller.getRollDiagnostics()).toMatchObject({
+      settleReason: null,
+      settleElapsed: null,
+    })
   })
 
   it('error 可在同一轮重新掷骰，且普通 throw 不能绕过专用恢复路径', () => {

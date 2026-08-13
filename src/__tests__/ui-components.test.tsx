@@ -390,6 +390,28 @@ describe('RollErrorPanel', () => {
     expect(screen.getByRole('button', { name: '掷骰' })).toBeDisabled()
   })
 
+  it('准确区分物理时间积压并展示调度诊断', () => {
+    act(() =>
+      store.getState().setRollError({
+        reason: 'timing-overload',
+        simulationElapsed: 1 / 3,
+        queuedMs: 800 / 3,
+        highWaterMs: 250,
+        executedSteps: 20,
+      }),
+    )
+
+    render(<RollErrorPanel />, { wrapper: Wrapper })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /页面帧调度持续落后.*物理模拟积压超过安全上限.*未读取点数.*未计入记录/,
+    )
+    expect(screen.getByText(/队列 266\.7 毫秒/)).toBeInTheDocument()
+    expect(screen.getByText(/安全上限 250\.0 毫秒/)).toBeInTheDocument()
+    expect(screen.getByText(/已模拟 0\.33 秒 \/ 20 步/)).toBeInTheDocument()
+    expect(screen.queryByText(/结算超时/)).toBeNull()
+  })
+
   it('提供重新掷骰与重置操作', async () => {
     render(<RollErrorPanel />, { wrapper: Wrapper })
     await userEvent.click(screen.getByRole('button', { name: '重新掷骰' }))

@@ -14,6 +14,7 @@ import {
   cloneThrowInitialState,
   type ThrowInitialStateDiagnostics,
 } from '@/dice/throw-initial-state'
+import type { RollError } from './roll-error'
 
 export interface GameControllerDeps {
   store: ReturnType<typeof createGameStore>
@@ -36,7 +37,7 @@ export interface GameRollDiagnostics {
   fallbackLayout: ThrowDiagnostics['fallbackLayout']
   initialState: ThrowInitialStateDiagnostics | null
   settleAlgorithmVersion: typeof SETTLE_ALGORITHM_VERSION
-  settleReason: SettleResult['reason'] | 'external-call' | null
+  settleReason: SettleResult['reason'] | RollError['reason'] | 'external-call' | null
   settleElapsed: number | null
 }
 
@@ -124,22 +125,16 @@ export class GameController {
     // rAF/生命周期可能送达重复或迟到回调；只有本轮 rolling 能改变业务状态。
     if (this.store.getState().phase !== 'rolling') return
 
+    if (settleResult?.reason === 'timeout') {
+      this.terminateRollWithError({ reason: 'timeout', elapsed: settleResult.elapsed })
+      return
+    }
+
     const bodies = this.dicePairs.map((p) => p.body)
     this.rollDiagnostics = {
       ...this.rollDiagnostics,
       settleReason: settleResult?.reason ?? 'external-call',
       settleElapsed: settleResult?.elapsed ?? null,
-    }
-
-    if (settleResult?.reason === 'timeout') {
-      // timeout 只冻结异常画面，绝不读面、判奖、播放中奖音或推进轮次。
-      for (const body of bodies) {
-        body.velocity.set(0, 0, 0)
-        body.angularVelocity.set(0, 0, 0)
-        body.sleep()
-      }
-      this.store.getState().setRollError({ reason: 'timeout', elapsed: settleResult.elapsed })
-      return
     }
 
     // 1. 读取详细结果（点数 + 可信度）
@@ -176,6 +171,32 @@ export class GameController {
       this.store.getState().setResult({ diceValues, result })
       this.playCommittedWin(result.prize)
     }
+  }
+
+  /**
+   * 接收不属于正常 settle 的调度/运行时错误。
+   * 只有当前 rolling 的第一个终止回调能改变业务状态，迟到或重复回调会被忽略。
+   */
+  onRollError(error: RollError): void {
+    this.terminateRollWithError(error)
+  }
+
+  private terminateRollWithError(error: RollError): void {
+    if (this.store.getState().phase !== 'rolling') return
+
+    // 错误只冻结当前物理画面；绝不读面、判奖、播放中奖音或推进轮次。
+    for (const { body } of this.dicePairs) {
+      body.velocity.set(0, 0, 0)
+      body.angularVelocity.set(0, 0, 0)
+      body.sleep()
+    }
+
+    this.rollDiagnostics = {
+      ...this.rollDiagnostics,
+      settleReason: error.reason,
+      settleElapsed: error.reason === 'timeout' ? error.elapsed : error.simulationElapsed,
+    }
+    this.store.getState().setRollError(error)
   }
 
   private playCommittedWin(prize: ReturnType<typeof judge>['prize']): void {

@@ -1,6 +1,9 @@
 import { createStore } from 'zustand/vanilla'
 import { Prize, type JudgeResult } from '@/rules/types'
 import { UI } from '@/config/ui'
+import type { RollError } from './roll-error'
+
+export type { RollError } from './roll-error'
 
 /** 历史记录条目 */
 export interface HistoryEntry {
@@ -15,12 +18,6 @@ export interface PendingSettlement {
   result: JudgeResult
   /** 倾斜骰子的索引（0-based） */
   tiltedIndices: number[]
-}
-
-/** 当前轮无法可信结算时的显式异常；不得包含或提交骰面/奖级。 */
-export interface RollError {
-  reason: 'timeout'
-  elapsed: number
 }
 
 /** 游戏状态 */
