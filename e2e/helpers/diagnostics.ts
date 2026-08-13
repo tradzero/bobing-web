@@ -169,6 +169,7 @@ export interface DiceRuntimeDiagnostics {
       | 'pose-stable-window'
       | 'cluster-assist'
       | 'timeout'
+      | 'timing-overload'
       | 'external-call'
       | null
     settleElapsed: number | null
