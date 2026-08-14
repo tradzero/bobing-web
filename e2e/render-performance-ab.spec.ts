@@ -104,7 +104,51 @@ function expectProfile(diagnostics: DiceRuntimeDiagnostics): void {
   })
   expect(profile!.retainedFrameCount).toBeGreaterThan(0)
   expect(profile!.metrics.cannonStepnumberDelta.max).not.toBeNull()
-  expect(profile!.metrics.cannonStepnumberDelta.max!).toBeLessThanOrEqual(8)
+  expect(profile!.metrics.cannonStepnumberDelta.max!).toBeLessThanOrEqual(6)
+}
+
+function expectProductionPhysicsScheduler(diagnostics: DiceRuntimeDiagnostics): void {
+  expect(diagnostics.physicsSchedulerExperiment).toEqual({
+    version: 1,
+    explicit: false,
+    variant: 'exact-cap6',
+    kind: 'exact-accumulator',
+    maxStepsPerFrame: 6,
+  })
+  expect(diagnostics.engine.physicsTiming).toMatchObject({
+    version: 1,
+    preset: 'exact-cap6',
+    kind: 'exact-accumulator',
+    maxStepsPerFrame: 6,
+    overload: { active: false, highWaterMs: 250 },
+    suspended: false,
+  })
+}
+
+function expectSettledExactTiming(diagnostics: DiceRuntimeDiagnostics): void {
+  expectProductionPhysicsScheduler(diagnostics)
+  const timing = diagnostics.engine.physicsTiming
+  expect(timing.simulationStep).not.toBeNull()
+  expect(timing.simulationStep!).toBeGreaterThan(0)
+  expect(timing.totalExecutedSteps).toBe(timing.simulationStep)
+  expect(diagnostics.engine.physicsStepCount).toBe(timing.totalExecutedSteps)
+  expect(timing.simulationTime).toBeCloseTo(
+    timing.totalExecutedSteps * (timing.fixedStepMs / 1_000),
+    9,
+  )
+  expect(timing.totalRawWallDeltaMs).toBeCloseTo(
+    timing.totalAcceptedWallDeltaMs + timing.totalDiscardedWallDeltaMs,
+    8,
+  )
+  expect(timing.totalPausedWallDeltaMs).toBe(0)
+  expect(timing.terminalAbandoned).toMatchObject({ reason: 'settled' })
+  expect(timing.queuedMs).toBeCloseTo(timing.terminalAbandoned!.queuedMs, 9)
+  expect(timing.queuedWholeSteps).toBe(timing.terminalAbandoned!.queuedWholeSteps)
+  expect(timing.interpolationAlpha).toBeCloseTo(timing.terminalAbandoned!.interpolationAlpha, 9)
+  expect(timing.totalAcceptedWallDeltaMs).toBeCloseTo(
+    timing.totalExecutedSteps * timing.fixedStepMs + timing.terminalAbandoned!.queuedMs,
+    7,
+  )
 }
 
 function expectRollingStructure(diagnostics: DiceRuntimeDiagnostics, projectName: string): void {
@@ -207,6 +251,14 @@ async function runVariant(
 
   let idle = await waitForPostRender(page, { mode: 'idle', frameScheduled: false })
   idle = await waitForStaticQuiescence(page, idle)
+  expectProductionPhysicsScheduler(idle)
+  expect(idle.engine.physicsTiming).toMatchObject({
+    simulationStep: null,
+    simulationTime: null,
+    totalExecutedSteps: 0,
+    queuedMs: 0,
+    terminalAbandoned: null,
+  })
   expectExperimentState(idle, variant, 'static')
   expectRenderBudgets(idle, testInfo.project.name)
   await page.evaluate(() => {
@@ -225,6 +277,7 @@ async function runVariant(
     afterRenderCount: idle.engine.renderCount,
     frameScheduled: true,
   })
+  expectProductionPhysicsScheduler(rolling)
   expectExperimentState(rolling, variant, 'rolling')
   expectRollingStructure(rolling, testInfo.project.name)
   expect(rolling.roll.seed).toBe(seed)
@@ -247,6 +300,7 @@ async function runVariant(
   })
   const settleWallMs = performance.now() - settleStartedAt
   expectExperimentState(settled, variant, 'static')
+  expectSettledExactTiming(settled)
   expectRenderBudgets(settled, testInfo.project.name)
   expectRollSafety(settled)
   expectProfile(settled)

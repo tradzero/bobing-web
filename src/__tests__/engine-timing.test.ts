@@ -203,6 +203,32 @@ describe('Engine 按需调度', () => {
     return { ...fixture, world, onRollError }
   }
 
+  it('省略 physicsSchedulerVariant 时使用生产默认 exact-cap6，并要求 exact 依赖', () => {
+    const base = {
+      sceneCtx: mockSceneCtx(),
+      world: new CANNON.World(),
+      worldStep: vi.fn(),
+      dicePairs: makeDicePairs(),
+      onSettled: vi.fn(),
+    }
+
+    expect(() => createEngine({ ...base, onRollError: vi.fn() })).toThrow(/exact-cap6.*stepExact/)
+    expect(() => createEngine({ ...base, stepExact: vi.fn() })).toThrow(/exact-cap6.*onRollError/)
+
+    const engine = createEngine({
+      ...base,
+      stepExact: vi.fn(),
+      onRollError: vi.fn(),
+    })
+    engines.push(engine)
+    expect(engine.getDiagnostics().physicsTiming).toMatchObject({
+      version: 1,
+      preset: 'exact-cap6',
+      kind: 'exact-accumulator',
+      maxStepsPerFrame: 6,
+    })
+  })
+
   it('exact scheduler 缺少 stepExact 或 onRollError 时拒绝构造', () => {
     const sceneCtx = mockSceneCtx()
     const world = new CANNON.World()

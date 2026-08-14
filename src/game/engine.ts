@@ -101,8 +101,9 @@ export interface EngineDiagnostics {
 export interface EngineOptions {
   sceneCtx: SceneContext
   world: CANNON.World
+  /** legacy-batched 对照/回滚入口；生产默认 exact 调度不会调用。 */
   worldStep: (dt: number) => void
-  /** exact 实验只允许单参数固定步；production 默认仍使用 worldStep。 */
+  /** 生产默认 exact 调度的单固定步入口；不让 Cannon 自行累计墙钟时间。 */
   stepExact?: () => void
   dicePairs: DicePair[]
   onSettled: (result: SettleResult) => void

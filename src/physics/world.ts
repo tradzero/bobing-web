@@ -11,9 +11,9 @@ export interface PhysicsWorldOptions {
 
 export interface PhysicsWorld {
   world: CANNON.World
-  /** 兼容当前生产调度：由 Cannon 根据墙钟时间累计并批量推进。 */
+  /** legacy-batched 对照/回滚入口：由 Cannon 根据墙钟时间累计并批量推进。 */
   step: (dt: number) => void
-  /** 精确推进一个固定物理步；不让 Cannon 自己累计墙钟时间。 */
+  /** 生产默认入口：精确推进一个固定物理步，不让 Cannon 自己累计墙钟时间。 */
   stepExact: () => void
   dispose: () => void
 }
