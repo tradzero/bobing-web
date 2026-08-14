@@ -122,8 +122,8 @@
 
 - [x] 1H.1 [实现] 实现 `game/store.ts`：Zustand store 定义（五态 phase、round、diceValues、currentResult、history、prizeRecord、pendingSettlement、rollError、soundEnabled、playerId）
 - [x] 1H.2 [实现] store 预留 playerId 字段（默认 null，多人阶段启用）
-- [x] 1H.3 [实现] store actions 为纯状态设置器：覆盖正常结果、倾斜 pending/commit/clear、timeout error/clear、reset 与 toggleSound
-- [x] 1H.4 [实现] 实现 `game/engine.ts` 按需唯一 rAF 调度器：显式 `idle / rolling / settled / stopped`；只有 rolling 连续调度，idle/settled 仅启动或失效时单帧，stopped 不调度
+- [x] 1H.3 [实现] store actions 为纯状态设置器：覆盖正常结果、倾斜 pending/commit/clear、timeout/timing-overload error/clear、reset 与 toggleSound
+- [x] 1H.4 [实现] 实现 `game/engine.ts` 按需唯一 rAF 调度器：当前显式 `idle / rolling / settled / error / stopped`；只有 rolling 连续调度，idle/settled/error 仅启动、结算或失效时单帧，stopped 不调度
 - [x] 1H.5 [实现] engine 暴露 start()、stop()、dispose()、beginSettle()、returnToIdle()、invalidate() 与只读 diagnostics；静态失效请求按 rafId 合并
 - [x] 1H.6 [实现] rolling 帧使用固定步长推进 physics，未停稳时以 Cannon interpolated pose 渲染；停稳回调完成后以 raw body pose 渲染最终帧
 - [x] 1H.7 [实现] 实现 `game/controller.ts`：GameController 类（唯一业务入口）
@@ -151,18 +151,19 @@
 - [x] 1H.29 [实现/测试] 生产仅在基础质量 reduced 档应用 rolling 1x，full 档保持基础 DPR；该切换只改变主画布有效 DPR，不改变基础 1.0～1.5/350 万像素质量与 1024/512 阴影档，结算 raw render 前恢复 static DPR且不制造额外静态帧
 - [x] 1H.30 [实现/测试] rolling shadow scheduler v1 对 every-frame/alternate/frozen-after-first 逐真实 render 计数；生产保持 every-frame，skip 不清除 resize 等外部 needsUpdate
 - [x] 1H.31 [实现/测试] diagnostics schema v6 在 throw 返回后、首个物理步前捕获 initial-state v1；按 6-body canonical 顺序记录 pose/线速度/角速度，并对 Float64 大端字节生成 FNV-1a 64 签名，不消费随机数或写物理状态
+- [x] 1H.32 [实现/测试] diagnostics schema v8 增加 scheduler preset/explicit、accumulator 时间守恒与 terminal-abandoned/overload、模拟步数/时间，以及结算后 canonical 6-body 完整终态数组/签名；schema v6 仅保留为历史迁移节点
 
 ### 1I 阶段一集成验证
 
 - [x] 1I.1 [验收] 完整流程跑通：点击按钮 → 骰子投掷 → 翻滚 → 停稳 → 读数 → 判定 → 控制台输出完整 JudgeResult
-- [x] 1I.2 [验收] 最终 tier-aware 策略的 schema v5 `pnpm test:e2e:soak` 桌面/移动各 20 轮 2/2 通过；桌面 77.181s、17 natural/3 stable、最长 8.346s、最大半径/穿透 0.6567970953m/0.0548978013m，移动 55.144s、20 natural、最长 3.299s、最大半径/穿透 0.6555080668m/0.0536350029m；boundary/wall/guard/non-finite/页面错误为 0，资源每轮稳定为 1/8/6/10
+- [x] 1I.2 [历史验收] tier-aware 策略在 schema v5 `pnpm test:e2e:soak` 桌面/移动各 20 轮 2/2 通过；该 batched-era 数据保留作迁移基线，当前生产证据见 1I.30
 - [x] 1I.3 [验收] 点数读取准确（人工目视对照至少 10 轮）
 - [x] 1I.4 [测试] 物理烟雾测试：真实 cannon-es 世界 + 碗 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能结算或超时
 - [x] 1I.5 [验收] 奖级判定与点数组合匹配（人工核对）
 - [x] 1I.6 [验收] 全部单测通过：`pnpm test`
 - [x] 1I.7 [验收] `pnpm build` 通过，无编译错误
-- [x] 1I.8 [验收] `pnpm test:e2e` 在桌面/移动项目完成真实固定 seed 正常结算、timeout 不提交/同轮恢复、reset、静态零帧与移动布局验收；当前 4/4 通过
-- [x] 1I.9 [验收] 最终 tier-aware 策略的 schema v5 `pnpm bench:browser` 桌面/移动 2/2 通过；desktop reduced idle/settled 3,498,014px@1.445028、rolling 1,676,160px@1x，mobile full idle/rolling 562,185px@1.5x、settled 414,765px@1.5x；shadow 请求/rolling frames 为 17/17、19/19
+- [x] 1I.8 [验收] clean `e20d359` 的 `pnpm test:e2e` 在桌面/移动项目完成默认 exact 正常结算、隔离强制 timeout 产品恢复、显式 exact、cap4 timing-overload、reset、静态零帧与移动布局验收；当前 8/8 通过
+- [x] 1I.9 [历史验收] schema v5 `pnpm bench:browser` 桌面/移动 2/2 通过；该结构/DPR 基线由当前 schema v8 证据 1I.29 接续
 - [x] 1I.10 [实现] `physics/roll-runner.ts` 复用正式 throw/world/escape/settle/read-face 行为链，统一单 seed 复现、批量验收与 A/B 诊断
 - [x] 1I.11 [实现] variant schema v2 固定 historical、placement-control、placement-candidate、natural-control 与 current 的投掷/assist/pose 组合
 - [x] 1I.12 [测试] `pnpm test:physics:ab` 落地：按 seed 交替 A/B、B/A，分离 watch/batch cohort，并对每个非自然结果运行最多 20s 的同 seed natural continuation
@@ -182,16 +183,23 @@
 - [x] 1I.26 [实验基础] `runRoll()` 改用共享 exact-step session：每个 Cannon 步后按固定顺序采样安全/contact/floor、guard、settle 与 sleep/stable 诊断，roll diagnostics 升 v3 并记录 `simulationStep / simulationTime`；seed 25042 锁定 step 460、7.6667s、骰面 `2,1,2,1,4,5`
 - [x] 1I.27 [证据边界] schema v4 soak checkpoint 为 109.197s/52.950s，schema v5 为 83.527s/53.488s；只作环境观察，不把 wall-clock 差值设为性能门禁
 - [x] 1I.28 [门禁结果] durable render A/B 4/4 均为 behaviorViolation=0、schedulerSensitive=0；4/4 仅表示流程/正确性硬门禁通过，不代表四组性能判据都通过
-- [x] 1I.29 [验收] 最终 tier-aware 策略的 `pnpm test:e2e` 4/4、`pnpm bench:browser` 2/2 通过；确认 reduced 档 rolling=1x、full 档 rolling=base、static=base 并保留 artifact
-- [x] 1I.30 [验收] 最终 tier-aware 策略的 `pnpm test:e2e:soak` 桌面/移动各 20 轮 2/2 通过；逐轮提交、物理安全、静态调度与 WebGL 资源稳定
+- [x] 1I.29 [验收] clean `e20d359` 的 schema v8 `pnpm test:e2e` 8/8、`pnpm bench:browser` 2/2 通过；默认调度锁定 explicit=false/exact-cap6，并确认 reduced rolling=1x、full rolling=base、static=base
+- [x] 1I.30 [验收] clean `e20d359` 的 `pnpm test:e2e:soak` production-default 桌面/移动各 20 轮均为 20 natural；72.794s/53.628s，最大 terminal queue=86.8993ms/56.2333ms，最大半径/穿透=0.6571491133m/0.0548978013m，安全/页面错误为 0、资源无增长
 - [x] 1I.31 [证据门禁] render A/B artifact schema v2 记录完整 HEAD、worktree dirty、porcelain 哈希和 HEAD-relative tracked diff 状态/SHA-256，并校验长跑前后 repo state 未变化；同 seed 同时硬门禁完整 initial-state v1 数组/签名。repository-state schema v2 同时哈希未跟踪普通文件内容与 symlink 目标、排除 ignored artifact；正式证据仍要求从 clean worktree 开始，dirty 运行只作探索
-- [x] 1I.32 [验收] clean checkpoint `6901f4d90e7557f2bdcf2081abffb37952c2f6f5` 已完成 schema v6 / render A/B artifact schema v2 长浏览器门禁 4/4；四组均 start clean、end unchanged、behaviorViolation=0、schedulerSensitive=0。普通 `bench:browser` / soak 仍沿用此前 schema v5 checkpoint 证据，未在本次重跑
-- [x] 1I.33 [实验基础] 新增未接入生产的 fixed-step accumulator v1：显式记录 accepted/paused/discarded wall time、逐步消费 backlog、cap4 跨帧追赶、插值余量与锁存 overload；单元测试锁定守恒和 early-stop，不改变当前 Engine 调度
+- [x] 1I.32 [历史验收] clean checkpoint `6901f4d90e7557f2bdcf2081abffb37952c2f6f5` 的 schema v6 / render A/B artifact schema v2 长浏览器门禁 4/4；当前 schema v8 重跑见 1I.29/1I.42
+- [x] 1I.33 [历史实验基础] fixed-step accumulator v1 最初以未接生产的纯状态机落地，单元测试锁定 accepted/paused/discarded、backlog 守恒、cap4 追赶、插值余量、overload 与 early-stop；当前生产接线见 1I.38
 - [x] 1I.34 [实验基础] `PhysicsWorld.stepExact()`、previous→raw 显式插值和共享 `roll-step-session` 已落地；session 具有 stepnumber delta=1 硬契约、非破坏 snapshot、可选 floor/stable 扩展与通用阶段计时接缝
 - [x] 1I.35 [实验基础] versioned headless cadence runner 已覆盖 steady60/30、deterministic jitter、单次 100ms、visibility suspend 与持续 100ms；reference/cap6/cap4 复用同一 lifecycle/session，逐帧门禁时间守恒、terminal abandoned backlog 与 overload；首批直接测试以 4 个 watch seed 锁定正常 cadence 结果完全一致
 - [x] 1I.36 [诊断] canonical body-state v1 泛化初始/终态位级签名；roll diagnostics v4 在 finish 后记录 6-body 完整终态，seed 25042 final hash=`ca710327c6d45df3`，cadence 候选显式对比 initialState、finalState 与完整 RollRunResult
-- [x] 1I.37 [实现/验收] `pnpm test:physics:cadence` 与 comparison report v1 已落地；CLI 固定 normal/overload matrix，不开放 cadence/scheduler 弱化开关。clean checkpoint `92c3e5f7fa23694660d3a3ad9802894e562755f7` 的 `artifacts/cadence/head-92c3e5f-200-seeds.json` start/end clean unchanged：200 total seeds=20 watch（含 25042）+180 batch、780/780 runs、normal 560/560、overload 20/20、failure=0；watch 完整 5 cadence×2 cap，batch 每 cadence 36 seeds×2 cap；initial/final canonical、完整 RollRunResult/Judge、安全与守恒 exact 等价，visibility 5s 全部 paused/discarded，持续 100ms/cap4 在 frame6/step20/queue=`800/3ms` 返回 `roll=null`
-- [ ] 1I.38 [后续] 将 exact-step accumulator/session 接入生产 Engine，并补仅 e2e 可开启的 timing experiment、真实 visibility 生命周期与独立 timing-overload 产品错误流程；浏览器流程/性能门禁通过前不得替换当前 batched 调度
+- [x] 1I.37 [历史验收] `pnpm test:physics:cadence` 与 comparison report v1 在 clean `92c3e5f` 首次以 200 seeds / 780 runs 全绿；当前 clean production-default 重跑见 1I.41
+- [x] 1I.38 [实现] exact-step accumulator/session 已接入生产 Engine 并默认 `exact-cap6`；每个固定步依序执行共享 world/safety/floor/guard/settle 链，生产忽略 URL 调度参数，legacy-batched 仅为版本化 e2e A/B/rollback preset
+- [x] 1I.39 [实现/测试] Engine 已接入 `visibilitychange`、pause/resume 时钟语义与 listener cleanup；隐藏时间归 paused/discarded，不进入 backlog。unit/headless cadence 已覆盖，真实 OS/tab 隐藏恢复仍列入后续人工验收
+- [x] 1I.40 [实现/测试] accumulator 超过 250ms 高水位进入独立 `timing-overload`：冻结 raw 终态、Engine/controller/store 进入 error，不读面/判奖/推进记录，可同轮重掷或重置；cap4 浏览器用例验证产品流程
+- [x] 1I.41 [验收] clean `e20d359` cadence artifact `artifacts/cadence/head-e20d359-200-seeds.json` start/end clean unchanged：200 seeds、780/780 runs、normal 560/560、overload 20/20、failure=0；该结果只证明 cadence 真值/安全/守恒，不宣称浏览器性能
+- [x] 1I.42 [A/B] clean `e20d359` scheduler A/B v2 桌面/移动各 5 seeds、20 measured rolls：结果/奖级/结算路径/安全等价，exact 重复终态稳定，但 `trajectoryEquivalentSeedCount=0`；rAF/wall 比值只作 observation-only，不宣称普适性能提升
+- [x] 1I.43 [回滚验收] `pnpm test:e2e:soak:legacy` 桌面/移动 2/2 通过；仅证明显式 legacy-batched 回滚可用，不改变生产 exact 默认
+- [x] 1I.44 [手工补充] Chrome 无 query seed 50000 为 explicit=false/exact-cap6，natural-sleep@2.1333s/128 steps；3D 可见面与 UI 均为 `1,5,6,6,4,4`，判“二举，带18”，重置回第 1 轮并清空结果/历史；单轮不替代批量门禁
+- [ ] 1I.45 [后续] 在真实操作系统 tab 隐藏/恢复和真实设备 GPU 上完成人工验收；自动化 visibility cadence/DOM listener 与 SwiftShader artifact 不替代该证据
 
 ---
 
