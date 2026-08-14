@@ -83,6 +83,9 @@ export class GameController {
   }
 
   private startRoll(): void {
+    // 保持在点击/重掷的用户手势栈内，并且早于 throwDice 与首个物理步预热碰撞音频。
+    soundManager.prepare()
+
     // 队列专用于连续验收；耗尽后才回退到旧的单次注入，再回退到运行时时间种子。
     let injectedSeed = this.nextSeeds.shift()
     if (injectedSeed === undefined) {
@@ -229,12 +232,12 @@ export class GameController {
   /** 重掷：清除待确认/异常数据 → 同一轮重新投掷全部 6 颗。 */
   rethrow(): void {
     const { phase } = this.store.getState()
-    if (phase !== 'tilt-confirm' && phase !== 'error') return
+    if ((phase !== 'tilt-confirm' && phase !== 'error') || !this.engine) return
 
     if (phase === 'tilt-confirm') this.store.getState().clearPending()
     else this.store.getState().clearRollError()
     this.startRoll()
-    this.engine?.beginSettle()
+    this.engine.beginSettle()
   }
 
   /** 重置：rolling 阶段拒绝；其他阶段回到全新 idle，保留音效偏好。 */

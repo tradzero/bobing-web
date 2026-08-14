@@ -1,6 +1,7 @@
 import { expect, type Page, type TestInfo } from '@playwright/test'
 import { writeFile } from 'node:fs/promises'
 import { readRepositoryState } from '../../tooling/repository-state'
+import type { RollingCpuProfileSnapshot } from '../../src/game/performance-profile'
 
 export const E2E_NEXT_SEED = 42
 
@@ -9,7 +10,7 @@ export const E2E_NEXT_SEED = 42
  * 所有 browser bench 只消费此常量，渲染结构改变时避免散落修改断言。
  */
 export const BROWSER_BUDGETS = {
-  diagnosticsSchemaVersion: 8,
+  diagnosticsSchemaVersion: 9,
   mainPassCalls: 8,
   mainPassTriangles: 41_288,
   geometries: 8,
@@ -105,29 +106,7 @@ export interface DiceRuntimeDiagnostics {
       rollingShadowUpdateRequestCount: number
       maxConsecutiveRollingFramesWithoutShadowUpdateRequest: number
     }
-    performanceProfile?: {
-      version: number
-      sampleKind: 'rolling-cpu'
-      rendererTimingKind: 'cpu-submit'
-      capacity: number
-      totalFrameCount: number
-      retainedFrameCount: number
-      currentFrameExcluded: boolean
-      metrics: Record<
-        | 'rafRawDeltaMs'
-        | 'rafClampedDeltaMs'
-        | 'cannonStepnumberDelta'
-        | 'worldStepCpuMs'
-        | 'guardCpuMs'
-        | 'rollSafetyCpuMs'
-        | 'settleCpuMs'
-        | 'transformSyncCpuMs'
-        | 'rendererSubmitCpuMs'
-        | 'diagnosticsPublishCpuMs'
-        | 'tickTotalCpuMs',
-        { count: number; p50: number | null; p95: number | null; max: number | null }
-      >
-    }
+    performanceProfile?: RollingCpuProfileSnapshot
   }
   physicsSchedulerExperiment: {
     version: 1
@@ -135,6 +114,11 @@ export interface DiceRuntimeDiagnostics {
     variant: 'legacy-batched' | 'exact-cap6' | 'exact-cap4'
     kind: 'legacy-batched' | 'exact-accumulator'
     maxStepsPerFrame: number | null
+  }
+  physicsCollisionExperiment: {
+    version: 1
+    explicit: boolean
+    variant: 'cannon-default' | 'projected-aabb-v1'
   }
   renderExperiment: {
     version: number

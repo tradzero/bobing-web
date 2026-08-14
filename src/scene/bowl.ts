@@ -22,72 +22,73 @@ function createBowlPatternTexture(): THREE.CanvasTexture | null {
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
-  // 先铺一层接近瓷白的底色，再在外壁对应的 UV 带绘制占位青花纹样。
-  ctx.fillStyle = '#fbf8f2'
+  // 稍暖的瓷白底避免高光区域变成没有层次的纯白。
+  ctx.fillStyle = '#f8f4ec'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-  const stripeColor = '#2a5f93'
-  const motifColor = '#255789'
-  const softColor = 'rgba(46, 97, 148, 0.18)'
+  const stripeColor = '#37698f'
+  const motifColor = '#2d5f86'
+  const softColor = 'rgba(50, 98, 137, 0.44)'
+
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
 
   ctx.strokeStyle = stripeColor
-  ctx.lineWidth = 6
+  ctx.lineWidth = 3
   ctx.beginPath()
-  ctx.moveTo(0, 54)
-  ctx.lineTo(canvas.width, 54)
-  ctx.moveTo(0, 76)
-  ctx.lineTo(canvas.width, 76)
+  ctx.moveTo(0, 58)
+  ctx.lineTo(canvas.width, 58)
+  ctx.moveTo(0, 70)
+  ctx.lineTo(canvas.width, 70)
   ctx.moveTo(0, 116)
   ctx.lineTo(canvas.width, 116)
-  ctx.moveTo(0, 134)
-  ctx.lineTo(canvas.width, 134)
   ctx.stroke()
 
-  ctx.lineWidth = 4
+  ctx.lineWidth = 1.5
   ctx.beginPath()
-  ctx.moveTo(0, 196)
-  ctx.lineTo(canvas.width, 196)
-  ctx.moveTo(0, 302)
-  ctx.lineTo(canvas.width, 302)
+  ctx.moveTo(0, 124)
+  ctx.lineTo(canvas.width, 124)
+  ctx.moveTo(0, 344)
+  ctx.lineTo(canvas.width, 344)
+  ctx.moveTo(0, 356)
+  ctx.lineTo(canvas.width, 356)
   ctx.stroke()
 
-  // 中段主纹样采用循环团花占位，保证左右拼接时 seam 不会突兀。
-  for (let x = -192; x <= canvas.width + 192; x += 256) {
-    ctx.strokeStyle = motifColor
-    ctx.lineWidth = 5
+  // 碗口带使用低矮、连续的云头纹。128px 周期与画布宽度整除，接缝处自然闭合。
+  ctx.strokeStyle = motifColor
+  ctx.lineWidth = 2.5
+  for (let x = -128; x <= canvas.width + 128; x += 128) {
     ctx.beginPath()
-    ctx.arc(x, 248, 44, 0, Math.PI * 2)
+    ctx.moveTo(x, 166)
+    ctx.bezierCurveTo(x + 14, 154, x + 30, 154, x + 40, 164)
+    ctx.bezierCurveTo(x + 48, 172, x + 58, 172, x + 64, 164)
+    ctx.bezierCurveTo(x + 72, 154, x + 88, 154, x + 100, 166)
+    ctx.bezierCurveTo(x + 108, 174, x + 120, 174, x + 128, 166)
     ctx.stroke()
 
     ctx.beginPath()
-    ctx.moveTo(x - 26, 248)
-    ctx.quadraticCurveTo(x, 216, x + 26, 248)
-    ctx.quadraticCurveTo(x, 280, x - 26, 248)
+    ctx.moveTo(x + 40, 164)
+    ctx.quadraticCurveTo(x + 51, 148, x + 62, 164)
+    ctx.quadraticCurveTo(x + 55, 168, x + 48, 164)
     ctx.stroke()
-
-    ctx.beginPath()
-    ctx.moveTo(x, 204)
-    ctx.quadraticCurveTo(x + 18, 228, x, 248)
-    ctx.quadraticCurveTo(x - 18, 228, x, 204)
-    ctx.moveTo(x, 292)
-    ctx.quadraticCurveTo(x + 18, 268, x, 248)
-    ctx.quadraticCurveTo(x - 18, 268, x, 292)
-    ctx.stroke()
-
-    ctx.fillStyle = softColor
-    ctx.beginPath()
-    ctx.arc(x, 248, 12, 0, Math.PI * 2)
-    ctx.fill()
   }
 
-  // 靠近碗口再叠一层连续卷草边饰，后续正式素材可直接替换这一段。
-  ctx.strokeStyle = motifColor
-  ctx.lineWidth = 4
-  for (let x = -160; x <= canvas.width + 160; x += 160) {
+  // 中段用细折枝带取代大团花，图案只承担边饰作用，不与骰子争夺视觉焦点。
+  ctx.strokeStyle = softColor
+  ctx.lineWidth = 2
+  for (let x = -128; x <= canvas.width + 128; x += 128) {
     ctx.beginPath()
-    ctx.moveTo(x, 156)
-    ctx.quadraticCurveTo(x + 40, 138, x + 80, 156)
-    ctx.quadraticCurveTo(x + 120, 174, x + 160, 156)
+    ctx.moveTo(x, 252)
+    ctx.bezierCurveTo(x + 36, 244, x + 88, 260, x + 128, 250)
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.moveTo(x + 34, 249)
+    ctx.quadraticCurveTo(x + 42, 237, x + 50, 246)
+    ctx.quadraticCurveTo(x + 43, 252, x + 34, 249)
+    ctx.moveTo(x + 81, 254)
+    ctx.quadraticCurveTo(x + 89, 264, x + 98, 254)
+    ctx.quadraticCurveTo(x + 90, 249, x + 81, 254)
     ctx.stroke()
   }
 
@@ -152,15 +153,15 @@ export function createBowl(): THREE.Group {
 
   // 128 圆周分段消除俯视棱线和摩尔纹，碗仅一个，性能可忽略
   const geometry = new THREE.LatheGeometry(points, 128)
-  // 白瓷釉面：继续用单色占位，但把釉感和层次做得更明显，强化海碗存在感。
+  // 骨瓷仍保留柔和釉感，但避免低粗糙度和满 clearcoat 形成硬白热点。
   const wallMaterial = new THREE.MeshPhysicalMaterial({
     color: 0xf7f3ee,
-    map: bowlPattern ?? undefined,
-    roughness: 0.12,
+    ...(bowlPattern ? { map: bowlPattern } : {}),
+    roughness: 0.28,
     metalness: 0.02,
-    envMapIntensity: 1.0,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.03,
+    envMapIntensity: 0.8,
+    clearcoat: 0.58,
+    clearcoatRoughness: 0.16,
     side: THREE.DoubleSide,
   })
   const mesh = new THREE.Mesh(geometry, wallMaterial)
@@ -175,11 +176,11 @@ export function createBowl(): THREE.Group {
   const capGeo = new THREE.CircleGeometry(lastPoint.x + CAP_R_EXPAND, 128)
   const capMaterial = new THREE.MeshPhysicalMaterial({
     color: 0xfdf8f1,
-    roughness: 0.08,
+    roughness: 0.24,
     metalness: 0.01,
-    envMapIntensity: 1.05,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.02,
+    envMapIntensity: 0.8,
+    clearcoat: 0.55,
+    clearcoatRoughness: 0.18,
   })
   const cap = new THREE.Mesh(capGeo, capMaterial)
   // CircleGeometry 默认面朝 +Z，旋转到 XZ 平面使法线朝 +Y（碗内侧）

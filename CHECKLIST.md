@@ -146,12 +146,14 @@
 - [x] 1H.24 [测试] 锁定 diagnostics 字段命名与来源，避免将主 pass 数据误写成包含 shadow pass 的总 calls/triangles
 - [x] 1H.25 [实现] diagnostics 使用版本化 `post-render` 快照，只在真实 render 后发布；开发/e2e 支持 nextSeed 与版本化 nextSeeds 队列，隔离 e2e 另支持一次性强制 timeout outcome
 - [x] 1H.26 [测试] 锁定 schema v5 post-render revision、seed/队列消费、timeout seam、渲染实验/质量/阴影字段和 idle/settled 静态零帧语义
-- [x] 1H.27 [实现/测试] 隔离 e2e 仅在 `perfProfile=1&perfProfileVersion=1` 时启用 rolling CPU profile v1；固定容量记录 rAF 原始/截断间隔、Cannon 实际 substep 与各 CPU 阶段，renderer 明确为 cpu-submit，生产和普通 e2e 零计时采样
+- [x] 1H.27 [历史实现/测试] 隔离 e2e profile v1 首次落地固定容量 rAF/substep/CPU 阶段采样；当前入口与字段已由 profile v2 接续，生产和普通 e2e 仍保持零计时采样
 - [x] 1H.28 [实现/测试] render experiment v1 仅允许 baseline、rolling-dpr-1x、shadow-alternate、shadow-frozen 四个版本化 e2e preset；生产忽略 URL 参数，实验 rolling-dpr-1x 仍保持无条件 1x 以复现 durable A/B
 - [x] 1H.29 [实现/测试] 生产仅在基础质量 reduced 档应用 rolling 1x，full 档保持基础 DPR；该切换只改变主画布有效 DPR，不改变基础 1.0～1.5/350 万像素质量与 1024/512 阴影档，结算 raw render 前恢复 static DPR且不制造额外静态帧
 - [x] 1H.30 [实现/测试] rolling shadow scheduler v1 对 every-frame/alternate/frozen-after-first 逐真实 render 计数；生产保持 every-frame，skip 不清除 resize 等外部 needsUpdate
 - [x] 1H.31 [实现/测试] diagnostics schema v6 在 throw 返回后、首个物理步前捕获 initial-state v1；按 6-body canonical 顺序记录 pose/线速度/角速度，并对 Float64 大端字节生成 FNV-1a 64 签名，不消费随机数或写物理状态
-- [x] 1H.32 [实现/测试] diagnostics schema v8 增加 scheduler preset/explicit、accumulator 时间守恒与 terminal-abandoned/overload、模拟步数/时间，以及结算后 canonical 6-body 完整终态数组/签名；schema v6 仅保留为历史迁移节点
+- [x] 1H.32 [历史迁移] diagnostics schema v8 增加 scheduler preset/explicit、accumulator 时间守恒与 terminal-abandoned/overload、模拟步数/时间，以及结算后 canonical 6-body 完整终态数组/签名；当前实现由 schema v9 接续
+- [x] 1H.33 [实现/测试] rolling CPU profile v2 只在显式 `perfProfileVersion=2` 时启用；最多 600 条逐 rAF/逐 exact-step 原始样本记录 simulation、接触/摩擦方程、awake 骰子与 Cannon 五段内建 CPU 计时，并派生可重叠的 airborne/impact/tail 阶段
+- [x] 1H.34 [实现/测试] diagnostics schema v9 发布 collision experiment `version/explicit/variant`；生产忽略 collision query 并保持 `cannon-default`，隔离 e2e 只允许预注册的 `projected-aabb-v1`
 
 ### 1I 阶段一集成验证
 
@@ -163,7 +165,7 @@
 - [x] 1I.6 [验收] 全部单测通过：`pnpm test`
 - [x] 1I.7 [验收] `pnpm build` 通过，无编译错误
 - [x] 1I.8 [验收] clean `e20d359` 的 `pnpm test:e2e` 在桌面/移动项目完成默认 exact 正常结算、隔离强制 timeout 产品恢复、显式 exact、cap4 timing-overload、reset、静态零帧与移动布局验收；当前 8/8 通过
-- [x] 1I.9 [历史验收] schema v5 `pnpm bench:browser` 桌面/移动 2/2 通过；该结构/DPR 基线由当前 schema v8 证据 1I.29 接续
+- [x] 1I.9 [历史验收] schema v5 `pnpm bench:browser` 桌面/移动 2/2 通过；该结构/DPR 基线先由 clean schema v8 证据 1I.29 接续，当前实现已迁移 schema v9/profile v2
 - [x] 1I.10 [实现] `physics/roll-runner.ts` 复用正式 throw/world/escape/settle/read-face 行为链，统一单 seed 复现、批量验收与 A/B 诊断
 - [x] 1I.11 [实现] variant schema v2 固定 historical、placement-control、placement-candidate、natural-control 与 current 的投掷/assist/pose 组合
 - [x] 1I.12 [测试] `pnpm test:physics:ab` 落地：按 seed 交替 A/B、B/A，分离 watch/batch cohort，并对每个非自然结果运行最多 20s 的同 seed natural continuation
@@ -186,7 +188,7 @@
 - [x] 1I.29 [验收] clean `e20d359` 的 schema v8 `pnpm test:e2e` 8/8、`pnpm bench:browser` 2/2 通过；默认调度锁定 explicit=false/exact-cap6，并确认 reduced rolling=1x、full rolling=base、static=base
 - [x] 1I.30 [验收] clean `e20d359` 的 `pnpm test:e2e:soak` production-default 桌面/移动各 20 轮均为 20 natural；72.794s/53.628s，最大 terminal queue=86.8993ms/56.2333ms，最大半径/穿透=0.6571491133m/0.0548978013m，安全/页面错误为 0、资源无增长
 - [x] 1I.31 [证据门禁] render A/B artifact schema v2 记录完整 HEAD、worktree dirty、porcelain 哈希和 HEAD-relative tracked diff 状态/SHA-256，并校验长跑前后 repo state 未变化；同 seed 同时硬门禁完整 initial-state v1 数组/签名。repository-state schema v2 同时哈希未跟踪普通文件内容与 symlink 目标、排除 ignored artifact；正式证据仍要求从 clean worktree 开始，dirty 运行只作探索
-- [x] 1I.32 [历史验收] clean checkpoint `6901f4d90e7557f2bdcf2081abffb37952c2f6f5` 的 schema v6 / render A/B artifact schema v2 长浏览器门禁 4/4；当前 schema v8 重跑见 1I.29/1I.42
+- [x] 1I.32 [历史验收] clean checkpoint `6901f4d90e7557f2bdcf2081abffb37952c2f6f5` 的 schema v6 / render A/B artifact schema v2 长浏览器门禁 4/4；后续 clean schema v8 重跑见 1I.29/1I.42，当前实现已迁移 schema v9
 - [x] 1I.33 [历史实验基础] fixed-step accumulator v1 最初以未接生产的纯状态机落地，单元测试锁定 accepted/paused/discarded、backlog 守恒、cap4 追赶、插值余量、overload 与 early-stop；当前生产接线见 1I.38
 - [x] 1I.34 [实验基础] `PhysicsWorld.stepExact()`、previous→raw 显式插值和共享 `roll-step-session` 已落地；session 具有 stepnumber delta=1 硬契约、非破坏 snapshot、可选 floor/stable 扩展与通用阶段计时接缝
 - [x] 1I.35 [实验基础] versioned headless cadence runner 已覆盖 steady60/30、deterministic jitter、单次 100ms、visibility suspend 与持续 100ms；reference/cap6/cap4 复用同一 lifecycle/session，逐帧门禁时间守恒、terminal abandoned backlog 与 overload；首批直接测试以 4 个 watch seed 锁定正常 cadence 结果完全一致
@@ -199,7 +201,15 @@
 - [x] 1I.42 [A/B] clean `e20d359` scheduler A/B v2 桌面/移动各 5 seeds、20 measured rolls：结果/奖级/结算路径/安全等价，exact 重复终态稳定，但 `trajectoryEquivalentSeedCount=0`；rAF/wall 比值只作 observation-only，不宣称普适性能提升
 - [x] 1I.43 [回滚验收] `pnpm test:e2e:soak:legacy` 桌面/移动 2/2 通过；仅证明显式 legacy-batched 回滚可用，不改变生产 exact 默认
 - [x] 1I.44 [手工补充] Chrome 无 query seed 50000 为 explicit=false/exact-cap6，natural-sleep@2.1333s/128 steps；3D 可见面与 UI 均为 `1,5,6,6,4,4`，判“二举，带18”，重置回第 1 轮并清空结果/历史；单轮不替代批量门禁
-- [ ] 1I.45 [后续] 在真实操作系统 tab 隐藏/恢复和真实设备 GPU 上完成人工验收；自动化 visibility cadence/DOM listener 与 SwiftShader artifact 不替代该证据
+- [x] 1I.45 [用户人工验收，2026-08-14] 用户确认真实操作系统 tab 隐藏/恢复可接受；这是用户报告，未记录 OS/浏览器版本、操作序列或 trace，不反向替代自动化守恒证据
+- [x] 1I.46 [用户人工验收，2026-08-14] 用户确认当前真实设备画面可接受；这是主观验收，未记录 GPU、驱动、电源、DPR 与 profile 元数据，不作为受控真实 GPU 性能基准
+- [x] 1I.47 [实现/测试] profile v2 将逐帧 simulation 与逐 exact-step 接触/摩擦/awake/Cannon 五段 CPU 计时写入固定容量样本，并派生 airborne、首次接触后 500ms impact 与结算前 500ms tail；普通生产与非 profile e2e 不启用 Cannon profiling
+- [x] 1I.48 [候选门禁] `projected-aabb-v1` 只按凸包真实顶点在 Heightfield 局部 XY 的投影收紧 cell 候选；160 组 step differential、200 组 justTest 和 200 seeds（含 25042）的完整 RollRunResult/canonical 终态均与 cannon-default 严格等价
+- [x] 1I.49 [探索性 A/B] dirty-worktree SwiftShader collision A/B 每端 5 seeds/20 measured rolls 且 start/end state unchanged：桌面 impact narrowphase p50/p95 比值 `0.720000000089407/0.8095238101995992`、4/5 改善、criterion=true；移动为 `0.7500000001940256/0.8749999995925464`、3/5 改善、criterion=false
+- [x] 1I.50 [生产结论] 因移动端未达到预注册至少 4/5 seeds 改善标准，collision production 保持 `cannon-default`；`projected-aabb-v1` 仅留在隔离 e2e，dirty SwiftShader 结果不写成 clean/durable production attribution
+- [x] 1I.51 [实现/测试] 合法投掷/重掷在用户手势栈内先调用 `soundManager.prepare()`，在 throw 与首个物理步前预热 AudioContext/noise buffer；静音、非法 phase、重复点击与音频失败均保持原语义或静默降级
+- [x] 1I.52 [浏览器截图] schema v9 `bench:browser` 已保存并人工复核本轮最终桌面/移动 settled 截图；六骰、碗口、结果、按钮、统计与历史可核对，结构预算不增长
+- [ ] 1I.53 [后续] 在记录浏览器/GPU/驱动/电源/DPR 的条件下补不同浏览器与更多真实 GPU 受控对比；当前 SwiftShader 截图不外推为跨设备结论
 
 ---
 
@@ -246,10 +256,11 @@
 - [x] 2C.6 [实现] 整体布局：桌面端 canvas 居中 + 右侧/底部 UI 面板
 - [x] 2C.7 [实现] 移动端布局：canvas 上半 + UI 下半，按钮足够大（≥44px touch target）
 - [x] 2C.8 [实现] CSS 媒体查询断点处理（桌面/平板/手机）
-- [x] 2C.9 [实现] `max-width: 768px` 关闭顶栏、倾斜/异常提示、结果面板和卡片等大面积 `backdrop-filter`，用高不透明度实色背景补偿；保留小面积图标按钮的桌面质感
-- [x] 2C.10 [实现] 移动端 rolling 按钮禁用会逐帧重绘 box-shadow 的 `buttonPulse`，保留 transform/opacity ornament 动效，不全局移除阴影
+- [x] 2C.9 [实现] `max-width: 768px` 关闭顶栏、倾斜/异常提示、结果面板和卡片等大面积 `backdrop-filter`，用高不透明度实色背景补偿；所有视口 rolling 时顶栏另改为无 blur 的红棕近实色渐变
+- [x] 2C.10 [实现] 删除 rolling 按钮会逐帧重绘 box-shadow 的 `buttonPulse`，只保留 transform/opacity ornament 动效，不全局移除静态阴影
 - [x] 2C.11 [实现] `(update: slow)` 下复用大面积模糊回退并关闭 rolling/倾斜/error/result 动态效果；`prefers-reduced-motion: reduce` 单独关闭动画、按钮过渡和 hover 位移，不牺牲桌面静态 blur
-- [x] 2C.12 [测试] CSS 契约测试锁定桌面 backdrop/rolling 规则仍存在、移动/slow 的 blur 与实色背景降级，以及 reduced-motion 的纯运动降级
+- [x] 2C.12 [测试] CSS 契约测试锁定 static 桌面 backdrop、rolling 顶栏无 blur/无 shadow pulse、移动/slow 实色降级，以及 reduced-motion 的纯运动降级
+- [x] 2C.13 [实现/测试] 首轮 UI 收口压缩 324px 桌面侧栏、短视口结果卡和 `82px + safe-area` 单行移动顶栏，移动结果 6 骰保持单行；ResultPanel 的系统“云/兔”字形替换为纯 CSS 细线角纹，零图片/纹理资源增量
 
 ### 2D 阶段二集成验证
 
@@ -391,7 +402,7 @@
 - [x] PF.1 [验收] 全量测试通过（`pnpm test`）
 - [x] PF.2 [验收] `pnpm build` 通过
 - [x] PF.3a [自动门禁] floor-relaunch tracker v1 已接入统一 runner、acceptance 与 A/B；当前 200-seed 固定逻辑样本事件为 0，coverage 另行记录且不设比例硬门禁
-- [ ] PF.3b [目视验收] 真实浏览器连续 20 轮投掷无碗底异常弹跳
+- [x] PF.3b [用户人工验收，2026-08-14] 用户确认真实浏览器连续 20 轮投掷未见碗底异常弹跳；这是目视报告，不替代 floor-relaunch 自动门禁或未记录环境下的可归因性能证据
 - [x] PF.4 [验收] 更新 `ARCHITECTURE.md` 碗碰撞体方案章节，明确当前 Box 物理碰撞体与独立 RoundedBox 视觉几何
 
 ---
@@ -400,12 +411,13 @@
 
 ### 3A 场景氛围
 
-- [ ] 3A.1 [实现] 桌面材质升级：木纹纹理或程序化木纹
-- [ ] 3A.2 [实现] 碗材质升级：白瓷质感（环境贴图或 MeshStandardMaterial 调参）
-- [ ] 3A.3 [实现] 添加桌面装饰物：月饼低多边形模型（仅视觉，无碰撞）
-- [ ] 3A.4 [实现] 添加灯笼装饰（仅视觉）
+- [x] 3A.1 [实现] 桌面程序化木纹第一轮收口：一张既有 512×512 CanvasTexture 改为细密长向纹、少量淡年轮和红棕基调，降低两道既有嵌饰圈透明度，不增加 mesh/material/texture
+- [x] 3A.2 [实现] 碗材质与程序化纹样第一轮收口：既有 2048×512 CanvasTexture 改为无缝云头/细折枝带，并提高瓷釉 roughness、降低 clearcoat 硬热点；不接入 PMREM 或额外纹理
+- [x] 3A.3 [取消/范围决策] 当前不添加月饼独立 3D 模型；若未来恢复，需用户明确同意并重新评估构图与 GPU 成本
+- [x] 3A.4 [取消/范围决策] 当前不添加灯笼独立 3D 模型；节庆感优先由既有 UI/纹样承担
 - [ ] 3A.5 [实现] 场景背景色/渐变调整为中秋暖色调
 - [ ] 3A.6 [实现] 可选：后处理（暖色 color grading 或 vignette）
+- [x] 3A.7 [测试] 场景资源测试锁定海碗 `2 mesh / 2 material / 1 texture`、桌面 `5 mesh / 5 material / 1 texture`，避免程序化美术收口扩大渲染资源
 
 ### 3B 音效
 
@@ -413,9 +425,9 @@
 - [x] 3B.2 [实现] cannon-es collide 事件按碰撞强度触发骰子碰击合成音
 - [x] 3B.3 [实现] 碰撞音效具备 60ms 节流、最低冲量筛选和最多 3 个并发限制
 - [x] 3B.4 [实现] 正式提交中奖结果后播放三音阶提示；倾斜待确认与 timeout 不提前播放
-- [x] 3B.5 [实现] AudioContext 与 noise buffer 懒创建，不阻塞首屏；同一 context 复用 noise buffer
-- [x] 3B.6 [验收] 单测覆盖静音期间不创建/恢复 context、取消静音、Promise rejection 和 dispose/remount 复位
-- [ ] 3B.7 [验收] 验证高频碰撞时不产生刺耳叠音
+- [x] 3B.5 [实现] AudioContext 与 noise buffer 保持首次合法用户交互前不创建；投掷/重掷在 throw 与首个物理步前调用幂等 `prepare()` 预热，同一 context 继续复用 noise buffer
+- [x] 3B.6 [验收] 单测覆盖 prepare 调用顺序/幂等、静音不创建/恢复 context、取消静音、closed context、Promise rejection、非法流程不 prepare 与 dispose/remount 复位
+- [x] 3B.7 [用户人工验收，2026-08-14] 用户确认高频碰撞听感可接受、未感到刺耳叠音；未记录音量、输出设备与声压，只作为主观验收
 
 ### 3C 视觉反馈
 

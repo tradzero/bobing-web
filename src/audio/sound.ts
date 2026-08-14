@@ -74,6 +74,25 @@ function getCollisionNoiseBuffer(ctx: AudioContext): AudioBuffer {
 }
 
 /**
+ * 在投掷按钮的用户手势栈内预热碰撞音频。
+ *
+ * AudioContext 与白噪声 buffer 都会在首个物理步之前同步创建，避免第一次碰撞回调
+ * 把初始化成本计入 world.step。音效属于可选反馈，初始化失败时保持静默降级。
+ */
+function prepare(): void {
+  if (muted) return
+
+  try {
+    const ctx = ensureCtx()
+    if (!ctx) return
+    getCollisionNoiseBuffer(ctx)
+  } catch {
+    // Web Audio 不可用或 buffer 创建失败时不影响投掷主流程；后续播放仍可按原路径重试。
+    collisionNoiseBuffer = null
+  }
+}
+
+/**
  * 播放碰撞短音效
  * 合成一个极短的撞击声：白噪声 burst + 低频衰减
  * @param impulse 碰撞冲量，用于控制音量
@@ -194,6 +213,7 @@ function dispose(): void {
 }
 
 export const soundManager = {
+  prepare,
   playCollisionSound,
   playWinSound,
   handleCollision,

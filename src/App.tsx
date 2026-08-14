@@ -26,7 +26,7 @@ export function GameOverlay() {
   const showContentPeek = !hasSettlement && !hasPanelContent
 
   return (
-    <div className="game-overlay">
+    <div className={`game-overlay phase-${phase}`}>
       {/* 顶部栏 */}
       <div className="top-bar">
         <div className="top-bar-start">

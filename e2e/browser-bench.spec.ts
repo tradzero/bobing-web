@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test'
 import {
+  MAX_ROLLING_CPU_PROFILE_CAPACITY,
+  ROLLING_CPU_PROFILE_METRICS,
+  ROLLING_CPU_PROFILE_VERSION,
+  ROLLING_CPU_SEGMENT_METRICS,
+} from '../src/game/performance-profile'
+import {
   BROWSER_BUDGETS,
   E2E_NEXT_SEED,
   collectBrowserIssues,
@@ -32,7 +38,9 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
   let completed = false
 
   try {
-    await page.goto(`/?nextSeed=${E2E_NEXT_SEED}&perfProfile=1&perfProfileVersion=1`)
+    await page.goto(
+      `/?nextSeed=${E2E_NEXT_SEED}&perfProfile=1&perfProfileVersion=${ROLLING_CPU_PROFILE_VERSION}`,
+    )
     await expect(page.getByRole('button', { name: '掷骰' })).toBeVisible()
     artifact.environment = await readBrowserMetadata(page)
 
@@ -145,28 +153,14 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
     const profile = settled.engine.performanceProfile
     expect(profile, 'rolling CPU profile must be present in explicit profile mode').toBeDefined()
     expect(profile).toMatchObject({
-      version: 1,
+      version: ROLLING_CPU_PROFILE_VERSION,
       sampleKind: 'rolling-cpu',
       rendererTimingKind: 'cpu-submit',
     })
     expect(typeof profile!.currentFrameExcluded).toBe('boolean')
     expect(profile!.totalFrameCount).toBeGreaterThan(0)
     expect(profile!.retainedFrameCount).toBeGreaterThan(0)
-    expect(Object.keys(profile!.metrics).sort()).toEqual(
-      [
-        'rafRawDeltaMs',
-        'rafClampedDeltaMs',
-        'cannonStepnumberDelta',
-        'worldStepCpuMs',
-        'guardCpuMs',
-        'rollSafetyCpuMs',
-        'settleCpuMs',
-        'transformSyncCpuMs',
-        'rendererSubmitCpuMs',
-        'diagnosticsPublishCpuMs',
-        'tickTotalCpuMs',
-      ].sort(),
-    )
+    expect(Object.keys(profile!.metrics).sort()).toEqual([...ROLLING_CPU_PROFILE_METRICS].sort())
     for (const [metric, distribution] of Object.entries(profile!.metrics)) {
       expect(distribution.count, `${metric} sample count`).toBe(profile!.retainedFrameCount)
       expect(Number.isFinite(distribution.p50), `${metric} p50 must be finite`).toBe(true)
@@ -176,6 +170,67 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
     expect(profile!.metrics.cannonStepnumberDelta.max).toBeGreaterThanOrEqual(0)
     expect(Number.isInteger(profile!.metrics.cannonStepnumberDelta.max)).toBe(true)
     expect(profile!.metrics.cannonStepnumberDelta.max).toBeLessThanOrEqual(6)
+    expect(profile!.rawFrameSamples).toHaveLength(profile!.retainedFrameCount)
+    expect(profile!.rawFrameSamples.length).toBeLessThanOrEqual(MAX_ROLLING_CPU_PROFILE_CAPACITY)
+    expect(profile!.exactStepSamples).toHaveLength(profile!.retainedExactStepCount)
+    expect(profile!.exactStepSamples.length).toBeLessThanOrEqual(MAX_ROLLING_CPU_PROFILE_CAPACITY)
+    expect(profile!.retainedExactStepCount).toBeGreaterThan(0)
+    expect(profile!.totalExactStepCount).toBe(timing.totalExecutedSteps)
+    for (const [index, step] of profile!.exactStepSamples.entries()) {
+      expect(step.simulationStep).toBeGreaterThan(0)
+      expect(step.simulationTime).toBeCloseTo(step.simulationStep * (timing.fixedStepMs / 1_000), 9)
+      expect(step.contactCount).toBeGreaterThanOrEqual(0)
+      expect(Number.isInteger(step.contactCount)).toBe(true)
+      expect(step.contactEquationCount).toBeGreaterThanOrEqual(step.contactCount)
+      expect(step.frictionEquationCount).toBeGreaterThanOrEqual(0)
+      expect(Number.isInteger(step.contactEquationCount)).toBe(true)
+      expect(Number.isInteger(step.frictionEquationCount)).toBe(true)
+      expect(step.awakeDiceCount).toBeGreaterThanOrEqual(0)
+      expect(step.awakeDiceCount).toBeLessThanOrEqual(6)
+      expect(Number.isInteger(step.awakeDiceCount)).toBe(true)
+      for (const [metric, value] of Object.entries({
+        broadphaseCpuMs: step.broadphaseCpuMs,
+        narrowphaseCpuMs: step.narrowphaseCpuMs,
+        makeContactConstraintsCpuMs: step.makeContactConstraintsCpuMs,
+        solveCpuMs: step.solveCpuMs,
+        integrateCpuMs: step.integrateCpuMs,
+      })) {
+        expect(Number.isFinite(value), `${metric} must be finite`).toBe(true)
+        expect(value, `${metric} must be non-negative`).toBeGreaterThanOrEqual(0)
+      }
+      if (index > 0) {
+        expect(step.simulationStep).toBe(profile!.exactStepSamples[index - 1].simulationStep + 1)
+      }
+    }
+    const segments = profile!.phaseSegments
+    expect(segments, 'settled exact profile must derive phase segments').not.toBeNull()
+    expect(segments).toMatchObject({
+      overlapAllowed: true,
+      frameClassification: 'end-simulation-time',
+      impactWindowMs: 500,
+      tailWindowMs: 500,
+      settlement: {
+        simulationStep: timing.simulationStep,
+        simulationTime: timing.simulationTime,
+      },
+    })
+    expect(segments!.firstContact).not.toBeNull()
+    expect(segments!.airborne.sampleCount).toBeGreaterThan(0)
+    expect(segments!.impactWindow.sampleCount).toBeGreaterThan(0)
+    expect(segments!.tail.sampleCount).toBeGreaterThan(0)
+    for (const segment of [segments!.airborne, segments!.impactWindow, segments!.tail]) {
+      expect(Object.keys(segment.metrics).sort()).toEqual([...ROLLING_CPU_SEGMENT_METRICS].sort())
+      for (const distribution of Object.values(segment.metrics)) {
+        expect(distribution.count).toBe(segment.sampleCount)
+        if (segment.sampleCount === 0) {
+          expect(distribution).toMatchObject({ p50: null, p95: null, max: null })
+        } else {
+          expect(Number.isFinite(distribution.p50)).toBe(true)
+          expect(Number.isFinite(distribution.p95)).toBe(true)
+          expect(Number.isFinite(distribution.max)).toBe(true)
+        }
+      }
+    }
     await expectNoStaticFrames(page, settled)
 
     expect(issues.pageErrors, 'uncaught page errors').toEqual([])

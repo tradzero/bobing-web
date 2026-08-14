@@ -26,14 +26,21 @@ import {
   resolvePhysicsSchedulerExperiment,
   type PhysicsSchedulerVariant,
 } from '@/game/physics-scheduler-experiment'
+import {
+  DEFAULT_RUNTIME_PHYSICS_COLLISION_VARIANT_ID,
+  getPhysicsCollisionVariant,
+  PHYSICS_COLLISION_EXPERIMENT_VERSION,
+  resolvePhysicsCollisionExperiment,
+  type PhysicsCollisionVariant,
+} from '@/game/physics-collision-experiment'
+import { ROLLING_CPU_PROFILE_VERSION } from '@/game/performance-profile'
 import { GameControllerContext } from './GameControllerContext'
 import { GameStoreContext } from './GameStoreContext'
 
-const DIAGNOSTICS_SCHEMA_VERSION = 8
+const DIAGNOSTICS_SCHEMA_VERSION = 9
 const DIAGNOSTICS_ENABLED = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
 const E2E_SEED_PLAN_VERSION = '1'
 const E2E_SETTLEMENT_OVERRIDE_VERSION = '1'
-const E2E_PERFORMANCE_PROFILE_VERSION = '1'
 
 interface GameViewportProps {
   children?: ReactNode
@@ -50,6 +57,11 @@ interface DiceRuntimeDiagnostics {
     variant: PhysicsSchedulerVariant['id']
     kind: PhysicsSchedulerVariant['kind']
     maxStepsPerFrame: number | null
+  }
+  physicsCollisionExperiment: {
+    version: typeof PHYSICS_COLLISION_EXPERIMENT_VERSION
+    explicit: boolean
+    variant: PhysicsCollisionVariant['id']
   }
   renderExperiment: {
     version: typeof RENDER_PERFORMANCE_EXPERIMENT_VERSION
@@ -113,7 +125,7 @@ function readNextSettlementOverride(): 'timeout' | undefined {
 function readPerformanceProfile(): { now: () => number } | undefined {
   if (import.meta.env.MODE !== 'e2e') return undefined
   const params = new URLSearchParams(window.location.search)
-  if (params.get('perfProfileVersion') !== E2E_PERFORMANCE_PROFILE_VERSION) return undefined
+  if (params.get('perfProfileVersion') !== String(ROLLING_CPU_PROFILE_VERSION)) return undefined
   return params.get('perfProfile') === '1' ? { now: () => performance.now() } : undefined
 }
 
@@ -133,6 +145,16 @@ function readPhysicsSchedulerExperiment(): PhysicsSchedulerVariant | undefined {
   return resolvePhysicsSchedulerExperiment(
     params.get('physicsSchedulerExperimentVersion'),
     params.get('physicsSchedulerVariant'),
+  )
+}
+
+function readPhysicsCollisionExperiment(): PhysicsCollisionVariant | undefined {
+  // 生产构建忽略碰撞实验 query，始终使用编译时选定的默认 preset。
+  if (import.meta.env.MODE !== 'e2e') return undefined
+  const params = new URLSearchParams(window.location.search)
+  return resolvePhysicsCollisionExperiment(
+    params.get('physicsCollisionExperimentVersion'),
+    params.get('physicsCollisionVariant'),
   )
 }
 
@@ -203,6 +225,10 @@ export function GameViewport({ children }: GameViewportProps) {
     const physicsSchedulerVariant =
       explicitPhysicsSchedulerExperiment ??
       getPhysicsSchedulerVariant(DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID)
+    const explicitPhysicsCollisionExperiment = readPhysicsCollisionExperiment()
+    const physicsCollisionVariant =
+      explicitPhysicsCollisionExperiment ??
+      getPhysicsCollisionVariant(DEFAULT_RUNTIME_PHYSICS_COLLISION_VARIANT_ID)
 
     // 初始化场景
     const sceneCtx = createScene(canvas, {
@@ -214,7 +240,9 @@ export function GameViewport({ children }: GameViewportProps) {
     sceneCtx.scene.add(bowl)
 
     // 初始化物理
-    const physics = createPhysicsWorld()
+    const physics = createPhysicsWorld({
+      heightfieldNarrowphaseMode: physicsCollisionVariant.heightfieldNarrowphaseMode,
+    })
     setupContactMaterials(physics.world)
     createBowlBodies(physics.world)
 
@@ -254,6 +282,11 @@ export function GameViewport({ children }: GameViewportProps) {
           variant: physicsSchedulerVariant.id,
           kind: physicsSchedulerVariant.kind,
           maxStepsPerFrame: physicsSchedulerVariant.maxStepsPerFrame,
+        },
+        physicsCollisionExperiment: {
+          version: PHYSICS_COLLISION_EXPERIMENT_VERSION,
+          explicit: explicitPhysicsCollisionExperiment !== undefined,
+          variant: physicsCollisionVariant.id,
         },
         renderExperiment: {
           version: RENDER_PERFORMANCE_EXPERIMENT_VERSION,

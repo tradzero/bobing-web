@@ -178,6 +178,7 @@ export function createEngine(opts: EngineOptions): Engine {
   const clock = opts.clock ?? (() => performance.now())
   const { scene, camera, renderer } = sceneCtx
   const bodies = dicePairs.map((pair) => pair.body)
+  const diceBodySet = new Set(bodies)
 
   let mode: EngineMode = 'stopped'
   let rafId: number | null = null
@@ -200,6 +201,8 @@ export function createEngine(opts: EngineOptions): Engine {
   const rollingCpuProfile = performanceProfile
     ? createRollingCpuProfileAccumulator(performanceProfile.capacity)
     : null
+  const initialWorldProfiling = world.doProfiling
+  if (rollingCpuProfile) world.doProfiling = true
   const profileNow = performanceProfile?.now
   let profileFrameInProgress = false
   const rollingShadowScheduler = createRollingShadowScheduler(rollingShadowPreset)
@@ -319,9 +322,13 @@ export function createEngine(opts: EngineOptions): Engine {
   function recordProfiledRollingFrame(rawDeltaMs: number, clampedDeltaMs: number): void {
     const tickStartedAt = profileNow!()
     const sample: RollingCpuFrameSample = {
+      simulationStep: null,
+      simulationTime: null,
       rafRawDeltaMs: rawDeltaMs,
       rafClampedDeltaMs: clampedDeltaMs,
       cannonStepnumberDelta: 0,
+      executedSteps: 0,
+      queuedMs: 0,
       worldStepCpuMs: 0,
       guardCpuMs: 0,
       rollSafetyCpuMs: 0,
@@ -335,6 +342,7 @@ export function createEngine(opts: EngineOptions): Engine {
     const stepnumberBefore = world.stepnumber
     sample.worldStepCpuMs = measureCpu(() => worldStep(clampedDeltaMs / 1000))
     sample.cannonStepnumberDelta = world.stepnumber - stepnumberBefore
+    sample.executedSteps = sample.cannonStepnumberDelta
     physicsStepCount++
 
     sample.guardCpuMs = measureCpu(() => {
@@ -444,6 +452,25 @@ export function createEngine(opts: EngineOptions): Engine {
 
     for (let step = 0; step < plan.maxExecutableSteps; step++) {
       const advance = exactSession.advanceExactStep()
+      if (rollingCpuProfile) {
+        rollingCpuProfile.recordExactStep({
+          simulationStep: advance.simulationStep,
+          simulationTime: advance.simulationTime,
+          contactCount: world.contacts.filter(
+            ({ bi, bj }) => diceBodySet.has(bi) || diceBodySet.has(bj),
+          ).length,
+          contactEquationCount: world.contacts.length,
+          frictionEquationCount: world.frictionEquations.length,
+          // cannon-es 的 AWAKE sleepState 常量为 0；SLEEPY 不计为 awake。
+          awakeDiceCount: bodies.filter(({ sleepState }) => sleepState === 0).length,
+          broadphaseCpuMs: world.profile.broadphase,
+          narrowphaseCpuMs: world.profile.narrowphase,
+          makeContactConstraintsCpuMs: world.profile.makeContactConstraints,
+          solveCpuMs: world.profile.solve,
+          integrateCpuMs: world.profile.integrate,
+          settled: advance.settled !== null,
+        })
+      }
       // 只在 exact step 连同逐步观察全部成功后扣减 backlog。
       exactAccumulator.consumeStep()
       physicsStepCount++
@@ -500,12 +527,16 @@ export function createEngine(opts: EngineOptions): Engine {
     const tickStartedAt = profileNow!()
     const stepnumberBefore = world.stepnumber
     exactProfileSample = {
+      simulationStep: null,
+      simulationTime: null,
       rafRawDeltaMs: rawDeltaMs,
       rafClampedDeltaMs: Math.min(
         Math.max(rawDeltaMs, 0),
         PHYSICS_CADENCE_MAX_ACCEPTED_WALL_DELTA_MS,
       ),
       cannonStepnumberDelta: 0,
+      executedSteps: 0,
+      queuedMs: 0,
       worldStepCpuMs: 0,
       guardCpuMs: 0,
       rollSafetyCpuMs: 0,
@@ -519,6 +550,11 @@ export function createEngine(opts: EngineOptions): Engine {
     try {
       processExactFrame(rawDeltaMs, true)
       exactProfileSample.cannonStepnumberDelta = world.stepnumber - stepnumberBefore
+      exactProfileSample.executedSteps = exactProfileSample.cannonStepnumberDelta
+      const exactRoll = exactSessionSnapshot()
+      exactProfileSample.simulationStep = exactRoll?.simulationStep ?? null
+      exactProfileSample.simulationTime = exactRoll?.simulationTime ?? null
+      exactProfileSample.queuedMs = exactAccumulator?.snapshot().queuedMs ?? 0
       exactProfileSample.tickTotalCpuMs = profileNow!() - tickStartedAt
       rollingCpuProfile!.record(exactProfileSample)
     } finally {
@@ -838,6 +874,7 @@ export function createEngine(opts: EngineOptions): Engine {
     if (disposed) return
     stopInternal('disposed')
     disposed = true
+    world.doProfiling = initialWorldProfiling
 
     for (const body of bodies) {
       body.removeEventListener('collide', soundManager.handleCollision)

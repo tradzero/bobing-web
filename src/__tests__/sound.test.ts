@@ -25,6 +25,8 @@ describe('soundManager 生命周期', () => {
   let contexts: AudioContextStub[]
   let now: number
   let initialContextState: AudioContextState
+  let contextConstructionError: Error | null
+  let createBufferError: Error | null
 
   class AudioContextStub {
     state: AudioContextState
@@ -36,6 +38,7 @@ describe('soundManager 生命周期', () => {
     oscillators: Array<{ connect: ReturnType<typeof vi.fn> }> = []
 
     constructor() {
+      if (contextConstructionError) throw contextConstructionError
       this.state = initialContextState
       contexts.push(this)
     }
@@ -56,6 +59,7 @@ describe('soundManager 生命周期', () => {
     })
 
     createBuffer = vi.fn((_channels: number, length: number) => {
+      if (createBufferError) throw createBufferError
       const buffer: BufferStub = {
         data: new Float32Array(length),
         getChannelData: vi.fn(),
@@ -110,6 +114,8 @@ describe('soundManager 生命周期', () => {
     contexts = []
     now = 100
     initialContextState = 'running'
+    contextConstructionError = null
+    createBufferError = null
     vi.stubGlobal('AudioContext', AudioContextStub)
     vi.spyOn(performance, 'now').mockImplementation(() => now)
   })
@@ -136,6 +142,69 @@ describe('soundManager 生命周期', () => {
     soundManager.playWinSound()
     expect(contexts).toHaveLength(1)
     expect(contexts[0].oscillators).toHaveLength(3)
+  })
+
+  it('prepare 同步预建 context 与碰撞 buffer，重复调用保持幂等且不创建播放节点', () => {
+    soundManager.prepare()
+
+    expect(contexts).toHaveLength(1)
+    expect(contexts[0].createBuffer).toHaveBeenCalledOnce()
+    expect(contexts[0].bufferSources).toHaveLength(0)
+    expect(contexts[0].oscillators).toHaveLength(0)
+
+    soundManager.prepare()
+    expect(contexts).toHaveLength(1)
+    expect(contexts[0].createBuffer).toHaveBeenCalledOnce()
+
+    soundManager.playCollisionSound(2)
+    expect(contexts[0].createBuffer).toHaveBeenCalledOnce()
+    expect(contexts[0].bufferSources).toHaveLength(1)
+  })
+
+  it('prepare 在静音时不创建或恢复 context', () => {
+    soundManager.setMuted(true)
+    soundManager.prepare()
+    expect(contexts).toHaveLength(0)
+
+    soundManager.setMuted(false)
+    soundManager.prepare()
+    expect(contexts).toHaveLength(1)
+
+    soundManager.setMuted(true)
+    const context = contexts[0]
+    expect(context.suspend).toHaveBeenCalledOnce()
+    soundManager.prepare()
+    expect(context.resume).not.toHaveBeenCalled()
+    expect(contexts).toHaveLength(1)
+  })
+
+  it('prepare 丢弃 closed context 并为新 context 重新预建 buffer', () => {
+    soundManager.prepare()
+    const closedContext = contexts[0]
+    closedContext.state = 'closed'
+
+    soundManager.prepare()
+
+    expect(contexts).toHaveLength(2)
+    expect(contexts[1].createBuffer).toHaveBeenCalledOnce()
+    expect(contexts[1].buffers).toHaveLength(1)
+  })
+
+  it('prepare 的 context 与 buffer 初始化异常都静默降级', () => {
+    contextConstructionError = new Error('context unavailable')
+    expect(() => soundManager.prepare()).not.toThrow()
+    expect(contexts).toHaveLength(0)
+
+    contextConstructionError = null
+    createBufferError = new Error('buffer unavailable')
+    expect(() => soundManager.prepare()).not.toThrow()
+    expect(contexts).toHaveLength(1)
+    expect(contexts[0].createBuffer).toHaveBeenCalledOnce()
+
+    createBufferError = null
+    expect(() => soundManager.prepare()).not.toThrow()
+    expect(contexts[0].createBuffer).toHaveBeenCalledTimes(2)
+    expect(contexts[0].buffers).toHaveLength(1)
   })
 
   it('已创建 context 在静音期间只 suspend，不 resume 也不创建播放节点', () => {

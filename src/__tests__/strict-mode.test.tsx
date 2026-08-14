@@ -40,6 +40,7 @@ const engineRollErrorCallbacks: unknown[] = []
 const engineClocks: unknown[] = []
 const engineInitiallyHidden: unknown[] = []
 const engineVisibilityCalls: Array<{ id: number; hidden: boolean; timestampMs: number }> = []
+const physicsWorldOptions: unknown[] = []
 let callCounter = 0
 let diceSetCallCounter = 0
 
@@ -85,15 +86,18 @@ vi.mock('@/scene/bowl', () => ({
 }))
 
 vi.mock('@/physics/world', () => ({
-  createPhysicsWorld: () => ({
-    world: {
-      addBody: vi.fn(),
+  createPhysicsWorld: (options?: unknown) => {
+    physicsWorldOptions.push(options)
+    return {
+      world: {
+        addBody: vi.fn(),
+        step: vi.fn(),
+      },
       step: vi.fn(),
-    },
-    step: vi.fn(),
-    stepExact: vi.fn(),
-    dispose: vi.fn(),
-  }),
+      stepExact: vi.fn(),
+      dispose: vi.fn(),
+    }
+  },
 }))
 
 vi.mock('@/physics/materials', () => ({
@@ -196,14 +200,15 @@ beforeEach(() => {
   engineClocks.length = 0
   engineInitiallyHidden.length = 0
   engineVisibilityCalls.length = 0
+  physicsWorldOptions.length = 0
 })
 
 describe('StrictMode 重挂载', () => {
-  it('非 e2e 构建忽略 scheduler query，继续使用编译时生产默认', () => {
+  it('非 e2e 构建忽略 scheduler/collision query，继续使用编译时生产默认', () => {
     window.history.replaceState(
       {},
       '',
-      '/?physicsSchedulerExperimentVersion=1&physicsSchedulerVariant=legacy-batched',
+      '/?physicsSchedulerExperimentVersion=1&physicsSchedulerVariant=legacy-batched&physicsCollisionExperimentVersion=1&physicsCollisionVariant=projected-aabb-v1',
     )
 
     const { unmount } = render(<GameViewport />)
@@ -212,6 +217,9 @@ describe('StrictMode 重挂载', () => {
       id: 'exact-cap6',
       kind: 'exact-accumulator',
       maxStepsPerFrame: 6,
+    })
+    expect(physicsWorldOptions.at(-1)).toEqual({
+      heightfieldNarrowphaseMode: 'cannon-default',
     })
     unmount()
   })
@@ -307,7 +315,7 @@ describe('StrictMode 重挂载', () => {
     const canvas = container.querySelector('canvas')
     const diagnostics = JSON.parse(canvas?.dataset.diceDiagnostics ?? '{}')
     expect(diagnostics).toMatchObject({
-      schemaVersion: 8,
+      schemaVersion: 9,
       revision: 1,
       sampleKind: 'post-render',
       physicsSchedulerExperiment: {
@@ -316,6 +324,11 @@ describe('StrictMode 重挂载', () => {
         variant: 'exact-cap6',
         kind: 'exact-accumulator',
         maxStepsPerFrame: 6,
+      },
+      physicsCollisionExperiment: {
+        version: 1,
+        explicit: false,
+        variant: 'cannon-default',
       },
       renderExperiment: {
         version: 1,
@@ -362,6 +375,12 @@ describe('StrictMode 重挂载', () => {
     expect(engineRollErrorCallbacks.every((callback) => typeof callback === 'function')).toBe(true)
     expect(engineClocks.every((clock) => typeof clock === 'function')).toBe(true)
     expect(engineInitiallyHidden.every((hidden) => hidden === document.hidden)).toBe(true)
+    expect(physicsWorldOptions).not.toHaveLength(0)
+    expect(physicsWorldOptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ heightfieldNarrowphaseMode: 'cannon-default' }),
+      ]),
+    )
 
     unmount()
   })

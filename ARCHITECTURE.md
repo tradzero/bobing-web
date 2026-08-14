@@ -45,8 +45,9 @@ src/
 ├── game/
 │   ├── engine.ts               # 生产 exact-cap6：按需 rAF、逐步 session、安全/停稳、visibility、error 与渲染
 │   ├── fixed-step-accumulator.ts # 生产 fixed-step backlog 所有者：守恒、pause、跨帧追赶与 overload
-│   ├── performance-profile.ts  # 隔离 e2e rolling CPU profile v1：固定容量的阶段分布聚合
+│   ├── performance-profile.ts  # 隔离 e2e rolling CPU profile v2：逐帧/逐 exact-step 与阶段分布
 │   ├── physics-scheduler-experiment.ts # exact-cap6 默认与 legacy/exact-cap4 版本化 e2e preset
+│   ├── physics-collision-experiment.ts # cannon-default 默认与 projected-aabb-v1 版本化 e2e preset
 │   ├── render-performance-experiment.ts # 版本化渲染 A/B preset 与生产默认选择
 │   ├── rolling-shadow.ts       # rolling shadow 请求节奏与可观测计数
 │   ├── controller.ts           # 游戏编排层：状态机、可信结算/异常分流、轮次推进、重置（唯一业务入口）
@@ -59,8 +60,9 @@ src/
 │   └── decorations.ts          # 旧桌面装饰实验文件，当前未接入 GameViewport 运行时
 │
 ├── physics/
-│   ├── world.ts                # cannon-es 世界初始化、暴露 world 实例和 step 函数（不自持循环）
+│   ├── world.ts                # cannon-es 世界初始化、exact/legacy step 与命名 Heightfield 窄相模式
 │   ├── bowl-body.ts            # 碗碰撞体（Heightfield 连续碗底 + 竖直挡墙）
+│   ├── heightfield-projected-aabb-narrowphase.ts # 实验候选：投影凸包 AABB 收紧 Heightfield cell
 │   ├── body-transform.ts       # Cannon raw/interpolated pose → Three 对象；teleport 插值状态同步
 │   ├── escape-guard.ts         # 运行时逃逸保护与可观测介入计数
 │   ├── roll-runner.ts          # 无渲染统一投掷 runner，复用运行时行为链
@@ -102,7 +104,7 @@ src/
 │   └── styles/                 # 原生 CSS 文件：global.css / variables.css / game.css
 │
 ├── audio/
-│   └── sound.ts                # Web Audio：懒创建、静音、碰撞/中奖合成音与完整 dispose/remount 复位
+│   └── sound.ts                # Web Audio：投掷前 prepare、静音、碰撞/中奖合成音与完整 dispose/remount 复位
 │
 ├── utils/
 │   └── random.ts               # 时间种子 mulberry32、固定 seed 复现、稳定派生随机子流
@@ -116,7 +118,9 @@ src/
     ├── controller.test.ts      # 编排层集成：phase、timeout、重复回调幂等、history、reset、sound
     ├── store.test.ts           # error 不提交结果与 reset 保留 soundEnabled
     ├── engine-timing.test.ts   # exact/legacy 引擎时序、守恒、visibility、overload 与最终 raw 帧
-    ├── performance-profile.test.ts # 固定容量、分位数与 reset 的纯聚合测试
+    ├── performance-profile.test.ts # profile v2 固定容量、逐步采样、阶段分段、分位数与 reset
+    ├── physics-collision-experiment.test.ts # e2e-only 碰撞 preset 解析与 cannon-default 生产契约
+    ├── heightfield-projected-aabb-narrowphase.test.ts # step/justTest differential 与 200-seed 严格等价
     ├── render-performance-experiment.test.ts # e2e-only preset 解析与生产默认契约
     ├── rolling-shadow.test.ts  # every-frame/alternate/frozen 请求序列
     ├── body-transform.test.ts  # raw/interpolated pose 复制与 teleport 状态同步
@@ -150,7 +154,8 @@ e2e/
 ├── browser-bench.spec.ts       # 三阶段渲染结构、DPR/像素与静态零帧预算
 ├── render-performance-ab.spec.ts # 五 seed、双 warm-up、ABBA/BAAB 渲染配对 A/B
 ├── physics-scheduler-ab.spec.ts # legacy-batched / exact-cap6 结果、轨迹与观测性能配对 A/B
-└── helpers/diagnostics.ts      # schema v8 类型、调度/守恒/结构/profile 预算与读取 helper
+├── physics-collision-ab.spec.ts # cannon-default / projected-aabb-v1 真值与 impact 窄相配对 A/B
+└── helpers/diagnostics.ts      # schema v9 类型、调度/碰撞实验/守恒/结构/profile 预算与读取 helper
 
 sweep/                          # 独立长时间运行脚本（按需手动执行，不在 pnpm test 中）
 ├── lib/
@@ -166,10 +171,10 @@ sweep/                          # 独立长时间运行脚本（按需手动执�
 ## 当前视觉占位策略
 
 - 运行时场景当前只接入桌面、海碗和 6 颗骰子；`scene/decorations.ts` 保留为旧实验文件，不在 `GameViewport` 中挂载。
-- 海碗外壁当前使用 `CanvasTexture` 生成程序化青花纹样占位，正式纹样素材的尺寸、比例、无缝与格式规范记录在 `UI-CHECKLIST.md`。
-- 桌面当前使用程序化木纹与环形嵌饰作为占位视觉；后续美术方向优先在现有桌体上叠加桌布，而不是继续扩展桌腿、桌裙板或独立摆件。
+- 海碗外壁当前仍只使用一张 `2048×512 CanvasTexture`，第一轮美术收口把抢眼的大团花改为可无缝循环的低矮云头纹与细折枝带，并提高瓷釉粗糙度、降低 clearcoat 硬热点；正式纹样素材的尺寸、比例、无缝与格式规范记录在 `UI-CHECKLIST.md`。
+- 桌面仍只使用一张 `512×512 CanvasTexture`，当前以更细密的长向木纹、少量淡年轮和更低透明度的既有嵌饰圈压低“靶环感”。该轮改动不增加 mesh、material 或 texture；后续美术方向优先在现有桌体上叠加桌布，而不是继续扩展桌腿、桌裙板或独立摆件。
 - 场景使用纯色背景、方向光、环境光和半球光，不生成 PMREM。旧路径在 `createScene()` 阶段生成环境贴图时，桌面、海碗和骰子尚未加入 scene，得到的环境信息有限；同时只保留 target texture 会丢失 render target 的所有权，无法由场景上下文可靠释放，因此已删除该路径并保持 `scene.environment = null`。
-- 这类视觉占位的目标是先稳定构图与层次，不改变物理世界、碰撞体和游戏状态流。
+- 这类视觉占位的目标是先稳定构图与层次，不改变物理世界、碰撞体和游戏状态流；资源测试当前锁定海碗 `2 mesh / 2 material / 1 texture`、桌面 `5 mesh / 5 material / 1 texture`。
 
 ## 骰子渲染与资源生命周期
 
@@ -275,12 +280,12 @@ error 状态由 RollErrorPanel 明确说明“本轮未结算”，用户可在�
 - 阴影档位只由基础质量决定：未触发像素预算限制时使用 `1024 × 1024`，触发限制时使用 `512 × 512`，切档时释放旧 shadow map 并请求重建。rolling DPR 不反向改变基础档位，避免 A/B 同时修改两个变量。
 - 阴影 map 始终关闭 `autoUpdate`。生产 rolling preset 保持 `every-frame`，Engine 在每个真正进入 `renderer.render()` 的 rolling 帧显式请求一次 `needsUpdate`；idle/settled/error 静态帧也只请求一次。版本化实验另有 `alternate` 与 `frozen-after-first`，但不作为生产默认。
 - `scene/setup.ts` 只在 CSS 尺寸或设备 DPR 实际变化时重算 renderer 尺寸、基础 DPR、camera preset/aspect 和阴影档位。Engine 紧邻真实渲染切换 static/rolling 有效 DPR，phase 切换本身不回调 invalidate，因此不产生额外静态帧；`GameViewport` 仍将 resize 失效回调绑定到 `engine.invalidate()`，cleanup 时解绑。
-- 开发环境与隔离的 e2e 构建把 diagnostics 写入 canvas 的 `data-dice-diagnostics`；普通生产构建不发布该数据集。当前 schema v8 的每份快照带 `schemaVersion / revision / sampleKind: 'post-render'`，且只在一次真实 `renderer.render()` 后发布。它在 schema v6 初态签名基础上增加调度 experiment/preset、accumulator 时间分类与守恒、terminal-abandoned/overload、模拟步数/时间，以及结算后的 canonical 6-body 完整终态数组和 Float64 位级签名。
+- 开发环境与隔离的 e2e 构建把 diagnostics 写入 canvas 的 `data-dice-diagnostics`；普通生产构建不发布该数据集。当前 schema v9 的每份快照带 `schemaVersion / revision / sampleKind: 'post-render'`，且只在一次真实 `renderer.render()` 后发布。它保留 schema v8 的 scheduler experiment/preset、accumulator 守恒、canonical 6-body 初末态和安全包络，并新增碰撞实验的 `version / explicit / variant`；普通生产无实验 query 时明确为 `explicit=false / cannon-default`。
 - `mainPassCalls / mainPassTriangles` 明确表示 renderer 主 pass 的调用数和三角形数，不冒充包含 shadow pass 的总量；`geometries / textures` 来自 `renderer.info.memory`，并附带当前 `programs` 数量、CSS/drawing-buffer 尺寸、DPR 与 Engine 调度计数。投掷诊断同时记录实际 seed、投掷路径、停稳原因与模拟耗时；Engine 还逐物理步累计最大半径、保守/墙中心越界、最大接触穿透、非有限状态与 escape-guard 介入，避免飞出或穿透后落回被终态掩盖。
 - Playwright 的 `test:e2e` 在桌面/移动项目执行生产默认 exact 正常流程、timeout 不提交/同轮恢复、reset、显式 exact preset、cap4 overload 和静态零帧验收，clean `e20d359` 当前 8/8 通过。`test:e2e:soak` 是无 query 的 production-default exact-cap6 门禁；`test:e2e:soak:legacy` 显式指定 legacy-batched，只证明回滚 preset 可用。两者都逐轮检查提交/历史、逐步安全、调度守恒、static DPR、静态零帧及 WebGL 资源，并写 schema v4 artifact。
-- `bench:browser` 对三种引擎阶段锁定 8 个主 pass calls、41,288 个三角形、8 个 geometry、最多 6 个 texture、DPR/3.5MP drawing-buffer 预算和分平台 shader program 上限。它只在隔离 e2e URL 显式带上 `perfProfile=1&perfProfileVersion=1` 时创建 rolling CPU profile v1；普通生产与普通 e2e 不采样计时。profile 以固定容量聚合 rAF 原始/截断间隔、Cannon `stepnumber` 的实际 substep 差，以及 world step、guard、roll safety、settle、transform sync、renderer submit、diagnostics publish、tick total 各 CPU 阶段的 count/p50/p95/max。`rendererSubmitCpuMs` 是 `renderer.render()` 同步 CPU submit 时间，不是 GPU 时间；当前帧在 post-render 发布之后才完成记录，因此快照明确标记不含发布中的当前帧。
+- `bench:browser` 对三种引擎阶段锁定 8 个主 pass calls、41,288 个三角形、8 个 geometry、最多 6 个 texture、DPR/3.5MP drawing-buffer 预算和分平台 shader program 上限。它只在隔离 e2e URL 显式带上 `perfProfile=1&perfProfileVersion=2` 时创建 rolling CPU profile v2；普通生产与普通 e2e 不采样计时。v2 保留 rAF 原始/截断间隔、accumulator、world step、guard、安全、settle、transform sync、renderer submit、diagnostics publish 与 tick total，并以最多 600 条原始样本记录逐 rAF 的 simulation step/time 和逐 exact-step 的接触/摩擦方程、awake 骰子数、settlement，以及 Cannon 内建 broadphase、narrowphase、make-contact-constraints、solve、integrate 五段 CPU 计时。它还派生 airborne、首次接触后 500ms impact-window 和结算前 500ms tail；impact 与 tail 可以重叠，不能相加为整轮成本。`rendererSubmitCpuMs` 是 `renderer.render()` 同步 CPU submit 时间，不是 GPU 时间；当前帧在 post-render 发布之后才完成记录，因此快照明确标记不含发布中的当前帧。
 - browser bench 对 profile 只硬门禁字段完整、数值有限、样本数大于 0 和生产 exact 每帧 `cannonStepnumberDelta.max <= 6`；毫秒分布与独立 rAF 观测只写 JSON artifact 供同环境 A/B，不设跨机器硬阈值。失败时保留 JSON、页面截图、video 与 trace。
-- clean `e20d359` 的 schema v8 `bench:browser` 桌面/移动 2/2 通过。桌面 `reduced` idle/settled 为 3,498,014 pixels、DPR `1.445028`，rolling 为 1,676,160 pixels、DPR 1；移动 `full` 保持 1.5 DPR。结构与资源预算通过；SwiftShader rAF/profile 毫秒只作本次环境记录，不构成真实 GPU 或跨机器结论。
+- clean `e20d359` 的 schema v8 `bench:browser` 桌面/移动 2/2 结果保留为 profile v1 历史基线。桌面 `reduced` idle/settled 为 3,498,014 pixels、DPR `1.445028`，rolling 为 1,676,160 pixels、DPR 1；移动 `full` 保持 1.5 DPR。当前实现已迁移到 schema v9/profile v2，任何新毫秒值仍只作同环境记录，不构成真实 GPU 或跨机器结论。
 
 ### 渲染性能实验与当前结论
 
@@ -290,14 +295,21 @@ error 状态由 RollErrorPanel 明确说明“本轮未结算”，用户可在�
 - 交互 Chrome 的补充单 seed 观察约为 candidate 17.6ms、baseline 33ms，并人工核对了 rolling 画面和 settled 后基础 DPR 恢复。这支持继续保留候选，但不是系统 GPU timer、不是多 seed 样本，也不能外推为通用 GPU 性能结论。
 - 将 Cannon `maxSubSteps` 从 8 直接降到 4 的尝试已排除：慢帧会丢弃更多待模拟时间，seed 25042 已显示 cadence 分叉风险。生产改为显式 accumulator，每个 exact 固定步依次运行 world、未介入安全采样、floor tracker、escape guard 与 settle；cap6 是单帧追赶上限，超过 250ms 高水位会锁存 `timing-overload`。
 - Engine 通过 `document.visibilitychange` 把隐藏时间归为 paused/discarded，不纳入 backlog；resume 从新的 monotonic timestamp 继续。timeout/overload 都进入独立 `error` 并冻结 raw 终态，不读取或提交奖级。生产构建始终使用编译时 `exact-cap6`；只有隔离 e2e 才解析版本化 `legacy-batched / exact-cap6 / exact-cap4` query。
-- clean `e20d359` 的 cadence artifact `artifacts/cadence/head-e20d359-200-seeds.json` start/end clean unchanged：200 seeds、780/780 runs、normal 560/560、overload 20/20、failure=0。它锁定 exact 候选在 5 cadence 中的 initial/final state、完整结果、安全和守恒；5s visibility suspend 全部归为 paused/discarded，持续 100ms/cap4 在 frame 6、step 20、queue `800/3ms` 时返回 `timing-overload`、`roll=null`。这是模拟 cadence 证据，不能替代真实 OS/tab visibility 验收。
+- clean `e20d359` 的 cadence artifact `artifacts/cadence/head-e20d359-200-seeds.json` start/end clean unchanged：200 seeds、780/780 runs、normal 560/560、overload 20/20、failure=0。它锁定 exact 候选在 5 cadence 中的 initial/final state、完整结果、安全和守恒；5s visibility suspend 全部归为 paused/discarded，持续 100ms/cap4 在 frame 6、step 20、queue `800/3ms` 时返回 `timing-overload`、`roll=null`。这是模拟 cadence 证据；用户于 2026-08-14 已另行报告真实 OS/tab 隐藏恢复可用，但该主观确认不补充浏览器、设备、电源、DPR 或 trace 元数据。
 - scheduler A/B artifact schema v2 对 5 seeds 每侧重复两次。桌面/移动的结果、奖级、结算路径与安全均等价，exact 重复终态稳定；但 `trajectoryEquivalentSeedCount=0`，不宣称两种调度轨迹等价。exact/legacy 的 rAF p95 中位比为 `0.986535928581883` / `0.9161676646706578`，settlement wall 比为 `0.94935576135633` / `1.0074334792048256`，结论固定为 observation-only，生产切换依据是逐步真值、可复现性和异常语义，而非普适性能提升。
 
-### 移动端与低动态环境的 CSS 合成降级
+### Heightfield 碰撞窄相实验与当前结论
 
-- 桌面默认保留玻璃模糊和 rolling 按钮的光晕动效；`max-width: 768px` 时只关闭 `.top-bar / .tilt-warning / .roll-error / .result-panel / .panel-card` 等大面积区域的 `backdrop-filter`，以高不透明度实色背景补偿，小面积 `.btn-icon` 仍保留原样。
-- 移动端 rolling 按钮禁用会逐帧重绘 `box-shadow` 的 `buttonPulse`，但保留基于 `transform / opacity` 的 ornament 动效。
-- `(update: slow)` 环境采用大面积模糊回退，并关闭 rolling 按钮、ornament、倾斜/异常提示和结果面板动画。`prefers-reduced-motion: reduce` 只关闭动画、按钮过渡和 hover 位移，不额外牺牲桌面 blur 等静态视觉；这些规则不全局移除其他阴影。
+- 生产碰撞实现仍为 cannon-es 0.20.0 原生 `Narrowphase`，版本化 collision experiment v1 只在隔离 e2e 构建接受 `cannon-default / projected-aabb-v1`；生产构建忽略 query，`DEFAULT_RUNTIME_PHYSICS_COLLISION_VARIANT_ID` 固定为 `cannon-default`。
+- `projected-aabb-v1` 只改 Heightfield cell 候选范围：把凸包真实顶点变换到 Heightfield 局部空间，按其 XY 投影 AABB 加向外 epsilon 后收紧索引，再保持上游 pillar、SAT、contact、friction、`justTest` 和循环顺序。它不修改世界步长、求解器、材质、轨迹兜底或结算阈值。
+- differential 测试覆盖 160 组 step 和 200 组 `justTest` 随机姿态/边界场景；统一 runner 对 200 seeds（含 watch seed 25042）的完整 `RollRunResult` 与 canonical 终态逐项严格等价。浏览器 collision A/B 再对固定 5 seeds 按 ABBA/BAAB 每端执行 20 measured rolls，投掷计划、初末 canonical state、点数/奖级/带数、结算原因/时间、simulation step/time、安全与渲染结构全部硬门禁等价。
+- dirty-worktree SwiftShader artifact 中，桌面 impact narrowphase p50/p95 中位比为 `0.720000000089407 / 0.8095238101995992`，4/5 seeds 改善并达到预注册判据；移动为 `0.7500000001940256 / 0.8749999995925464`，只有 3/5 seeds 改善，未达到至少 4/5 的判据。两端收益均超过各自 repeat-noise 中位数，但移动 criterion 为 false，因此结论是“不推进生产”。这些 artifact 只证明该 dirty 工作树一次运行期间 repository state unchanged，不是 clean checkpoint，也不是不同浏览器或真实 GPU 证据。
+
+### UI 收口与低动态环境的 CSS 合成降级
+
+- 桌面 idle/settled 仍保留面板玻璃质感；所有视口进入 rolling 后，顶栏通过 `.game-overlay.phase-rolling` 关闭大面积 `backdrop-filter`，改用近似实色红棕渐变，避免持续采样 WebGL 背景。滚动按钮不再运行会逐帧重绘 box-shadow 的 `buttonPulse`，只保留基于 `transform / opacity` 的 ornament 动效。
+- 桌面侧栏由 352px 收窄至 324px、上沿由 126px 提至 112px，并压缩卡片边框/阴影/间距；结果卡设置 460px 上限及短视口压缩规则，减少与碗区争抢。ResultPanel 原有系统“云/兔”字符已替换为纯 CSS 细线角纹，避免平台字形差异且零图片/纹理增量。移动顶栏改为 `82px + safe-area` 的单行布局、图标按钮保持 44px；结果骰子保持单行，统计/历史继续位于真实文档流。
+- `max-width: 768px` 仍关闭 `.top-bar / .tilt-warning / .roll-error / .result-panel / .panel-card` 等大面积区域的 `backdrop-filter`，以高不透明度实色背景补偿，小面积 `.btn-icon` 保留原样。`(update: slow)` 额外关闭 rolling ornament、倾斜/异常提示和结果面板动画；`prefers-reduced-motion: reduce` 只关闭动画、按钮过渡和 hover 位移，不额外牺牲桌面静态 blur。
 
 ## 游戏状态机
 
@@ -388,7 +400,8 @@ interface GameState {
 
 ### 音效生命周期
 
-- `soundManager` 仍是单例，但 AudioContext 只在非静音的首次实际播放时创建；muted 状态下的碰撞或中奖事件不会创建、恢复或分配播放节点。
+- `soundManager` 仍是单例；每次合法投掷或专用重掷在当前用户手势栈内先调用 `prepare()`，同步创建 AudioContext、触发必要的异步恢复并生成该 context 的碰撞 noise buffer，然后才执行 `throwDice()` 与 `engine.beginSettle()`。这保持首次交互前零音频资源，同时避免第一次 collide 回调把上下文/buffer 初始化成本计入 `world.step()`。
+- `prepare()` 幂等，muted 状态下不创建或恢复 context；非法 phase、rolling 重复点击及未装配 engine 的路径不会调用。Web Audio 不可用、closed context 或 buffer 创建失败时静默降级，后续播放路径仍可重试。
 - `suspend / resume / close` 的同步异常和 Promise rejection 都降级为静默，不形成页面级 unhandled rejection。`dispose()` 会复位 context、muted、节流时间、并发计数和碰撞 noise buffer，保证 StrictMode/remount 后 store 默认状态与音频管理器一致。
 - 碰撞白噪声 buffer 在同一 AudioContext 内复用；每次碰撞仍创建独立 source、滤波与包络。中奖音只在业务结果正式提交后播放，tilt-confirm、rethrow、reset 和 timeout 均不会提前触发。
 
@@ -432,6 +445,8 @@ interface GameState {
 
 碗内壁曲线（纯幂函数零偏移）定义在 `config/bowl.ts`，物理层和渲染层共用同一函数，消除几何分叉。
 
+Heightfield 与骰子凸包的窄相生产默认仍由 cannon-es 原生 `Narrowphase` 完成。`physics/heightfield-projected-aabb-narrowphase.ts` 只是命名实验：它只按凸包顶点的局部 XY 投影收紧候选 cell，保持上游 pillar/SAT/contact/friction 语义；由于移动浏览器 A/B 未达到预注册的 4/5 seeds 改善标准，未切换生产默认。
+
 ### 骰子碰撞体
 
 当前运行时明确采用 Box 物理碰撞体（8v/6f），视觉层独立采用 `RoundedBoxGeometry` 保留圆润外观。两者职责分离，不要求视觉圆角与物理碰撞几何同构：
@@ -467,19 +482,21 @@ interface GameState {
 | 投掷与随机计划         | `dice/throw.ts` + `utils/random.ts`                                | 6 槽几何、整体旋转/槽位打乱、layout/dynamics 子流隔离、算法/计划版本                                                                                                            | 固定 seed + 随机单位值快照                                       |
 | 物理 A/B               | `physics/roll-runner.ts` + `physics/roll-comparison.ts`            | 命名 preset、A/B-B/A 交替、watch/batch cohort、非自然结算 20s continuation 真值与安全性；schema v4 同时门禁 runtime/continuation floor-relaunch tracker                         | 统一 runner + 固定 seed + 结构化汇总                             |
 | cadence 调度 A/B       | `physics/cadence-roll-runner.ts` + `physics/cadence-comparison.ts` | 5 种 normal cadence 的 reference/cap6/cap4 exact 等价、canonical 初末态、完整结果/判奖、安全与时间守恒；sustained cap4 overload 精确语义                                        | 20 watch 完整矩阵 + 180 batch 均衡矩阵 + versioned JSON artifact |
+| Heightfield 窄相候选   | `physics/heightfield-projected-aabb-narrowphase.ts`                | 上游 0.20.0 顺序锁定；step/justTest differential、200-seed 完整结果/canonical 等价，生产默认仍为 cannon-default                                                                 | 随机边界场景 + 统一 runner + 严格逐项比较                        |
 | 碗底二次离地           | `physics/floor-relaunch.ts`                                        | tracker v1 的 coverage、连续支撑、floor-only/pre-external 离地、ordered rise、双阈值、事件锁存与严格 shape sampler unavailable                                                  | 纯状态序列 + Box/Heightfield 采样器                              |
 | 引擎调度与姿态         | `game/engine.ts` + `physics/body-transform.ts`                     | exact-cap6 默认、逐步 session/守恒、visibility pause/resume、overload error、rolling 插值、终态 raw pose、legacy rollback                                                       | mock rAF/renderer + 真实 Cannon Body                             |
 | 骰子实例与资源生命周期 | `dice/create.ts` + `GameViewport.tsx`                              | 单材质 atlas InstancedMesh、6 个 body/proxy、矩阵索引同步、dispose 幂等、StrictMode 重挂载不复用已释放贴图                                                                      | Three 对象断言 + dispose spy + React StrictMode 重挂载           |
 | 渲染质量与 resize      | `config/render.ts` + `scene/setup.ts`                              | 基础 DPR 1.5 上限/350 万像素预算、仅 reduced 档 rolling 1x、full 档保持基础 DPR、static 恢复、1024/512 阴影档位、重复 resize 去重、phase 切换无额外失效、不创建 PMREM           | 纯质量函数 + mock WebGLRenderer/ResizeObserver/PMREMGenerator    |
 | 阴影调度               | `game/rolling-shadow.ts` + `game/engine.ts`                        | every-frame/alternate/frozen 的逐真实 render 请求序列、首帧刷新、跨轮 reset、外部 needsUpdate 不被 skip 清除                                                                    | 纯 scheduler + mock renderer.shadowMap                           |
-| 开发态渲染诊断         | `GameViewport.tsx` + `game/performance-profile.ts`                 | schema v8 post-render；初末 canonical state、scheduler/timing/守恒、实验/质量/阴影、结构、安全与可选 profile                                                                    | mock renderer.info/dataset/时钟 + 固定容量聚合断言               |
+| 开发态渲染诊断         | `GameViewport.tsx` + `game/performance-profile.ts`                 | schema v9 post-render；初末 canonical state、scheduler/collision experiment、timing/守恒、质量/阴影、结构、安全与可选 profile v2                                                | mock renderer.info/dataset/时钟 + 固定容量逐帧/逐步聚合断言      |
 | 浏览器渲染 A/B         | `e2e/render-performance-ab.spec.ts`                                | 5 seeds、warm-up、ABBA/BAAB；投掷计划、初始 6-body 状态、repo provenance、结果与安全硬门禁；毫秒仅观测                                                                          | Playwright 桌面/移动项目 + JSON/video/trace artifact             |
-| CSS 合成降级契约       | `ui/styles/game.css`                                               | 桌面 backdrop/光晕规则仍在；移动端与 slow-update 对 tilt/error/result 等大面积面板关闭 blur/动画；reduced-motion 单独关闭运动且保留静态视觉                                     | 读取 CSS 文本并限定媒体查询块断言                                |
+| CSS 合成降级契约       | `ui/styles/game.css`                                               | rolling 顶栏关闭 blur、移除 shadow pulse；移动/slow 对大面积面板关闭 blur/动画；reduced-motion 单独关闭运动且保留静态视觉                                                       | 读取 CSS 文本并限定 phase/媒体查询块断言                         |
 | 编排与异常状态         | `game/controller.ts` + `store.ts`                                  | 仅 rolling 首个结算回调生效；timeout/timing-overload 不读面/提交/播放/推进，error 同轮重掷或重置；history 上限、reset 保留 soundEnabled                                         | mock dice/engine/sound + 直接 store 断言                         |
 | 倾斜确认流程           | `game/controller.ts` + `store.ts`                                  | onSettled 倾斜检测→tilt-confirm、35° 靠壁正常姿态不触发、pending 隔离（不写 history/prizeRecord/round）、acceptTilted 提交完整内容并播放一次、rethrow/reset 不播放 pending 结果 | 构造已知四元数 mock DicePair，settleWithoutThrow 跳过随机投掷    |
-| 音频生命周期           | `audio/sound.ts`                                                   | 静音不创建/恢复 context、碰撞节流/并发、noise buffer 复用、同步异常/Promise rejection 静默降级、dispose/remount 完整复位                                                        | AudioContext mock + 事件/Promise 断言                            |
-| 浏览器流程与 soak      | `e2e/game.spec.ts` + `e2e/soak.spec.ts`                            | 默认 exact、timeout/overload、固定队列逐轮提交、调度守恒、安全、static DPR/零帧、资源不增长；legacy 显式回滚；schema v8/v4 artifact                                             | Playwright 桌面/移动项目 + JSON artifact                         |
+| 音频生命周期           | `audio/sound.ts`                                                   | 合法投掷前 prepare、静音不创建/恢复 context、碰撞节流/并发、noise buffer 复用、异常静默降级、dispose/remount 完整复位                                                           | AudioContext mock + controller 调用顺序 + Promise 断言           |
+| 浏览器流程与 soak      | `e2e/game.spec.ts` + `e2e/soak.spec.ts`                            | 默认 exact/cannon、timeout/overload、固定队列逐轮提交、调度守恒、安全、static DPR/零帧、资源不增长；legacy 显式回滚；schema v9/v4 artifact                                      | Playwright 桌面/移动项目 + JSON artifact                         |
 | 浏览器调度 A/B         | `e2e/physics-scheduler-ab.spec.ts`                                 | 5 seeds 双侧重复；投掷/初态、结果/奖级/路径、安全与重复稳定性硬门禁，终态轨迹分开分类，毫秒 observation-only                                                                    | Playwright 桌面/移动项目 + artifact schema v2                    |
+| 浏览器碰撞 A/B         | `e2e/physics-collision-ab.spec.ts`                                 | 5 seeds、ABBA/BAAB；完整初末物理真值/结果/安全/渲染硬门禁，impact narrowphase p50/p95 与 repeat noise 按预注册判据                                                              | Playwright 桌面/移动项目 + artifact schema v1                    |
 | 物理烟雾               | 物理层整体                                                         | 真实 cannon-es 世界 + 碗碰撞体 + 6 骰子，固定种子跑若干帧，无 NaN、不掉出桌面、能在预期时间内结算或触发超时                                                                     | 固定种子 + 帧循环                                                |
 
 **随机数可复现**：`utils/random.ts` 默认以时间种子初始化 mulberry32，也支持固定 seed、测试随机源注入和带 salt 的独立子流。投掷 v3 在诊断中同时记录 seed、位置算法和 random-plan 版本，不把单一裸 seed 当作跨版本复现保证。
@@ -498,7 +515,7 @@ interface GameState {
 
 最新默认 200-seed 物理验收使用 acceptance report schema v3、roll diagnostics schema v4：200/200 为 `natural-sleep`，timeout、NaN、越墙、guard、assist、fallback 与 floor-relaunch event 均为 0。floor-relaunch tracker v1 全部 available；1200 颗骰子中 1190 颗观察到真实初始 contact、1158 颗 armed，secondary episode 54 个、floor-only 2 个；最大 floor-only clearance / ordered rise 为 2.761mm / 0，最大 pre-external clearance / ordered rise 为 7.795mm / 0。coverage 和这些最大值只记录、不设比例或单项阈值门禁；事件仍要求 clearance 与 ordered rise 同时严格超过 5mm。seed 25042 锁定为 exact step 460 / 7.6667s 自然停稳、骰面 `2,1,2,1,4,5`，canonical final-state hash 为 `ca710327c6d45df3`。该结果是当前固定逻辑样本的回退基线，不等同于真实浏览器连续投掷的目视验收。
 
-最新 clean cadence comparison v1 证据对应 commit `e20d359fa18d0954394b23570da8315839e9448f`，artifact 为 `artifacts/cadence/head-e20d359-200-seeds.json`。它完成 780/780 headless runs、560/560 normal comparisons 与 20/20 overload checks，failure=0；repository start/end clean unchanged。该矩阵的 20 watch seeds 包含 25042，并完整覆盖 5 cadence × 2 cap；180 batch seeds 按每 cadence 36 个均衡分配，并对每个 seed 比较 cap6/cap4。它门禁生产 exact 算法的 cadence 真值，但不包含真实 OS/tab visibility 或真实 GPU。
+最新 clean cadence comparison v1 证据对应 commit `e20d359fa18d0954394b23570da8315839e9448f`，artifact 为 `artifacts/cadence/head-e20d359-200-seeds.json`。它完成 780/780 headless runs、560/560 normal comparisons 与 20/20 overload checks，failure=0；repository start/end clean unchanged。该矩阵的 20 watch seeds 包含 25042，并完整覆盖 5 cadence × 2 cap；180 batch seeds 按每 cadence 36 个均衡分配，并对每个 seed 比较 cap6/cap4。它门禁生产 exact 算法的 cadence 真值，本身不包含真实 OS/tab visibility 或真实 GPU；相关用户人工确认另行记录，不能反向提升这份 artifact 的证据等级。
 
 默认 `historical → current` A/B 共 200 个 seed，其中 19 个历史问题 seed 单列为 watch、181 个普通 seed 用于 batch 回退预算。当前实现通过门禁：batch 的 fallback 从 56.35% 降为 0，assist 从 34 轮降为 0，最大接触穿透从 0.083572 降为 0.066890；逻辑结算 p95 减少 0.1167s、p99 增加 0.25s，均在预先设定的回退预算内。watch seed 只承担真实性与安全回归，不混入这些分布预算。
 
@@ -512,6 +529,9 @@ interface GameState {
 | `pnpm bench:browser`                      | 三阶段结构、质量/profile 字段与 substeps 灾难性回退门禁；毫秒只记录                |
 | `pnpm bench:browser:render-ab`            | 5 seeds × ABBA/BAAB 的 baseline/candidate 配对实验，行为与安全硬门禁、性能只作观测 |
 | `pnpm bench:browser:physics-scheduler-ab` | legacy/exact 配对调度 A/B；行为/安全硬门禁，轨迹分类与毫秒仅观测                   |
+| `pnpm bench:browser:collision-ab`         | cannon/projected-AABB 配对 A/B；完整真值硬门禁，impact 窄相按预注册判据评估        |
+
+用户于 2026-08-14 明确确认了此前列出的五个人工项：真实 OS/tab 隐藏恢复、当前真实设备画面、连续 20 轮无碗底异常弹跳、移动端视觉回归以及高频碰撞听感。它们只记录为用户报告的操作/主观验收，不等价于受控的真实 GPU 基准。本轮 UI/CSS 和程序化材质已由 schema v9 `bench:browser` 保存并人工复核桌面/移动 settled 截图；不同浏览器与更多记录 GPU/驱动的真实设备仍需单独留证。
 
 ### 独立 sweep 脚本
 

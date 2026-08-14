@@ -1,12 +1,16 @@
 import * as CANNON from 'cannon-es'
 import { PHYSICS } from '@/config/physics'
+import { HeightfieldProjectedAabbNarrowphase } from './heightfield-projected-aabb-narrowphase'
 
 export type SolverMode = 'gs' | 'split'
+export type HeightfieldNarrowphaseMode = 'cannon-default' | 'projected-aabb-v1'
 
 export interface PhysicsWorldOptions {
   solverMode?: SolverMode
   solverIterations?: number
   solverTolerance?: number
+  /** 命名实验开关；生产默认仍使用 cannon-default。 */
+  heightfieldNarrowphaseMode?: HeightfieldNarrowphaseMode
 }
 
 export interface PhysicsWorld {
@@ -26,7 +30,11 @@ export function createPhysicsWorld(options?: PhysicsWorldOptions): PhysicsWorld 
   const solverMode = options?.solverMode ?? 'gs'
   const solverIterations = options?.solverIterations ?? PHYSICS.solverIterations
   const solverTolerance = options?.solverTolerance ?? PHYSICS.solverTolerance
+  const heightfieldNarrowphaseMode = options?.heightfieldNarrowphaseMode ?? 'cannon-default'
   const world = new CANNON.World()
+  if (heightfieldNarrowphaseMode === 'projected-aabb-v1') {
+    world.narrowphase = new HeightfieldProjectedAabbNarrowphase(world)
+  }
   world.gravity.set(0, PHYSICS.gravity, 0)
   world.broadphase = new CANNON.SAPBroadphase(world)
   world.allowSleep = true

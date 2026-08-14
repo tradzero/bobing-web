@@ -10,45 +10,46 @@ function createWoodTexture(): THREE.CanvasTexture | null {
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
-  const baseGradient = ctx.createRadialGradient(256, 208, 48, 256, 256, 292)
-  baseGradient.addColorStop(0, '#a57149')
-  baseGradient.addColorStop(0.55, '#8b5a38')
-  baseGradient.addColorStop(1, '#6d4327')
+  const baseGradient = ctx.createLinearGradient(0, 0, 512, 512)
+  baseGradient.addColorStop(0, '#7b4a3a')
+  baseGradient.addColorStop(0.52, '#63372b')
+  baseGradient.addColorStop(1, '#48271f')
   ctx.fillStyle = baseGradient
   ctx.fillRect(0, 0, 512, 512)
 
-  // 程序化同心木纹：先建立大的环向层次，让俯视桌面不再是纯色圆盘。
-  for (let i = 0; i < 16; i++) {
-    const radius = 86 + i * 16
+  // 只保留少量极淡的年轮提示，避免俯视时形成抢眼的靶环。
+  for (let i = 0; i < 5; i++) {
+    const radius = 118 + i * 42
     ctx.beginPath()
     ctx.ellipse(
-      256 + Math.sin(i * 0.9) * 3,
-      256 + Math.cos(i * 0.7) * 5,
+      256 + Math.sin(i * 0.9) * 5,
+      256 + Math.cos(i * 0.7) * 7,
       radius,
-      radius * 0.82,
-      Math.PI / 10,
+      radius * 0.78,
+      Math.PI / 9,
       0,
       Math.PI * 2,
     )
-    ctx.strokeStyle = i % 2 === 0 ? 'rgba(69, 36, 19, 0.16)' : 'rgba(241, 205, 139, 0.06)'
-    ctx.lineWidth = i % 3 === 0 ? 3 : 2
+    ctx.strokeStyle = i % 2 === 0 ? 'rgba(39, 19, 15, 0.055)' : 'rgba(230, 180, 137, 0.028)'
+    ctx.lineWidth = 1
     ctx.stroke()
   }
 
-  // 再叠加少量长向木纹，避免环纹过于机械。
-  for (let i = 0; i < 22; i++) {
-    const y = 44 + i * 20 + ((i % 3) - 1) * 6
+  // 细密长向木纹成为主层次；振幅和明暗略有变化，但不产生额外纹理或几何。
+  for (let i = 0; i < 46; i++) {
+    const y = 8 + i * 11 + ((i % 5) - 2) * 1.4
+    const wave = Math.sin(i * 1.73) * 7
     ctx.beginPath()
-    ctx.moveTo(24, y)
-    ctx.bezierCurveTo(156, y - 18, 356, y + 20, 488, y - 10)
-    ctx.strokeStyle = i % 2 === 0 ? 'rgba(255, 234, 194, 0.045)' : 'rgba(68, 37, 21, 0.085)'
-    ctx.lineWidth = 1.5
+    ctx.moveTo(-20, y)
+    ctx.bezierCurveTo(132, y - 5 + wave, 352, y + 6 - wave, 532, y + wave * 0.35)
+    ctx.strokeStyle = i % 3 === 0 ? 'rgba(238, 194, 158, 0.035)' : 'rgba(37, 18, 15, 0.075)'
+    ctx.lineWidth = i % 9 === 0 ? 1.35 : 0.75
     ctx.stroke()
   }
 
-  const vignette = ctx.createRadialGradient(256, 256, 150, 256, 256, 256)
-  vignette.addColorStop(0, 'rgba(255, 245, 220, 0)')
-  vignette.addColorStop(1, 'rgba(32, 17, 11, 0.18)')
+  const vignette = ctx.createRadialGradient(256, 230, 120, 256, 256, 300)
+  vignette.addColorStop(0, 'rgba(255, 235, 215, 0.025)')
+  vignette.addColorStop(1, 'rgba(28, 13, 11, 0.24)')
   ctx.fillStyle = vignette
   ctx.fillRect(0, 0, 512, 512)
 
@@ -69,11 +70,11 @@ export function createTable(): THREE.Group {
 
   const group = new THREE.Group()
 
-  // 桌面主体：浅木色
+  // 桌面主体：偏暗红棕的木色，让瓷白海碗成为画面主焦点。
   const topGeo = new THREE.CylinderGeometry(radius, radius, topHeight, 64)
   const topMat = new THREE.MeshStandardMaterial({
-    color: 0x8b5e3c,
-    map: woodTexture ?? undefined,
+    color: 0x8b5a47,
+    ...(woodTexture ? { map: woodTexture } : {}),
     roughness: 0.82,
     metalness: 0.05,
   })
@@ -84,11 +85,11 @@ export function createTable(): THREE.Group {
 
   // 桌面嵌饰：用两道程序化纹样圈出博饼区域，让桌面中心更像设计稿里的仪式感桌面。
   const centerInlayMat = new THREE.MeshStandardMaterial({
-    color: 0xa8733b,
+    color: 0x8f5a3d,
     transparent: true,
-    opacity: 0.6,
-    roughness: 0.55,
-    metalness: 0.08,
+    opacity: 0.28,
+    roughness: 0.72,
+    metalness: 0.04,
   })
   const centerInlay = new THREE.Mesh(new THREE.RingGeometry(1.44, 1.62, 96), centerInlayMat)
   centerInlay.rotation.x = -Math.PI / 2
@@ -97,11 +98,11 @@ export function createTable(): THREE.Group {
   group.add(centerInlay)
 
   const outerInlayMat = new THREE.MeshStandardMaterial({
-    color: 0x5c341d,
+    color: 0x42241d,
     transparent: true,
-    opacity: 0.38,
-    roughness: 0.7,
-    metalness: 0.04,
+    opacity: 0.2,
+    roughness: 0.78,
+    metalness: 0.02,
   })
   const outerInlay = new THREE.Mesh(new THREE.RingGeometry(3.18, 3.34, 128), outerInlayMat)
   outerInlay.rotation.x = -Math.PI / 2
@@ -112,7 +113,7 @@ export function createTable(): THREE.Group {
   // 侧壁裙边：深色木质，紧贴桌面下方，略微内收
   const skirtGeo = new THREE.CylinderGeometry(radius - 0.03, radius - 0.06, skirtHeight, 64)
   const skirtMat = new THREE.MeshStandardMaterial({
-    color: 0x4f2d18,
+    color: 0x3f241e,
     roughness: 0.85,
     metalness: 0.03,
   })
@@ -122,9 +123,9 @@ export function createTable(): THREE.Group {
   group.add(skirtMesh)
 
   const lipMat = new THREE.MeshStandardMaterial({
-    color: 0x6b4124,
-    roughness: 0.62,
-    metalness: 0.07,
+    color: 0x593326,
+    roughness: 0.75,
+    metalness: 0.04,
   })
   const lipMesh = new THREE.Mesh(new THREE.TorusGeometry(radius - 0.1, 0.06, 14, 96), lipMat)
   lipMesh.rotation.x = Math.PI / 2

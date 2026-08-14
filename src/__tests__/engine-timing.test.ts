@@ -503,11 +503,76 @@ describe('Engine 按需调度', () => {
     expect(run(true)).toEqual(run(false))
   })
 
+  it('exact profile v2 逐步记录接触/awake，并保留 bounded rAF 原始样本', () => {
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.allowSleep = false
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    let profileClock = 0
+    const { engine, world } = createExactFixture({
+      variant: 'exact-cap6',
+      dicePairs,
+      performanceProfile: {
+        now: () => {
+          profileClock += 0.1
+          return profileClock
+        },
+      },
+    })
+
+    engine.start()
+    engine.beginSettle()
+    expect(world.doProfiling).toBe(true)
+    runNextFrame(100)
+
+    const diagnostics = engine.getDiagnostics()
+    const profile = diagnostics.performanceProfile!
+    expect(profile).toMatchObject({
+      version: 2,
+      totalFrameCount: 1,
+      retainedFrameCount: 1,
+      totalExactStepCount: 6,
+      retainedExactStepCount: 6,
+      phaseSegments: null,
+    })
+    expect(profile.rawFrameSamples[0]).toMatchObject({
+      simulationStep: 6,
+      simulationTime: 0.1,
+      executedSteps: 6,
+    })
+    expect(profile.rawFrameSamples[0].queuedMs).toBeCloseTo(0, 9)
+    expect(profile.exactStepSamples.map(({ simulationStep }) => simulationStep)).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ])
+    expect(profile.exactStepSamples.every(({ contactCount }) => contactCount === 0)).toBe(true)
+    expect(profile.exactStepSamples.every(({ awakeDiceCount }) => awakeDiceCount === 1)).toBe(true)
+    for (const step of profile.exactStepSamples) {
+      expect(step.contactEquationCount).toBeGreaterThanOrEqual(0)
+      expect(step.frictionEquationCount).toBeGreaterThanOrEqual(0)
+      expect(Number.isInteger(step.contactEquationCount)).toBe(true)
+      expect(Number.isInteger(step.frictionEquationCount)).toBe(true)
+      for (const value of [
+        step.broadphaseCpuMs,
+        step.narrowphaseCpuMs,
+        step.makeContactConstraintsCpuMs,
+        step.solveCpuMs,
+        step.integrateCpuMs,
+      ]) {
+        expect(Number.isFinite(value)).toBe(true)
+        expect(value).toBeGreaterThanOrEqual(0)
+      }
+    }
+    engine.dispose()
+    expect(world.doProfiling).toBe(false)
+  })
+
   it('未显式启用 profile 时 rolling 不读取 performance.now', () => {
     const now = vi.spyOn(performance, 'now')
+    const world = new CANNON.World()
     const dicePairs = makeDicePairs()
     dicePairs[0].body.velocity.set(1, 0, 0)
-    const { engine } = createFixture({ dicePairs })
+    const { engine } = createFixture({ dicePairs, world })
+
+    expect(world.doProfiling).toBe(false)
 
     engine.start()
     engine.beginSettle()
@@ -515,6 +580,7 @@ describe('Engine 按需调度', () => {
     runNextFrame(1016.67)
 
     expect(now).not.toHaveBeenCalled()
+    expect(world.doProfiling).toBe(false)
   })
 
   it('profile 记录真实 stepnumber delta，并明确 post-render 快照排除当前 publish 帧', () => {

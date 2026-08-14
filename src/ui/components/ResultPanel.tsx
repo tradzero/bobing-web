@@ -16,15 +16,8 @@ export function ResultPanel() {
 
   return (
     <div className={`result-panel ${isNone ? 'result-panel-none' : 'result-panel-win'}`}>
-      <div className="result-panel-decor result-panel-decor-left" aria-hidden="true">
-        ☁
-      </div>
-      <div className="result-panel-decor result-panel-decor-right" aria-hidden="true">
-        ☁
-      </div>
-      <div className="result-panel-rabbit" aria-hidden="true">
-        兔
-      </div>
+      <div className="result-panel-decor result-panel-decor-left" aria-hidden="true" />
+      <div className="result-panel-decor result-panel-decor-right" aria-hidden="true" />
       <div className="result-panel-lantern" aria-hidden="true" />
       <div className="result-kicker">本轮结算</div>
       <div className={`result-prize ${isNone ? 'no-prize' : ''}`}>

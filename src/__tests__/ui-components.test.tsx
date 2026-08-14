@@ -274,8 +274,18 @@ describe('GameOverlay', () => {
   it('初始态显示内容区提示边且不渲染侧栏', () => {
     const { container } = render(<GameOverlay />, { wrapper: Wrapper })
 
+    expect(container.querySelector('.game-overlay.phase-idle')).not.toBeNull()
     expect(screen.getByText('记录区将在此展开')).toBeInTheDocument()
     expect(container.querySelector('.side-panel')).toBeNull()
+  })
+
+  it('phase class 随 rolling 状态更新', () => {
+    const { container } = render(<GameOverlay />, { wrapper: Wrapper })
+
+    act(() => store.getState().setPhase('rolling'))
+
+    expect(container.querySelector('.game-overlay.phase-rolling')).not.toBeNull()
+    expect(container.querySelector('.game-overlay.phase-idle')).toBeNull()
   })
 
   it('首轮结算后隐藏提示边并渲染侧栏', () => {

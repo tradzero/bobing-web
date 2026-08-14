@@ -1,4 +1,4 @@
-import { createPhysicsWorld } from './world'
+import { createPhysicsWorld, type HeightfieldNarrowphaseMode } from './world'
 import { createBowlBodies } from './bowl-body'
 import { setupContactMaterials } from './materials'
 import { createDiceBody } from '@/dice/dice-body'
@@ -40,6 +40,8 @@ export interface HeadlessRollSimulationOptions {
   contactClusterAssistEnabled?: boolean
   /** 显式隔离只读姿态稳定窗口；未传时由 checkSettled 读取运行时配置。 */
   poseStableWindowEnabled?: boolean
+  /** 命名 Heightfield narrowphase 实验；默认保持 Cannon 原实现。 */
+  heightfieldNarrowphaseMode?: HeightfieldNarrowphaseMode
 }
 
 export interface RollRunOptions extends HeadlessRollSimulationOptions {
@@ -107,10 +109,11 @@ export function createHeadlessRollSimulation(
     throwPlacementAlgorithm,
     contactClusterAssistEnabled,
     poseStableWindowEnabled,
+    heightfieldNarrowphaseMode,
   } = options
 
   reseed(seed)
-  const physics = createPhysicsWorld()
+  const physics = createPhysicsWorld({ heightfieldNarrowphaseMode })
 
   try {
     setupContactMaterials(physics.world)

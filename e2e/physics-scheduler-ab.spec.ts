@@ -1,6 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { ROLLING_CPU_PROFILE_VERSION } from '../src/game/performance-profile'
 import {
   readRepositoryState,
   sameRepositoryState,
@@ -21,7 +22,7 @@ import {
 
 const PHYSICS_SCHEDULER_BROWSER_AB_SCHEMA_VERSION = 2
 const PHYSICS_SCHEDULER_EXPERIMENT_VERSION = 1
-const PROFILE_VERSION = 1
+const PROFILE_VERSION = ROLLING_CPU_PROFILE_VERSION
 const SEEDS = [50_000, 55_000, 60_000, 65_000, 70_000] as const
 const WARMUP_SEED = 42
 const MIN_BEHAVIOR_COMPARABLE_SEEDS = 4

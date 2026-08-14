@@ -70,11 +70,31 @@ describe('GameController 编排层集成测试', () => {
   })
 
   it('rolling 中二次点击 throw() 被拒绝', () => {
+    const prepare = vi.spyOn(soundManager, 'prepare')
     controller.throw()
     expect(store.getState().phase).toBe('rolling')
 
     controller.throw() // 应被拒绝
     expect(engine.beginSettle).toHaveBeenCalledTimes(1) // 只调用了一次
+    expect(prepare).toHaveBeenCalledTimes(1)
+  })
+
+  it('合法投掷在 throwDice 与 beginSettle 前同步预热音频', () => {
+    const firstBody = dicePairs[0].body
+    const initialPosition = firstBody.position.clone()
+    const order: string[] = []
+    const prepare = vi.spyOn(soundManager, 'prepare').mockImplementation(() => {
+      order.push('prepare')
+      // throwDice 尚未执行：位置仍是 controller 构造时的初始值。
+      expect(firstBody.position.almostEquals(initialPosition)).toBe(true)
+    })
+    engine.beginSettle = vi.fn(() => order.push('beginSettle'))
+
+    controller.throw()
+
+    expect(order).toEqual(['prepare', 'beginSettle'])
+    expect(prepare).toHaveBeenCalledOnce()
+    expect(firstBody.position.almostEquals(initialPosition)).toBe(false)
   })
 
   it('result 阶段直接再次 throw() 能正常进入 rolling', () => {
@@ -268,6 +288,7 @@ describe('GameController 编排层集成测试', () => {
   })
 
   it('error 可在同一轮重新掷骰，且普通 throw 不能绕过专用恢复路径', () => {
+    const prepare = vi.spyOn(soundManager, 'prepare')
     controller.throw()
     controller.onSettled({ reason: 'timeout', elapsed: 10 })
     const roundBefore = store.getState().round
@@ -275,6 +296,7 @@ describe('GameController 编排层集成测试', () => {
     controller.throw()
     expect(store.getState().phase).toBe('error')
     expect(engine.beginSettle).toHaveBeenCalledTimes(1)
+    expect(prepare).toHaveBeenCalledTimes(1)
 
     controller.rethrow()
     expect(store.getState()).toMatchObject({
@@ -285,6 +307,31 @@ describe('GameController 编排层集成测试', () => {
       currentResult: null,
     })
     expect(engine.beginSettle).toHaveBeenCalledTimes(2)
+    expect(prepare).toHaveBeenCalledTimes(2)
+  })
+
+  it('非恢复态 rethrow 不预热音频也不启动物理', () => {
+    const prepare = vi.spyOn(soundManager, 'prepare')
+
+    controller.rethrow()
+
+    expect(prepare).not.toHaveBeenCalled()
+    expect(engine.beginSettle).not.toHaveBeenCalled()
+    expect(store.getState().phase).toBe('idle')
+  })
+
+  it('未注入 engine 时 rethrow 保留异常态且不预热音频', () => {
+    const prepare = vi.spyOn(soundManager, 'prepare')
+    const controllerWithoutEngine = new GameController({ store, dicePairs })
+    store.getState().setRollError({ reason: 'timeout', elapsed: 10 })
+
+    controllerWithoutEngine.rethrow()
+
+    expect(prepare).not.toHaveBeenCalled()
+    expect(store.getState()).toMatchObject({
+      phase: 'error',
+      rollError: { reason: 'timeout', elapsed: 10 },
+    })
   })
 
   it('timeout 后重置清空异常但保留 soundEnabled', () => {
