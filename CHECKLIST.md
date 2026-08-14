@@ -210,6 +210,7 @@
 - [x] 1I.51 [实现/测试] 合法投掷/重掷在用户手势栈内先调用 `soundManager.prepare()`，在 throw 与首个物理步前预热 AudioContext/noise buffer；静音、非法 phase、重复点击与音频失败均保持原语义或静默降级
 - [x] 1I.52 [浏览器截图] schema v9 `bench:browser` 已保存并人工复核本轮最终桌面/移动 settled 截图；六骰、碗口、结果、按钮、统计与历史可核对，结构预算不增长
 - [ ] 1I.53 [后续] 在记录浏览器/GPU/驱动/电源/DPR 的条件下补不同浏览器与更多真实 GPU 受控对比；当前 SwiftShader 截图不外推为跨设备结论
+- [x] 1I.54 [验收] clean `1060095` 的 schema v9 production-default soak start/end clean unchanged；桌面/移动各 20/20 natural，66.222s/57.235s，最大 queue=97.3ms/59.7667ms，安全/页面错误为 0，资源保持 `1/8/6/10`
 
 ---
 
