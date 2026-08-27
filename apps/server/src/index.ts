@@ -4,12 +4,15 @@ import path from 'node:path'
 import sirv from 'sirv'
 import { WebSocketServer } from 'ws'
 import { loadServerConfig } from './config/env'
+import { loadProjectEnvFile } from './config/load-env'
 import { migrateDatabase } from './db/migrate'
 import { createDatabasePool } from './db/pool'
 import { RoomHub } from './room/hub'
 import { RoomRepository } from './room/repository'
 import { RoomRollService } from './roll/service'
 import { RoomDeadlineScheduler } from './scheduler/deadlines'
+
+loadProjectEnvFile()
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
   response.statusCode = status

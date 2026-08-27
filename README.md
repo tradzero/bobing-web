@@ -6,7 +6,7 @@
 
 ## 运行要求
 
-- Node.js
+- Node.js 22+
 - pnpm
 - PostgreSQL
 
@@ -14,11 +14,11 @@
 
 ## 启动
 
-安装依赖并设置数据库连接：
+安装依赖，复制配置样例并按本机环境修改 `DATABASE_URL`：
 
 ```bash
 pnpm install
-export DATABASE_URL=postgresql://dice:change-me@127.0.0.1:5432/dice
+cp .env.example .env
 ```
 
 应用数据库迁移、构建并启动服务：
@@ -31,7 +31,7 @@ pnpm start
 
 默认监听 `0.0.0.0:8787`。本机访问 `http://127.0.0.1:8787`，局域网设备使用服务端机器的 LAN IP 和相同端口访问。
 
-除 `DATABASE_URL` 外的可选配置和默认值见 [.env.example](./.env.example)。运行时以进程环境变量为准。
+`pnpm start`、`pnpm dev:server` 和 `pnpm db:migrate` 会读取仓库根目录的 `.env`。可选配置和默认值见 [.env.example](./.env.example)；显式设置的进程环境变量优先于 `.env`。
 
 ## 开发
 

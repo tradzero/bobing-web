@@ -1,6 +1,9 @@
 import { loadServerConfig } from '../config/env'
+import { loadProjectEnvFile } from '../config/load-env'
 import { migrateDatabase } from './migrate'
 import { createDatabasePool } from './pool'
+
+loadProjectEnvFile()
 
 const config = loadServerConfig()
 const pool = createDatabasePool(config)
