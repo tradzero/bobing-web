@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { createScene } from '@/scene/setup'
 import { createTable } from '@/scene/table'
-import { createBowl } from '@/scene/bowl'
+import { createBowl, disposeBowlPatternLoad } from '@/scene/bowl'
 import { createPhysicsWorld } from '@/physics/world'
 import { setupContactMaterials } from '@/physics/materials'
 import { createBowlBodies } from '@/physics/bowl-body'
@@ -204,8 +204,12 @@ export function GameViewport({ children }: GameViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [controller, setController] = useState<GameController | null>(null)
   const [store, setStore] = useState<ReturnType<typeof createGameStore> | null>(null)
+  const [sceneReady, setSceneReady] = useState(false)
 
   useEffect(() => {
+    let active = true
+    let revealFrameId: number | null = null
+    setSceneReady(false)
     const container = containerRef.current
     if (!container) return
 
@@ -236,7 +240,16 @@ export function GameViewport({ children }: GameViewportProps) {
     })
     const table = createTable()
     sceneCtx.scene.add(table)
-    const bowl = createBowl()
+    const bowlTextureLoad = {
+      settled: false,
+      reveal: undefined as (() => void) | undefined,
+    }
+    const bowl = createBowl({
+      onPatternReady: () => {
+        bowlTextureLoad.settled = true
+        bowlTextureLoad.reveal?.()
+      },
+    })
     sceneCtx.scene.add(bowl)
 
     // 初始化物理
@@ -340,6 +353,15 @@ export function GameViewport({ children }: GameViewportProps) {
     // 注入 engine（解决循环依赖）
     ctrl.setEngine(engine)
     sceneCtx.setRenderInvalidationCallback?.(engine.invalidate)
+    bowlTextureLoad.reveal = () => {
+      if (!active || revealFrameId !== null) return
+      ;(engine.invalidateVisual ?? engine.invalidate)()
+      // Engine 的 rAF 先上传当前材质纹理；随后才移除遮罩，避免露出空白帧。
+      revealFrameId = requestAnimationFrame(() => {
+        revealFrameId = null
+        if (active) setSceneReady(true)
+      })
+    }
 
     const handleVisibilityChange = () => {
       engine.setPageVisibility?.(document.hidden, performance.now())
@@ -347,7 +369,7 @@ export function GameViewport({ children }: GameViewportProps) {
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     engine.start()
-    let active = true
+    if (bowlTextureLoad.settled) bowlTextureLoad.reveal()
     queueMicrotask(() => {
       if (!active) return
       setStore(gameStore)
@@ -356,6 +378,7 @@ export function GameViewport({ children }: GameViewportProps) {
 
     return () => {
       active = false
+      if (revealFrameId !== null) cancelAnimationFrame(revealFrameId)
       sceneCtx.clearRenderInvalidationCallback?.()
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       delete canvas.dataset.diceDiagnostics
@@ -363,6 +386,7 @@ export function GameViewport({ children }: GameViewportProps) {
       // DiceSet 独占其 instance buffer 和共享骰子资源；先移出 scene，避免通用遍历重复 dispose。
       sceneCtx.scene.remove(diceSet.object3d)
       diceSet.dispose()
+      disposeBowlPatternLoad(bowl)
       disposeSceneResources(sceneCtx.scene)
       sceneCtx.dispose()
       physics.dispose()
@@ -373,9 +397,20 @@ export function GameViewport({ children }: GameViewportProps) {
   return (
     <GameStoreContext.Provider value={store}>
       <GameControllerContext.Provider value={controller}>
-        <div ref={containerRef} className="game-viewport">
+        <div
+          ref={containerRef}
+          className={`game-viewport ${sceneReady ? 'is-scene-ready' : 'is-scene-loading'}`}
+          aria-busy={!sceneReady}
+        >
           <div className="canvas-host" />
-          {controller && children}
+          {!sceneReady && (
+            <div className="scene-loading" role="status" aria-live="polite">
+              <div className="scene-loading-mark" aria-hidden="true" />
+              <div className="scene-loading-title">中秋博饼</div>
+              <div className="scene-loading-copy">正在加载海碗纹样</div>
+            </div>
+          )}
+          {sceneReady && controller && children}
         </div>
       </GameControllerContext.Provider>
     </GameStoreContext.Provider>

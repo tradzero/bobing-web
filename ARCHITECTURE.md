@@ -56,7 +56,7 @@ src/
 ├── scene/
 │   ├── setup.ts                # Three.js 场景、renderer、灯光、摄像机预设、resize 质量与失效通知（无 PMREM、无 rAF 循环）
 │   ├── table.ts                # 圆桌占位模型 + 程序化木纹/圈层；后续可叠桌布
-│   ├── bowl.ts                 # 海碗可视模型 + 程序化青花纹样占位
+│   ├── bowl.ts                 # 海碗可视模型 + 单张青花贴图及程序化回退
 │   └── decorations.ts          # 旧桌面装饰实验文件，当前未接入 GameViewport 运行时
 │
 ├── physics/
@@ -171,7 +171,7 @@ sweep/                          # 独立长时间运行脚本（按需手动执�
 ## 当前视觉占位策略
 
 - 运行时场景当前只接入桌面、海碗和 6 颗骰子；`scene/decorations.ts` 保留为旧实验文件，不在 `GameViewport` 中挂载。
-- 海碗外壁当前仍只使用一张 `2048×512 CanvasTexture`，第一轮美术收口把抢眼的大团花改为可无缝循环的低矮云头纹与细折枝带，并提高瓷釉粗糙度、降低 clearcoat 硬热点；正式纹样素材的尺寸、比例、无缝与格式规范记录在 `UI-CHECKLIST.md`。
+- 海碗外壁当前使用 `src/assets/bowl-blue-white-seamless-v2.webp` 单张青花贴图；纹样先重排半幅并镜像拼接，使 LatheGeometry 的左右 UV 边界在颜色与切线方向上连续，同时把残余 WebP 压缩差旋转到固定相机背面的 `-Z` 后壁，避免落在左右可见内壁。wall material 从初始化起持有待上传的 WebP texture；解码并完成一次静态渲染前由不透明加载页遮住场景和交互，失败或 8 秒超时才把唯一 map 换成原 `2048×512 CanvasTexture` fallback。该流程仍保持 2 mesh / 2 material / 1 活动 texture，不会因异步替图新增 shader program，并沿用已收口的瓷釉 roughness / clearcoat 参数。
 - 桌面仍只使用一张 `512×512 CanvasTexture`，当前以更细密的长向木纹、少量淡年轮和更低透明度的既有嵌饰圈压低“靶环感”。该轮改动不增加 mesh、material 或 texture；后续美术方向优先在现有桌体上叠加桌布，而不是继续扩展桌腿、桌裙板或独立摆件。
 - 场景使用纯色背景、方向光、环境光和半球光，不生成 PMREM。旧路径在 `createScene()` 阶段生成环境贴图时，桌面、海碗和骰子尚未加入 scene，得到的环境信息有限；同时只保留 target texture 会丢失 render target 的所有权，无法由场景上下文可靠释放，因此已删除该路径并保持 `scene.environment = null`。
 - 这类视觉占位的目标是先稳定构图与层次，不改变物理世界、碰撞体和游戏状态流；资源测试当前锁定海碗 `2 mesh / 2 material / 1 texture`、桌面 `5 mesh / 5 material / 1 texture`。

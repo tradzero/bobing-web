@@ -82,7 +82,11 @@ vi.mock('@/scene/table', () => ({
 }))
 
 vi.mock('@/scene/bowl', () => ({
-  createBowl: () => ({}),
+  createBowl: (options?: { onPatternReady?: () => void }) => {
+    queueMicrotask(() => options?.onPatternReady?.())
+    return {}
+  },
+  disposeBowlPatternLoad: vi.fn(),
 }))
 
 vi.mock('@/physics/world', () => ({

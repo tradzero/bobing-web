@@ -51,6 +51,30 @@ function expectSettledExactTiming(diagnostics: DiceRuntimeDiagnostics): void {
   expect(timing.overload.active).toBe(false)
 }
 
+test('海碗纹样完成前显示加载页，完成后才开放游戏画面', async ({ page }) => {
+  const issues = collectBrowserIssues(page)
+  let releaseAsset!: () => void
+  const assetGate = new Promise<void>((resolve) => {
+    releaseAsset = resolve
+  })
+  await page.route('**/bowl-blue-white-seamless-v2-*.webp', async (route) => {
+    await assetGate
+    await route.continue()
+  })
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('status')).toContainText('正在加载海碗纹样')
+  await expect(page.getByRole('button', { name: '掷骰' })).toHaveCount(0)
+
+  releaseAsset()
+  await expect(page.getByRole('status')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '掷骰' })).toBeVisible()
+  const idle = await waitForPostRender(page, { mode: 'idle', frameScheduled: false })
+  expect(idle.render.textures).toBeLessThanOrEqual(BROWSER_BUDGETS.maxTextures)
+  expect(issues.pageErrors, 'uncaught page errors').toEqual([])
+  expect(issues.consoleErrors, 'browser console errors').toEqual([])
+})
+
 test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, testInfo) => {
   const issues = collectBrowserIssues(page)
   await page.goto(`/?nextSeed=${E2E_NEXT_SEED}`)

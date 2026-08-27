@@ -5,12 +5,20 @@ import {
   BOWL_INNER_RADIUS,
   sampleBowlInnerProfile,
 } from '@/config/bowl'
+import bowlPatternUrl from '@/assets/bowl-blue-white-seamless-v2.webp'
 
 /** 视觉碗内壁采样段数（48 段保证俯视近景曲线光滑） */
 const SEGMENTS = 48
 
 /** 碗口圆角翻边采样点数 */
 const RIM_ARC_STEPS = 4
+
+export interface CreateBowlOptions {
+  /** 贴图成功写入或确认使用回退后通知场景可以首屏展示。 */
+  onPatternReady?: () => void
+}
+
+const pendingPatternLoadDisposers = new WeakMap<THREE.Group, () => void>()
 
 function createBowlPatternTexture(): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null
@@ -98,6 +106,74 @@ function createBowlPatternTexture(): THREE.CanvasTexture | null {
   return texture
 }
 
+function configureBowlPattern(texture: THREE.Texture): THREE.Texture {
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.flipY = false
+  texture.wrapS = THREE.RepeatWrapping
+  texture.minFilter = THREE.LinearMipmapLinearFilter
+  texture.magFilter = THREE.LinearFilter
+  return texture
+}
+
+function loadBowlPatternImage(
+  material: THREE.MeshPhysicalMaterial,
+  texture: THREE.Texture,
+  onPatternReady?: () => void,
+): () => void {
+  if (typeof document === 'undefined') return () => undefined
+
+  let disposed = false
+  let settled = false
+  const settle = () => {
+    if (settled || disposed) return
+    settled = true
+    window.clearTimeout(timeoutId)
+    onPatternReady?.()
+  }
+
+  const settleWithFallback = () => {
+    if (settled || disposed) return
+    const fallback = createBowlPatternTexture()
+    if (fallback) {
+      material.map = configureBowlPattern(fallback)
+      material.needsUpdate = true
+      texture.dispose()
+    }
+    settle()
+  }
+
+  const timeoutId = window.setTimeout(settleWithFallback, 8_000)
+
+  new THREE.ImageLoader().load(
+    bowlPatternUrl,
+    (image) => {
+      if (disposed || settled) return
+
+      const width = image.naturalWidth || image.width
+      const height = image.naturalHeight || image.height
+      if (width <= 0 || height <= 0) {
+        settleWithFallback()
+        return
+      }
+
+      // 直接把解码后的 HTMLImageElement 交给 Three 上传，避免在已上传的
+      // CanvasTexture 上改尺寸/重画后，不同 WebGL 实现仍沿用旧像素。
+      texture.image = image
+      texture.needsUpdate = true
+      settle()
+    },
+    undefined,
+    () => {
+      settleWithFallback()
+    },
+  )
+
+  return () => {
+    disposed = true
+    window.clearTimeout(timeoutId)
+  }
+}
+
 /**
  * 生成碗截面完整轮廓点列（外壁 → 碗口圆角翻边 → 内壁）
  * createBowl 直接消费此数组构建 LatheGeometry，T7 也引用同一函数校验
@@ -147,16 +223,16 @@ export function generateBowlProfile(): THREE.Vector2[] {
  * LatheGeometry 旋转体生成碗壁 + 独立 CircleGeometry 底盖
  * 避免 Lathe 极点法线奇异导致的星芒伪影
  */
-export function createBowl(): THREE.Group {
+export function createBowl(options: CreateBowlOptions = {}): THREE.Group {
   const points = generateBowlProfile()
-  const bowlPattern = createBowlPatternTexture()
+  const pattern = configureBowlPattern(new THREE.Texture())
 
   // 128 圆周分段消除俯视棱线和摩尔纹，碗仅一个，性能可忽略
   const geometry = new THREE.LatheGeometry(points, 128)
   // 骨瓷仍保留柔和釉感，但避免低粗糙度和满 clearcoat 形成硬白热点。
   const wallMaterial = new THREE.MeshPhysicalMaterial({
     color: 0xf7f3ee,
-    ...(bowlPattern ? { map: bowlPattern } : {}),
+    map: pattern,
     roughness: 0.28,
     metalness: 0.02,
     envMapIntensity: 0.8,
@@ -164,7 +240,15 @@ export function createBowl(): THREE.Group {
     clearcoatRoughness: 0.16,
     side: THREE.DoubleSide,
   })
+  const disposePendingPatternLoad = loadBowlPatternImage(
+    wallMaterial,
+    pattern,
+    options.onPatternReady,
+  )
   const mesh = new THREE.Mesh(geometry, wallMaterial)
+  // LatheGeometry 的 UV 接缝初始位于 +Z；固定相机也从 +Z 看向碗心。
+  // 总旋转 180° 把残余压缩差放到 -Z 后壁，由远侧碗沿遮住，而不是落在左右可见内壁。
+  mesh.rotation.y = Math.PI
   mesh.castShadow = true
   mesh.receiveShadow = true
 
@@ -192,5 +276,12 @@ export function createBowl(): THREE.Group {
   const group = new THREE.Group()
   group.add(mesh)
   group.add(cap)
+  pendingPatternLoadDisposers.set(group, disposePendingPatternLoad)
   return group
+}
+
+/** 在场景材质统一释放前取消尚未结束的异步贴图所有权。 */
+export function disposeBowlPatternLoad(bowl: THREE.Group): void {
+  pendingPatternLoadDisposers.get(bowl)?.()
+  pendingPatternLoadDisposers.delete(bowl)
 }

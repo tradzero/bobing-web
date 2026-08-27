@@ -134,6 +134,8 @@ export interface Engine {
   returnToIdle: () => void
   /** 非 rolling 阶段请求一次合并渲染；rolling 已有连续帧，无需额外调度。 */
   invalidate: () => void
+  /** 仅表面颜色等不影响投影的资源变化；合并渲染但不重复刷新阴影。 */
+  invalidateVisual?: () => void
   /** 获取不修改引擎状态的轻量诊断快照。 */
   getDiagnostics: () => EngineDiagnostics
   /** 页面生命周期由调用方显式注入，避免 hidden 墙钟污染物理 backlog。 */
@@ -182,6 +184,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
   let mode: EngineMode = 'stopped'
   let rafId: number | null = null
+  let scheduledStaticShadowUpdate = false
   let settleState: SettleState | null = null
   let previousRollingTimestamp: number | null = null
   let rollingElapsed = 0
@@ -270,9 +273,9 @@ export function createEngine(opts: EngineOptions): Engine {
     sampleRollBodyDiagnostics(rollFrameDiagnostics, bodies)
   }
 
-  function renderStaticFrame(): void {
+  function renderStaticFrame(updateShadows = true): void {
     sceneCtx.setRenderPhase?.('static')
-    prepareStaticShadows()
+    if (updateShadows) prepareStaticShadows()
     syncRawBodies()
     renderer.render(scene, camera)
     renderCount++
@@ -286,8 +289,10 @@ export function createEngine(opts: EngineOptions): Engine {
     renderCount++
   }
 
-  function scheduleFrame(): void {
-    if (disposed || suspended || rafId !== null || mode === 'stopped') return
+  function scheduleFrame(updateStaticShadows = true): void {
+    if (disposed || suspended || mode === 'stopped') return
+    if (mode !== 'rolling') scheduledStaticShadowUpdate ||= updateStaticShadows
+    if (rafId !== null) return
     rafId = requestAnimationFrame(tick)
   }
 
@@ -569,7 +574,9 @@ export function createEngine(opts: EngineOptions): Engine {
     if (disposed || mode === 'stopped') return
 
     if (mode !== 'rolling') {
-      renderStaticFrame()
+      const updateShadows = scheduledStaticShadowUpdate
+      scheduledStaticShadowUpdate = false
+      renderStaticFrame(updateShadows)
       notifyPostRenderDiagnostics()
       return
     }
@@ -741,6 +748,11 @@ export function createEngine(opts: EngineOptions): Engine {
     scheduleFrame()
   }
 
+  function invalidateVisual(): void {
+    if (disposed || mode === 'stopped' || mode === 'rolling') return
+    scheduleFrame(false)
+  }
+
   function setPageVisibility(hidden: boolean, timestampMs: number): void {
     if (!Number.isFinite(timestampMs)) {
       throw new RangeError(`visibility timestamp 必须是有限数字，收到 ${timestampMs}`)
@@ -889,6 +901,7 @@ export function createEngine(opts: EngineOptions): Engine {
     beginSettle,
     returnToIdle,
     invalidate,
+    invalidateVisual,
     getDiagnostics,
     setPageVisibility,
   }

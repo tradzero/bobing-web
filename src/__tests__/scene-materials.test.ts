@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
-import { createBowl } from '@/scene/bowl'
+import { createBowl, disposeBowlPatternLoad } from '@/scene/bowl'
 import { createTable } from '@/scene/table'
 
 function createCanvasContextStub(): CanvasRenderingContext2D {
@@ -10,6 +10,7 @@ function createCanvasContextStub(): CanvasRenderingContext2D {
     bezierCurveTo: vi.fn(),
     createLinearGradient: vi.fn(() => gradient),
     createRadialGradient: vi.fn(() => gradient),
+    drawImage: vi.fn(),
     ellipse: vi.fn(),
     fillRect: vi.fn(),
     lineTo: vi.fn(),
@@ -44,6 +45,7 @@ function collectResources(root: THREE.Object3D): {
 }
 
 function disposeResources(root: THREE.Object3D): void {
+  if (root instanceof THREE.Group) disposeBowlPatternLoad(root)
   const { meshes, materials, textures } = collectResources(root)
   for (const texture of textures) texture.dispose()
   for (const material of materials) material.dispose()
@@ -61,7 +63,7 @@ describe('场景美术资源预算', () => {
     vi.restoreAllMocks()
   })
 
-  it('海碗保持两个 mesh、两个材质和单张程序化纹理', () => {
+  it('海碗保持两个 mesh、两个材质和单张青花纹理', () => {
     const bowl = createBowl()
     const { meshes, materials, textures } = collectResources(bowl)
     const [wall, cap] = meshes
@@ -73,6 +75,9 @@ describe('场景美术资源预算', () => {
     expect(textures.size).toBe(1)
     expect(wallMaterial.map).toBe([...textures][0])
     expect(capMaterial.map).toBeNull()
+    expect(wallMaterial.map?.colorSpace).toBe(THREE.SRGBColorSpace)
+    expect(wallMaterial.map?.wrapS).toBe(THREE.RepeatWrapping)
+    expect(wall.rotation.y).toBeCloseTo(Math.PI)
 
     expect(wallMaterial.roughness).toBeGreaterThanOrEqual(0.24)
     expect(wallMaterial.roughness).toBeLessThanOrEqual(0.34)
@@ -83,6 +88,59 @@ describe('场景美术资源预算', () => {
     expect(capMaterial.clearcoat).toBeGreaterThanOrEqual(0.5)
     expect(capMaterial.clearcoat).toBeLessThanOrEqual(0.7)
 
+    disposeResources(bowl)
+  })
+
+  it('首屏持有待上传纹理，资产完成后直接上传解码图片并请求静态补帧', () => {
+    const image = { width: 1774, height: 887 } as HTMLImageElement
+    let finishLoad: ((image: HTMLImageElement) => void) | undefined
+    vi.spyOn(THREE.ImageLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
+      finishLoad = onLoad
+      return image
+    })
+    const onPatternReady = vi.fn()
+
+    const bowl = createBowl({ onPatternReady })
+    const wall = bowl.children[0] as THREE.Mesh
+    const wallMaterial = wall.material as THREE.MeshPhysicalMaterial
+    const pattern = wallMaterial.map
+    const patternVersion = pattern!.version
+
+    expect(pattern).toBeInstanceOf(THREE.Texture)
+    expect(pattern).not.toBeInstanceOf(THREE.CanvasTexture)
+    expect(onPatternReady).not.toHaveBeenCalled()
+
+    finishLoad?.(image)
+
+    expect(wallMaterial.map).toBe(pattern)
+    expect(pattern!.version).toBe(patternVersion + 1)
+    expect(pattern!.image).toBe(image)
+    expect(onPatternReady).toHaveBeenCalledOnce()
+
+    disposeResources(bowl)
+  })
+
+  it('青花资产失败时换成程序化纹样并结束加载门禁', () => {
+    let failLoad: (() => void) | undefined
+    vi.spyOn(THREE.ImageLoader.prototype, 'load').mockImplementation(
+      (_url, _onLoad, _onProgress, onError) => {
+        failLoad = () => onError?.(new Error('asset unavailable'))
+        return {} as HTMLImageElement
+      },
+    )
+    const onPatternReady = vi.fn()
+    const bowl = createBowl({ onPatternReady })
+    const wall = bowl.children[0] as THREE.Mesh
+    const pendingPattern = (wall.material as THREE.MeshPhysicalMaterial).map
+    const disposePendingPattern = vi.spyOn(pendingPattern!, 'dispose')
+
+    failLoad?.()
+
+    const fallback = (wall.material as THREE.MeshPhysicalMaterial).map
+    expect(fallback).toBeInstanceOf(THREE.CanvasTexture)
+    expect(fallback).not.toBe(pendingPattern)
+    expect(disposePendingPattern).toHaveBeenCalledOnce()
+    expect(onPatternReady).toHaveBeenCalledOnce()
     disposeResources(bowl)
   })
 
