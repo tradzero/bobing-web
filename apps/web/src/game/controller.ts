@@ -82,15 +82,18 @@ export class GameController {
     this.nextSeeds = [...(deps.nextSeeds ?? [])]
   }
 
-  private startRoll(): void {
+  private startRoll(authoritativeSeed?: number): void {
     // 保持在点击/重掷的用户手势栈内，并且早于 throwDice 与首个物理步预热碰撞音频。
     soundManager.prepare()
 
     // 队列专用于连续验收；耗尽后才回退到旧的单次注入，再回退到运行时时间种子。
-    let injectedSeed = this.nextSeeds.shift()
+    let injectedSeed = authoritativeSeed
     if (injectedSeed === undefined) {
-      injectedSeed = this.nextSeed
-      this.nextSeed = undefined
+      injectedSeed = this.nextSeeds.shift()
+      if (injectedSeed === undefined) {
+        injectedSeed = this.nextSeed
+        this.nextSeed = undefined
+      }
     }
     const seed = reseed(injectedSeed)
     const placement = throwDice(this.dicePairs, { seed })
@@ -127,6 +130,19 @@ export class GameController {
     this.store.getState().setPhase('rolling')
     this.startRoll()
     this.engine.beginSettle()
+  }
+
+  /** 多人模式只接受服务端公布的 seed；重复的同轮广播不会启动第二次。 */
+  throwAuthoritative(seed: number): boolean {
+    if (!Number.isSafeInteger(seed) || !this.engine) return false
+    const { phase } = this.store.getState()
+    if (phase === 'rolling') return this.rollDiagnostics.seed === seed
+    if (phase === 'tilt-confirm') this.store.getState().clearPending()
+    if (phase === 'error') this.store.getState().clearRollError()
+    this.store.getState().setPhase('rolling')
+    this.startRoll(seed)
+    this.engine.beginSettle()
+    return true
   }
 
   /**

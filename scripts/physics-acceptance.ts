@@ -5,28 +5,34 @@ import {
   runRoll,
   serializeRollResult,
   type RollRunResult,
-} from '../src/physics/roll-runner.ts'
-import { THROW } from '../src/config/throw.ts'
-import { PHYSICS } from '../src/config/physics.ts'
-import { SETTLE } from '../src/config/settle.ts'
+} from '../apps/web/src/physics/roll-runner.ts'
+import { THROW } from '../apps/web/src/config/throw.ts'
+import { PHYSICS } from '../apps/web/src/config/physics.ts'
+import { SETTLE } from '../apps/web/src/config/settle.ts'
 import {
   HF_GRID_SIZE,
   WALL_COUNT,
   WALL_HEIGHT,
   WALL_RADIUS,
   WALL_THICKNESS,
-} from '../src/physics/bowl-body.ts'
-import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '../src/dice/throw.ts'
-import { SETTLE_ALGORITHM_VERSION } from '../src/dice/settle.ts'
-import { ESCAPE_GUARD_VERSION } from '../src/physics/escape-guard.ts'
+} from '../apps/web/src/physics/bowl-body.ts'
+import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '../apps/web/src/dice/throw.ts'
+import { SETTLE_ALGORITHM_VERSION } from '../apps/web/src/dice/settle.ts'
+import { ESCAPE_GUARD_VERSION } from '../apps/web/src/physics/escape-guard.ts'
 import {
   FLOOR_RELAUNCH_CLEARANCE_THRESHOLD,
   FLOOR_RELAUNCH_SUPPORT_CLEARANCE_TOLERANCE,
   FLOOR_RELAUNCH_TRACKER_VERSION,
   FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
-} from '../src/physics/floor-relaunch.ts'
-import { compareRollContinuation, summarizeRollResults } from '../src/physics/roll-comparison.ts'
-import { PHYSICS_VARIANTS, PHYSICS_VARIANT_SCHEMA_VERSION } from '../src/config/physics-variants.ts'
+} from '../apps/web/src/physics/floor-relaunch.ts'
+import {
+  compareRollContinuation,
+  summarizeRollResults,
+} from '../apps/web/src/physics/roll-comparison.ts'
+import {
+  PHYSICS_VARIANTS,
+  PHYSICS_VARIANT_SCHEMA_VERSION,
+} from '../apps/web/src/config/physics-variants.ts'
 
 const PHYSICS_ACCEPTANCE_SCHEMA_VERSION = 3
 

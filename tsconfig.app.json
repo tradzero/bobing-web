@@ -21,8 +21,16 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./apps/web/src/*"],
+      "@dice/game-domain": ["./packages/game-domain/src/index.ts"],
+      "@dice/physics-core": ["./packages/physics-core/src/index.ts"],
+      "@dice/protocol": ["./packages/protocol/src/index.ts"]
     }
   },
-  "include": ["src"]
+  "include": [
+    "apps/web/src",
+    "packages/game-domain/src",
+    "packages/physics-core/src",
+    "packages/protocol/src"
+  ]
 }

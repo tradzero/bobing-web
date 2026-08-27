@@ -4,7 +4,7 @@ import {
   BOWL_HEIGHT,
   BOWL_INNER_RADIUS,
   sampleBowlInnerProfile,
-} from '../src/config/bowl.ts'
+} from '../apps/web/src/config/bowl.ts'
 
 // 复制 generateBowlProfile 逻辑，避免 @/ alias 问题
 function generateBowlProfile(): THREE.Vector2[] {

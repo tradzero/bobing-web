@@ -10,11 +10,15 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-server
 .e2e-dist
 artifacts
 playwright-report
 test-results
 *.local
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*

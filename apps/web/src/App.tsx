@@ -12,6 +12,7 @@ import { TiltWarning } from '@/ui/components/TiltWarning'
 import { RollErrorPanel } from '@/ui/components/RollErrorPanel'
 import { useGameStore } from '@/ui/components/GameStoreContext'
 import { Prize } from '@/rules/types'
+import { MultiplayerApp } from '@/multiplayer/MultiplayerApp'
 
 const DISPLAY_PRIZES = Object.values(Prize).filter((prize) => prize !== Prize.None)
 
@@ -68,6 +69,11 @@ export function GameOverlay() {
 }
 
 function App() {
+  const multiplayerEnabled =
+    import.meta.env.MODE !== 'test' &&
+    import.meta.env.MODE !== 'e2e' &&
+    import.meta.env.VITE_MULTIPLAYER_ENABLED !== 'false'
+  if (multiplayerEnabled) return <MultiplayerApp />
   return (
     <GameViewport>
       <GameOverlay />

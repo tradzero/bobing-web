@@ -1,7 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { ROLLING_CPU_PROFILE_VERSION } from '../src/game/performance-profile'
+import { ROLLING_CPU_PROFILE_VERSION } from '../apps/web/src/game/performance-profile'
 import {
   readRepositoryState,
   sameRepositoryState,

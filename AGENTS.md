@@ -35,6 +35,18 @@
 - 输入边界必须明确：正常判定只接受恰好 6 个、均为 1–6 的有限整数；异常输入不得静默判成奖项。
 - 多规则同时命中时只取最高优先级；所有带数、命中骰子和剩余骰子必须与输入相互一致。
 
+### 多人联机
+
+- 当前产品入口是服务启动时创建的单个默认房间；协议、表结构和 repository 必须继续保留未来多房间、密码房扩展能力，不能把 `default` 写死进领域逻辑。
+- PostgreSQL 是房间、回合、投掷、奖池和状元归属的权威持久层，只能通过环境变量连接；项目不得通过 Docker Compose 启动或接管数据库。
+- 一局实体奖项固定为 63 份：状元 1、对堂 2、三红 4、四进 8、二举 16、一秀 32。普通奖项库存为 0 后仍记录投掷，但不得超发。
+- 服务端使用共享 headless 物理生成 seed 和可提交结果，客户端使用同一 seed 播放可见动画。客户端点数、判奖或本地姿态不得覆盖服务端权威结果。
+- 每个玩家操作、倾斜确认和结束选择都使用 PostgreSQL 保存的绝对截止时间；内存 timer 仅负责唤醒。所有时限通过环境变量配置，重启后必须可继续处理。
+- 状元允许抢占：按状元子级、带数及相应规则比较；同一玩家只保留最后一次状元，即使新结果更小，然后在所有玩家最后一次状元中重算最终持有者。
+- 63 份奖项博完后，只有房主可以选择立即结束或让本局锁定玩家每人再投一次；加投轮不再分配普通实体奖项，但仍可改变状元归属。
+- 本局结束后只有原房主可以按本局锁定阵容再开一局；结束后才加入的成员保持旁观，不得进入下一局或改变座位顺序。
+- 权威物理错误、timeout、重复命令或事务冲突不得扣奖或推进两次。投掷命令需使用 UUID 幂等键，奖项扣减、投掷提交、状元更新和下一回合必须处于同一数据库事务。
+
 ### UI 与视觉方向
 
 - 核心 UI 包括：掷骰按钮、当前轮次、结果/异常面板、累计奖级记录、最近 5 轮历史、重置按钮和音效开关。
@@ -80,7 +92,7 @@
 
 - React 负责 DOM UI overlay；Three.js/物理层保持可独立驱动。若重构这一边界，需要说明收益并保留可测试性。
 - 业务状态写入集中在 controller/等价编排层，store 不应允许互相矛盾的 `diceValues`、`JudgeResult` 和 phase。
-- 物理、投掷、停稳与 UI 参数优先集中在 `src/config/`，避免测试和运行时各复制一套常量或算法。
+- 物理、投掷、停稳与 UI 参数优先集中在 `apps/web/src/config/`，避免测试和运行时各复制一套常量或算法；服务端时限与连接配置集中在 `apps/server/src/config/` 并来自环境变量。
 - 骰子可见材质面与读面法线应共享一个映射真源。
 - 关键逻辑保留必要的中文注释，重点解释读面、规则优先级、碰撞边界、停稳原因和非直观兜底。
 
@@ -201,26 +213,37 @@
 
 ### 已存在：快速与常规门禁
 
-| 层级 | 命令                                                                                | 用途                                             |
-| ---- | ----------------------------------------------------------------------------------- | ------------------------------------------------ |
-| 定向 | `pnpm exec vitest run src/__tests__/judge.test.ts`                                  | 规则改动                                         |
-| 定向 | `pnpm exec vitest run src/__tests__/read-face.test.ts src/__tests__/settle.test.ts` | 读面/停稳改动                                    |
-| 定向 | `pnpm exec vitest run <相关测试文件>`                                               | 任意模块的最小回归；`vitest` 当前已安装          |
-| 全量 | `pnpm test`                                                                         | 当前 Vitest 全量套件                             |
-| 静态 | `pnpm lint`                                                                         | ESLint                                           |
-| 构建 | `pnpm build`                                                                        | TypeScript project build + Vite production build |
+| 层级 | 命令                                                                                                  | 用途                                             |
+| ---- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| 定向 | `pnpm exec vitest run apps/web/src/__tests__/judge.test.ts`                                           | 规则改动                                         |
+| 定向 | `pnpm exec vitest run apps/web/src/__tests__/read-face.test.ts apps/web/src/__tests__/settle.test.ts` | 读面/停稳改动                                    |
+| 定向 | `pnpm exec vitest run <相关测试文件>`                                                                 | 任意模块的最小回归；`vitest` 当前已安装          |
+| 全量 | `pnpm test`                                                                                           | 当前 Vitest 全量套件                             |
+| 静态 | `pnpm lint`                                                                                           | ESLint                                           |
+| 构建 | `pnpm build`                                                                                          | TypeScript project build + Vite production build |
+
+多人/数据库改动还必须按需执行：
+
+| 层级   | 命令                                                                                                                          | 用途                                 |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 领域   | `pnpm exec vitest run packages/game-domain/src/__tests__/game.test.ts packages/game-domain/src/__tests__/multiplayer.test.ts` | 63 份奖池、抢状元、回合与结束语义    |
+| 调度   | `pnpm exec vitest run apps/server/src/scheduler/deadlines.test.ts apps/server/src/roll/authority.test.ts`                     | deadline 唤醒和服务端权威物理        |
+| 数据库 | `TEST_DATABASE_URL=<postgres-url> pnpm exec vitest run apps/server/src/room/repository.integration.test.ts`                   | 真实 PostgreSQL 事务、恢复与回合推进 |
+| 迁移   | `DATABASE_URL=<postgres-url> pnpm db:migrate`                                                                                 | 应用带校验和与 advisory lock 的迁移  |
+
+数据库集成测试只允许连接明确的测试数据库；测试房间必须使用随机 ID 并在 `afterAll` 精确清理。不得为了验收启动 Compose 或删除不属于当前测试的房间。
 
 ### 已存在：物理回归与诊断
 
 ```bash
 pnpm exec vitest run \
-  src/__tests__/physics-smoke.test.ts \
-  src/__tests__/dice-escape.test.ts \
-  src/__tests__/settle-regression.test.ts \
-  src/__tests__/freeze-consistency.test.ts \
-  src/__tests__/contact-cluster-assist.test.ts
+  apps/web/src/__tests__/physics-smoke.test.ts \
+  apps/web/src/__tests__/dice-escape.test.ts \
+  apps/web/src/__tests__/settle-regression.test.ts \
+  apps/web/src/__tests__/freeze-consistency.test.ts \
+  apps/web/src/__tests__/contact-cluster-assist.test.ts
 
-pnpm exec vitest run src/__tests__/reproduce-seed.test.ts --reporter=verbose
+pnpm exec vitest run apps/web/src/__tests__/reproduce-seed.test.ts --reporter=verbose
 pnpm sweep:jitter -- --seeds=1776310976115,1776311021115
 ```
 

@@ -1,11 +1,14 @@
 # 闽南博饼 Web 小游戏
 
-一个使用 Three.js + cannon-es 实现的中秋博饼小游戏。
+一个使用 Three.js + cannon-es 实现、由 PostgreSQL 与 WebSocket 驱动局域网联机的中秋博饼小游戏。
 
 项目当前优先级是先把核心玩法、物理稳定性、结算可靠性和移动端可用性做扎实，再逐步补齐最终视觉素材。
 
 ## 当前状态
 
+- 已完成单服务实例下的默认房间：玩家可通过局域网加入、恢复会话、由房主开局；目录和协议已保留未来多房间/密码房扩展点
+- 已完成 PostgreSQL 权威持久化、WebSocket 房间快照、可配置回合倒计时、服务端 headless 物理投掷与统一 seed 客户端动画
+- 已完成 63 份实体奖项池、个人/全员奖项查看、抢状元、奖池清空后的立即结束/每人加投一轮选择，以及结束后按锁定阵容再开一局
 - 已完成 6 颗骰子的投掷、碰撞、停稳检测、点数读取与博饼奖级判定
 - 已完成当轮结果、累计奖级记录、最近 5 轮历史、音效生命周期、timeout 异常恢复与重置流程
 - 已完成移动端真实上下布局，不再使用可拖拽底部浮层
@@ -40,20 +43,29 @@
 | 状态管理 | Zustand                  |
 | 3D 渲染  | Three.js                 |
 | 物理引擎 | cannon-es                |
+| 服务端   | Node.js + ws             |
+| 数据库   | PostgreSQL               |
 | 测试     | Vitest + Playwright      |
 | 样式     | 原生 CSS + CSS Variables |
 
 ## 快速开始
 
+服务不会启动或管理 PostgreSQL，也不依赖 Docker Compose。先准备数据库并通过环境变量传入连接串：
+
 ```bash
 pnpm install
-pnpm dev --host
+export DATABASE_URL=postgresql://dice:change-me@127.0.0.1:5432/dice
+pnpm db:migrate
+pnpm build
+pnpm start
 ```
 
-默认开发地址通常是：
+默认联机地址为 `http://127.0.0.1:8787`；同一局域网设备使用服务端机器的 LAN IP 和同一端口访问。可复制 `.env.example` 了解全部变量，但运行时仍以进程环境变量为准。
 
-```text
-http://127.0.0.1:5173
+只开发原单机物理/UI 时，可显式关闭多人入口并使用 Vite 热更新：
+
+```bash
+VITE_MULTIPLAYER_ENABLED=false pnpm dev --host
 ```
 
 ## 常用命令
@@ -61,6 +73,9 @@ http://127.0.0.1:5173
 | 命令                                      | 说明                                                                   |
 | ----------------------------------------- | ---------------------------------------------------------------------- |
 | `pnpm dev`                                | 启动 Vite 开发服务器                                                   |
+| `pnpm dev:server`                         | 以源码启动房间服务；仍需先构建 web 或另行运行 Vite                     |
+| `pnpm db:migrate`                         | 对 `DATABASE_URL` 指向的 PostgreSQL 应用校验和迁移                     |
+| `pnpm start`                              | 启动 `dist-server` 并托管 `dist`；默认监听 8787                        |
 | `pnpm build`                              | TypeScript 构建 + 生产打包                                             |
 | `pnpm preview`                            | 本地预览生产构建结果                                                   |
 | `pnpm lint`                               | 运行 ESLint                                                            |
@@ -91,7 +106,7 @@ http://127.0.0.1:5173
 
 ## 当前视觉路线
 
-- 海碗：当前使用 `src/assets/bowl-blue-white-seamless-v2.webp` 的梅枝、如意云与海水边饰；半幅重排与镜像拼接保证横向 UV 首尾连续。加载页会等纹样解码并完成一次静态渲染后再开放画面，失败或 8 秒超时把唯一材质贴图换成程序化云头/细折枝 CanvasTexture fallback；瓷釉硬高光参数沿用第一轮收口
+- 海碗：当前使用 `apps/web/src/assets/bowl-blue-white-seamless-v2.webp` 的梅枝、如意云与海水边饰；半幅重排与镜像拼接保证横向 UV 首尾连续。加载页会等纹样解码并完成一次静态渲染后再开放画面，失败或 8 秒超时把唯一材质贴图换成程序化云头/细折枝 CanvasTexture fallback；瓷釉硬高光参数沿用第一轮收口
 - 桌面：程序化木纹改为更细密的长向纹与少量淡年轮，降低既有圈层透明度；仍只使用一张 CanvasTexture
 - UI：rolling 顶栏关闭大面积 blur、移除逐帧阴影 pulse，桌面侧栏/短视口结果卡/移动单行顶栏完成首轮压缩；结果卡角饰改为纯 CSS 细线纹，避免系统字符字形差异
 - 桌体：当前不再推进“重做方形中式木桌”路线
@@ -102,12 +117,13 @@ http://127.0.0.1:5173
 
 ## 玩法流程
 
-1. 点击“掷骰”后，6 颗骰子从碗上方投入
-2. 引擎用 exact accumulator 逐固定步驱动物理、安全检测与停稳，再同步 mesh 和渲染
-3. 若发生 timeout 或 timing-overload，进入显式 error：不读点、不判奖、不写记录，用户可同轮重新掷骰或重置
-4. 可信停稳后读取每颗骰子朝上点数，并根据博饼规则计算最高优先级奖级
-5. 若存在倾斜骰子，进入 tilt-confirm；否则直接提交结果
-6. UI 展示当轮结果、累计奖级记录和最近 5 轮历史
+1. 玩家加入默认房间，房主开局后服务端按座位建立带绝对截止时间的回合。
+2. 当前玩家请求投掷，服务端用共享 headless runner 生成 seed、真实轨迹诊断、六骰点数和判奖候选；客户端只按服务端 seed 播放动画。
+3. 到 `revealAt` 后，PostgreSQL 事务原子提交结果、扣减实体奖项、更新状元归属并建立下一回合；任何物理硬错误都不会提交奖项。
+4. 倾斜结果先进入限时确认；玩家可接受或同回合重投，超时按 `MAX_AUTO_RETRIES` 自动重投，耗尽后跳过回合。
+5. 普通回合按 `TURN_ACTION_TIMEOUT_MS` 防卡死。63 份奖项全部分配后，房主限时选择立即结束，或让锁定玩家各加投一次。
+6. 所有连接通过版本化房间快照查看奖池、个人奖项、全员领取数、当前状元和最近结果。
+7. 本局结束后原房主可按本局锁定阵容再开一局；此时才加入的成员保持旁观。
 
 ## 测试与 sweep
 
@@ -161,24 +177,20 @@ clean `e20d359` 的 schema v8 浏览器门禁保留为迁移前基线：`test:e2
 ## 项目结构概览
 
 ```text
-src/
-├── App.tsx                    # 入口 UI 组合：GameViewport + GameOverlay
-├── config/                    # 物理、投掷、停稳、UI 常量
-├── game/                      # engine / controller / store
-├── scene/                     # 场景、桌面、海碗
-├── physics/                   # world、碗碰撞体、接触材质
-├── dice/                      # 骰子创建、投掷、停稳、读面、碰撞体
-├── rules/                     # 奖级类型、规则表、判定逻辑
-├── ui/                        # 组件与样式
-├── audio/                     # 音效管理
-└── __tests__/                 # 单元、集成、物理烟雾与回归测试
+apps/
+├── web/src/                   # React、Three.js、cannon-es、联机 UI 与浏览器动画
+└── server/                    # HTTP/WebSocket 服务、房间编排、PostgreSQL migrations
+packages/
+├── game-domain/              # 判奖、63 份奖池、抢状元、回合/加赛纯领域逻辑
+├── protocol/                 # 版本化 WebSocket 消息与房间快照契约
+└── physics-core/             # 服务端 headless 权威物理入口
 ```
 
 ## 开发说明
 
 - UI 是 DOM overlay，Three.js 和 cannon-es 维持命令式调用
 - 不要把业务流程分散写进 UI 组件，写入统一走 GameController
-- 可调参数优先放在 `src/config/` 下，不要散落在运行时代码里
+- 物理/UI 参数优先放在 `apps/web/src/config/`，服务端时限和数据库连接使用环境变量
 - 视觉可先使用占位资源推进，但不要为占位视觉反向修改业务流或碰撞结构
 
 ## 后续计划

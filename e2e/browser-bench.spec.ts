@@ -4,7 +4,7 @@ import {
   ROLLING_CPU_PROFILE_METRICS,
   ROLLING_CPU_PROFILE_VERSION,
   ROLLING_CPU_SEGMENT_METRICS,
-} from '../src/game/performance-profile'
+} from '../apps/web/src/game/performance-profile'
 import {
   BROWSER_BUDGETS,
   E2E_NEXT_SEED,

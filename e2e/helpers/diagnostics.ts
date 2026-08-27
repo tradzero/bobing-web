@@ -1,7 +1,7 @@
 import { expect, type Page, type TestInfo } from '@playwright/test'
 import { writeFile } from 'node:fs/promises'
 import { readRepositoryState } from '../../tooling/repository-state'
-import type { RollingCpuProfileSnapshot } from '../../src/game/performance-profile'
+import type { RollingCpuProfileSnapshot } from '../../apps/web/src/game/performance-profile'
 
 export const E2E_NEXT_SEED = 42
 

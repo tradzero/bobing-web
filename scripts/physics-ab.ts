@@ -1,22 +1,22 @@
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { PHYSICS } from '../src/config/physics.ts'
-import { SETTLE } from '../src/config/settle.ts'
-import { THROW } from '../src/config/throw.ts'
+import { PHYSICS } from '../apps/web/src/config/physics.ts'
+import { SETTLE } from '../apps/web/src/config/settle.ts'
+import { THROW } from '../apps/web/src/config/throw.ts'
 import {
   PHYSICS_VARIANT_SCHEMA_VERSION,
   PHYSICS_VARIANT_IDS,
-} from '../src/config/physics-variants.ts'
-import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '../src/dice/throw.ts'
-import { SETTLE_ALGORITHM_VERSION } from '../src/dice/settle.ts'
-import { ESCAPE_GUARD_VERSION } from '../src/physics/escape-guard.ts'
+} from '../apps/web/src/config/physics-variants.ts'
+import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '../apps/web/src/dice/throw.ts'
+import { SETTLE_ALGORITHM_VERSION } from '../apps/web/src/dice/settle.ts'
+import { ESCAPE_GUARD_VERSION } from '../apps/web/src/physics/escape-guard.ts'
 import {
   FLOOR_RELAUNCH_CLEARANCE_THRESHOLD,
   FLOOR_RELAUNCH_SUPPORT_CLEARANCE_TOLERANCE,
   FLOOR_RELAUNCH_TRACKER_VERSION,
   FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
-} from '../src/physics/floor-relaunch.ts'
-import { ROLL_DIAGNOSTICS_SCHEMA_VERSION, runRoll } from '../src/physics/roll-runner.ts'
+} from '../apps/web/src/physics/floor-relaunch.ts'
+import { ROLL_DIAGNOSTICS_SCHEMA_VERSION, runRoll } from '../apps/web/src/physics/roll-runner.ts'
 import {
   PHYSICS_AB_SCHEMA_VERSION,
   buildPhysicsAbSeedSet,
@@ -25,7 +25,7 @@ import {
   resolvePhysicsAbVariants,
   type PhysicsAbSummary,
   type RollSummary,
-} from '../src/physics/roll-comparison.ts'
+} from '../apps/web/src/physics/roll-comparison.ts'
 
 const HELP = `用法：pnpm test:physics:ab -- [options]
 

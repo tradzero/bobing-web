@@ -4,12 +4,12 @@ import { resolve } from 'node:path'
 import {
   PHYSICS_COLLISION_EXPERIMENT_VERSION,
   type PhysicsCollisionVariantId,
-} from '../src/game/physics-collision-experiment'
+} from '../apps/web/src/game/physics-collision-experiment'
 import {
   ROLLING_CPU_PROFILE_VERSION,
   type RollingCpuExactStepSample,
   type RollingCpuProfileSnapshot,
-} from '../src/game/performance-profile'
+} from '../apps/web/src/game/performance-profile'
 import {
   readRepositoryState,
   sameRepositoryState,

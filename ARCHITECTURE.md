@@ -10,6 +10,8 @@
 | 状态管理 | Zustand                            | 5.x           |
 | 3D 渲染  | Three.js（原生命令式，不使用 R3F） | latest stable |
 | 物理引擎 | cannon-es（原生命令式）            | latest stable |
+| 服务端   | Node.js + ws                       | 当前 LTS      |
+| 持久化   | PostgreSQL                         | 受迁移管理    |
 | 测试     | Vitest + Playwright                | latest stable |
 | CSS      | 原生 CSS 文件 + CSS Variables      | —             |
 
@@ -26,10 +28,43 @@
 9. **移动端布局不引入额外 UI 状态**：移动端采用真实上下布局，结算卡仅通过 CSS 在上下分界线处做轻度侵入，不再维护 `peek / expanded / hidden` 之类的局部状态。store 只提供 `phase` 驱动 `ResultPanel / TiltWarning / RollErrorPanel` 的显隐，不影响 game/controller 的业务状态机。
 10. **视觉占位先于正式素材**：当前允许用程序化木纹、程序化青花纹样等占位资源推进画面；后续替换正式素材时应通过贴图/样式替换完成，不反向改动业务流、物理结构和 UI 状态机。
 
-## 项目结构
+## 多人权威架构
+
+生产入口由同一 Node 进程托管 Vite 构建产物、`/healthz`、`/readyz` 和 `/ws`。当前启动时确保一个由 `DEFAULT_ROOM_ID` 指定的开放房间存在，但 room ID、访问类型和 password hash 已进入数据模型，后续增加多房间/密码加入不需要重写游戏聚合。
 
 ```text
-src/
+浏览器 WebSocket 命令
+        │
+        ▼
+RoomHub ── 鉴权当前 session / 广播版本化 RoomSnapshot
+        │
+        ├── RoomRollService ── physics-core.runRoll(seed)
+        │                         │
+        │                         └── 安全失败只记诊断，不判奖
+        ▼
+RoomRepository ── PostgreSQL 事务 ── games / turns / roll_attempts
+        │                              game_prize_pools / award_grants
+        │                              zhuangyuan_claims / game_events
+        ▼
+game-domain 纯聚合 ── 63 份奖池 / 抢状元 / 回合 / 加投轮
+```
+
+权威链路分两段：服务端先在数据库事务外运行共享 headless 物理，得到 seed、六骰点数、settlement 原因和完整安全诊断；随后短事务锁定当前 game/turn，再以 command UUID 幂等写入 `computed` attempt 和 `revealAt`。客户端收到同一 seed 后只播放动画，不能提交本地点数。到揭晓时间，deadline scheduler 唤醒 repository，在单一事务中提交 roll、扣减库存、写 award/claim、重算状元并创建下一回合。
+
+PostgreSQL 中的绝对时间是 deadline 真值，`setInterval` 只负责轮询唤醒。`awaiting-roll` 超时跳过当前玩家；`rolling` 到点揭晓结果，绝不能误走跳过分支；`tilt-decision` 超时在预算内生成服务端自动重投请求，耗尽后跳过；`end-decision` 超时默认立即结束。全部时间通过环境变量配置，进程重启不会丢失当前阶段。
+
+状元不写入普通 `award_grants`，而是每位玩家一条可替换的 `zhuangyuan_claims`。同一玩家的新状元无条件替换旧状元，再从所有玩家的最后一次 claim 中按子级、带数和六子点数选择持有者；完全相同时较早 claim 守擂。奖池中的状元计数在首次 claim 后为 0，但归属仍可在普通阶段和最后加投轮改变。
+
+游戏完成后保留已结算 game 作为不可变历史。原房主点击“再开一局”时，repository 在同一事务内按上一局锁定玩家与座位创建新的 lobby、补齐 63 份奖池并立即开始；结束后新加入的 room member 只能旁观，因此不会偷偷进入下一局。部分唯一索引保证同一房间同一时刻仍只有一个活动 game。
+
+所有数据库连接来自 `DATABASE_URL`，服务端不启动 PostgreSQL，也不包含 Compose 数据库定义。迁移以文件 SHA-256、`schema_migrations`、PostgreSQL advisory lock 和逐迁移事务保证可追踪与并发安全。
+
+## 项目结构
+
+仓库使用 pnpm workspace：`apps/web` 保存浏览器渲染与交互，`apps/server` 保存 HTTP/WebSocket 与 PostgreSQL 编排，`packages/game-domain`、`packages/protocol` 和 `packages/physics-core` 是双方共享边界。下面展开浏览器目录。
+
+```text
+apps/web/src/
 ├── main.tsx                    # 入口：仅 createRoot().render(<App />)
 ├── App.tsx                     # React 根组件：GameViewport + GameOverlay（顶栏、结算区、内容 peek、侧栏）
 │
@@ -171,7 +206,7 @@ sweep/                          # 独立长时间运行脚本（按需手动执�
 ## 当前视觉占位策略
 
 - 运行时场景当前只接入桌面、海碗和 6 颗骰子；`scene/decorations.ts` 保留为旧实验文件，不在 `GameViewport` 中挂载。
-- 海碗外壁当前使用 `src/assets/bowl-blue-white-seamless-v2.webp` 单张青花贴图；纹样先重排半幅并镜像拼接，使 LatheGeometry 的左右 UV 边界在颜色与切线方向上连续，同时把残余 WebP 压缩差旋转到固定相机背面的 `-Z` 后壁，避免落在左右可见内壁。wall material 从初始化起持有待上传的 WebP texture；解码并完成一次静态渲染前由不透明加载页遮住场景和交互，失败或 8 秒超时才把唯一 map 换成原 `2048×512 CanvasTexture` fallback。该流程仍保持 2 mesh / 2 material / 1 活动 texture，不会因异步替图新增 shader program，并沿用已收口的瓷釉 roughness / clearcoat 参数。
+- 海碗外壁当前使用 `apps/web/src/assets/bowl-blue-white-seamless-v2.webp` 单张青花贴图；纹样先重排半幅并镜像拼接，使 LatheGeometry 的左右 UV 边界在颜色与切线方向上连续，同时把残余 WebP 压缩差旋转到固定相机背面的 `-Z` 后壁，避免落在左右可见内壁。wall material 从初始化起持有待上传的 WebP texture；解码并完成一次静态渲染前由不透明加载页遮住场景和交互，失败或 8 秒超时才把唯一 map 换成原 `2048×512 CanvasTexture` fallback。该流程仍保持 2 mesh / 2 material / 1 活动 texture，不会因异步替图新增 shader program，并沿用已收口的瓷釉 roughness / clearcoat 参数。
 - 桌面仍只使用一张 `512×512 CanvasTexture`，当前以更细密的长向木纹、少量淡年轮和更低透明度的既有嵌饰圈压低“靶环感”。该轮改动不增加 mesh、material 或 texture；后续美术方向优先在现有桌体上叠加桌布，而不是继续扩展桌腿、桌裙板或独立摆件。
 - 场景使用纯色背景、方向光、环境光和半球光，不生成 PMREM。旧路径在 `createScene()` 阶段生成环境贴图时，桌面、海碗和骰子尚未加入 scene，得到的环境信息有限；同时只保留 target texture 会丢失 render target 的所有权，无法由场景上下文可靠释放，因此已删除该路径并保持 `scene.environment = null`。
 - 这类视觉占位的目标是先稳定构图与层次，不改变物理世界、碰撞体和游戏状态流；资源测试当前锁定海碗 `2 mesh / 2 material / 1 texture`、桌面 `5 mesh / 5 material / 1 texture`。
@@ -535,7 +570,7 @@ Heightfield 与骰子凸包的窄相生产默认仍由 cannon-es 原生 `Narrowp
 
 ### 独立 sweep 脚本
 
-长时间运行的参数扫描、统计类测试已从 vitest 套件中拆出，放在 `sweep/` 目录下作为独立 `vite-node` 脚本运行。**不要将这些脚本重新写回 `src/__tests__/` 或注册为 vitest 测试。**
+长时间运行的参数扫描、统计类测试已从 vitest 套件中拆出，放在 `sweep/` 目录下作为独立 `vite-node` 脚本运行。**不要将这些脚本重新写回 `apps/web/src/__tests__/` 或注册为 vitest 测试。**
 
 | 命令                                                 | 脚本                                 | 用途                                           | 典型耗时       | CLI 参数                       |
 | ---------------------------------------------------- | ------------------------------------ | ---------------------------------------------- | -------------- | ------------------------------ |

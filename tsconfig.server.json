@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "types": ["node"],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@/*": ["./apps/web/src/*"],
+      "@dice/game-domain": ["./packages/game-domain/src/index.ts"],
+      "@dice/physics-core": ["./packages/physics-core/src/index.ts"],
+      "@dice/protocol": ["./packages/protocol/src/index.ts"]
+    }
+  },
+  "include": [
+    "apps/server/src",
+    "apps/web/src/config",
+    "apps/web/src/dice",
+    "apps/web/src/physics",
+    "apps/web/src/utils",
+    "packages/game-domain/src",
+    "packages/physics-core/src",
+    "packages/protocol/src"
+  ]
+}
