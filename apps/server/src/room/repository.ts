@@ -31,6 +31,11 @@ interface RoomRow extends QueryResultRow {
   host_member_id: string | null
 }
 
+interface RoomResetCountsRow extends QueryResultRow {
+  member_count: string
+  game_count: string
+}
+
 interface MemberRow extends QueryResultRow {
   id: string
   display_name: string
@@ -194,6 +199,12 @@ export interface DeadlineSweepResult {
   autoRollRequests: AutoRollRequest[]
 }
 
+export interface ForcedRoomResetResult {
+  roomId: string
+  deletedMemberCount: number
+  deletedGameCount: number
+}
+
 function normalizedName(displayName: string): { displayName: string; normalized: string } {
   const trimmed = displayName.trim()
   if (trimmed.length < 1 || trimmed.length > 24) {
@@ -247,6 +258,50 @@ export class RoomRepository {
 
   async ping(): Promise<void> {
     await this.pool.query('SELECT 1')
+  }
+
+  /**
+   * 运维用的破坏性重置：保留房间配置，但删除该房间的全部成员和对局数据。
+   * 调用方必须先停止应用服务，避免仍在计算中的权威投掷与重置竞争。
+   */
+  async forceResetRoom(roomId: string): Promise<ForcedRoomResetResult> {
+    const normalizedRoomId = roomId.trim()
+    if (normalizedRoomId.length < 1 || normalizedRoomId.length > 64) {
+      throw new RangeError('房间 ID 长度必须在 1..64 之间')
+    }
+
+    return this.withTransaction(async (client) => {
+      const roomResult = await client.query<RoomRow>(
+        'SELECT id, host_member_id FROM rooms WHERE id = $1 FOR UPDATE',
+        [normalizedRoomId],
+      )
+      if (!roomResult.rows[0]) throw new RoomRepositoryError('not-found', '房间不存在')
+
+      const countsResult = await client.query<RoomResetCountsRow>(
+        `
+          SELECT
+            (SELECT count(*)::text FROM room_members WHERE room_id = $1) AS member_count,
+            (SELECT count(*)::text FROM games WHERE room_id = $1) AS game_count
+        `,
+        [normalizedRoomId],
+      )
+      const counts = countsResult.rows[0]
+      if (!counts) throw new Error('无法读取房间重置统计')
+
+      // 先删 game，让其子表按外键级联清理；再删 member 并清空房主。
+      await client.query('DELETE FROM games WHERE room_id = $1', [normalizedRoomId])
+      await client.query('DELETE FROM room_members WHERE room_id = $1', [normalizedRoomId])
+      await client.query(
+        'UPDATE rooms SET host_member_id = NULL, updated_at = now() WHERE id = $1',
+        [normalizedRoomId],
+      )
+
+      return {
+        roomId: normalizedRoomId,
+        deletedMemberCount: Number(counts.member_count),
+        deletedGameCount: Number(counts.game_count),
+      }
+    })
   }
 
   async joinRoom(input: {

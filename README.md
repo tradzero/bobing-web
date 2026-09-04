@@ -53,6 +53,7 @@ pnpm dev:server
 | 命令              | 说明                                   |
 | ----------------- | -------------------------------------- |
 | `pnpm db:migrate` | 应用并校验 PostgreSQL 迁移             |
+| `pnpm room:reset` | 强制清空指定房间（破坏性运维命令）     |
 | `pnpm dev`        | 启动 Vite 开发服务器                   |
 | `pnpm dev:server` | 启动服务端源码                         |
 | `pnpm build`      | 构建 Web 和服务端生产产物              |
@@ -60,6 +61,16 @@ pnpm dev:server
 | `pnpm test`       | 运行 Vitest 测试                       |
 | `pnpm test:e2e`   | 运行桌面端和移动端 Playwright 流程测试 |
 | `pnpm lint`       | 运行 ESLint                            |
+
+强制重置房间时先停止应用服务，再显式确认目标房间 ID：
+
+```bash
+pnpm room:reset -- --room=default --confirm=default
+```
+
+该命令保留房间配置，但永久删除其成员、对局、投掷和奖项数据。完成后重新启动服务，所有玩家刷新页面；同一访问地址下，浏览器会保留昵称并自动重新绑定为新成员。
+
+玩家身份以当前浏览器同源 `localStorage` 中的高熵恢复令牌绑定，服务端只保存令牌哈希。普通服务重启或短暂断线会自动恢复；切换主机名、IP、端口、浏览器或无痕窗口会形成新的浏览器身份。
 
 ## 项目结构
 

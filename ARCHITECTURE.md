@@ -51,11 +51,15 @@ game-domain 纯聚合 ── 63 份奖池 / 抢状元 / 回合 / 加投轮
 
 权威链路分两段：服务端先在数据库事务外运行共享 headless 物理，得到 seed、六骰点数、settlement 原因和完整安全诊断；随后短事务锁定当前 game/turn，再以 command UUID 幂等写入 `computed` attempt 和 `revealAt`。客户端收到同一 seed 后只播放动画，不能提交本地点数。到揭晓时间，deadline scheduler 唤醒 repository，在单一事务中提交 roll、扣减库存、写 award/claim、重算状元并创建下一回合。
 
+浏览器身份使用同源 `localStorage` 保存昵称与 256-bit 随机恢复令牌，PostgreSQL 只保存 SHA-256 哈希。页面重新打开时自动携带令牌加入；WebSocket 断开后每 1.5 秒自动尝试恢复，普通服务重启不要求重新输入昵称。只有首次恢复阶段返回 `not-found` 时，客户端才会保留昵称、丢弃失效令牌并无令牌重试一次，用于强制清房后的自动重新绑定；加入成功后的业务 `not-found` 不得触发身份降级。Cookie 同样受 origin 限制，而 HttpOnly Cookie 还需要增加独立 HTTP 会话签发/撤销链路，当前局域网 MVP 不为此扩展协议。正式的切换玩家入口必须先补离房/座位转移语义，不能只清浏览器令牌并在房间中遗留幽灵成员。
+
 PostgreSQL 中的绝对时间是 deadline 真值，`setInterval` 只负责轮询唤醒。`awaiting-roll` 超时跳过当前玩家；`rolling` 到点揭晓结果，绝不能误走跳过分支；`tilt-decision` 超时在预算内生成服务端自动重投请求，耗尽后跳过；`end-decision` 超时默认立即结束。全部时间通过环境变量配置，进程重启不会丢失当前阶段。
 
 状元不写入普通 `award_grants`，而是每位玩家一条可替换的 `zhuangyuan_claims`。同一玩家的新状元无条件替换旧状元，再从所有玩家的最后一次 claim 中按子级、带数和六子点数选择持有者；完全相同时较早 claim 守擂。奖池中的状元计数在首次 claim 后为 0，但归属仍可在普通阶段和最后加投轮改变。
 
 游戏完成后保留已结算 game 作为不可变历史。原房主点击“再开一局”时，repository 在同一事务内按上一局锁定玩家与座位创建新的 lobby、补齐 63 份奖池并立即开始；结束后新加入的 room member 只能旁观，因此不会偷偷进入下一局。部分唯一索引保证同一房间同一时刻仍只有一个活动 game。
+
+紧急强制重置通过 `pnpm room:reset -- --room=<id> --confirm=<id>` 执行，不暴露为无认证的局域网 HTTP/WebSocket 管理接口。运维人员必须先停止应用服务；repository 在单一事务内锁定房间，显式删除该房间的 games 后再删除 members，依赖外键级联清理回合、投掷、奖项和事件，最后保留房间的名称、访问类型和密码配置并清空房主。旧恢复令牌随成员删除而失效；重启后客户端保留昵称并执行一次无令牌重绑。匹配目标 ID 的 `--confirm` 是防误操作门禁，但不替代备份。
 
 所有数据库连接来自 `DATABASE_URL`，服务端不启动 PostgreSQL，也不包含 Compose 数据库定义。迁移以文件 SHA-256、`schema_migrations`、PostgreSQL advisory lock 和逐迁移事务保证可追踪与并发安全。
 

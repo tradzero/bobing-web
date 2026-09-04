@@ -304,7 +304,7 @@ function JoinRoom({
       <form onSubmit={submit}>
         <small>局域网联机 · 单房间实例</small>
         <h1>中秋博饼</h1>
-        <p>输入昵称加入当前房间。奖项、回合与倒计时均由服务端保存。</p>
+        <p>首次输入昵称后会绑定当前浏览器；以后打开同一访问地址将自动恢复身份。</p>
         <label htmlFor="room-display-name">玩家昵称</label>
         <input
           id="room-display-name"

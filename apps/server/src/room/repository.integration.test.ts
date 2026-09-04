@@ -11,6 +11,7 @@ const describeDatabase = describe.skipIf(!databaseUrl)
 describeDatabase('PostgreSQL 单房间 repository', () => {
   const roomId = `test-${randomUUID()}`
   const replayRoomId = `test-replay-${randomUUID()}`
+  const resetRoomId = `test-reset-${randomUUID()}`
   const pool = new Pool({ connectionString: databaseUrl, max: 4 })
   const repository = new RoomRepository(pool)
   const timing: GameTimingConfig = {
@@ -25,7 +26,9 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
   })
 
   afterAll(async () => {
-    await pool.query('DELETE FROM rooms WHERE id = ANY($1::text[])', [[roomId, replayRoomId]])
+    await pool.query('DELETE FROM rooms WHERE id = ANY($1::text[])', [
+      [roomId, replayRoomId, resetRoomId],
+    ])
     await pool.end()
   })
 
@@ -283,5 +286,59 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
       role: 'spectator',
       seat: null,
     })
+  })
+
+  it('强制重置保留房间配置，但删除全部成员、对局和旧恢复凭据', async () => {
+    await repository.ensureOpenRoom(resetRoomId, '待重置房间')
+    const host = await repository.joinRoom({
+      roomId: resetRoomId,
+      displayName: 'ResetHost',
+      maxPlayers: 12,
+    })
+    await repository.joinRoom({ roomId: resetRoomId, displayName: 'ResetGuest', maxPlayers: 12 })
+    await repository.startGame({
+      roomId: resetRoomId,
+      playerId: host.playerId,
+      now: 70_000,
+      timing,
+    })
+
+    await expect(repository.forceResetRoom(resetRoomId)).resolves.toEqual({
+      roomId: resetRoomId,
+      deletedMemberCount: 2,
+      deletedGameCount: 1,
+    })
+    await expect(
+      repository.joinRoom({
+        roomId: resetRoomId,
+        displayName: 'ResetHost',
+        resumeToken: host.resumeToken,
+        maxPlayers: 12,
+      }),
+    ).rejects.toMatchObject({ code: 'not-found' })
+
+    const preserved = await pool.query<{
+      display_name: string
+      access_type: string
+      host_member_id: string | null
+    }>('SELECT display_name, access_type, host_member_id FROM rooms WHERE id = $1', [resetRoomId])
+    expect(preserved.rows[0]).toEqual({
+      display_name: '待重置房间',
+      access_type: 'open',
+      host_member_id: null,
+    })
+
+    const replacement = await repository.joinRoom({
+      roomId: resetRoomId,
+      displayName: 'NewHost',
+      maxPlayers: 12,
+    })
+    const snapshot = await repository.getRoomSnapshot(resetRoomId, new Set())
+    expect(snapshot).toMatchObject({
+      phase: 'lobby',
+      hostPlayerId: replacement.playerId,
+      members: [expect.objectContaining({ id: replacement.playerId, seat: 0, role: 'player' })],
+    })
+    expect(countPrizePool(snapshot.prizePool)).toBe(63)
   })
 })
