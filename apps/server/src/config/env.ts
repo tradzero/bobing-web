@@ -1,4 +1,5 @@
 import type { GameTimingConfig } from '@dice/game-domain'
+import type { RoomLifecycleConfig } from '../room/repository'
 
 export interface ServerConfig {
   databaseUrl: string
@@ -9,9 +10,11 @@ export interface ServerConfig {
   dbPoolMax: number
   autoMigrate: boolean
   schedulerPollIntervalMs: number
+  lifecyclePollIntervalMs: number
   rollRevealMinMs: number
   rollRevealMaxMs: number
   timing: GameTimingConfig
+  lifecycle: RoomLifecycleConfig
 }
 
 function requiredString(env: NodeJS.ProcessEnv, name: string): string {
@@ -59,6 +62,17 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
   if (rollRevealMaxMs < rollRevealMinMs) {
     throw new RangeError('ROLL_REVEAL_MAX_MS 不能小于 ROLL_REVEAL_MIN_MS')
   }
+  const gameIdleAbandonMs = integer(env, 'GAME_IDLE_ABANDON_MS', 30 * 60_000, {
+    min: 60_000,
+    max: 30 * 24 * 60 * 60_000,
+  })
+  const roomIdleArchiveMs = integer(env, 'ROOM_IDLE_ARCHIVE_MS', 24 * 60 * 60_000, {
+    min: 60_000,
+    max: 365 * 24 * 60 * 60_000,
+  })
+  if (roomIdleArchiveMs < gameIdleAbandonMs) {
+    throw new RangeError('ROOM_IDLE_ARCHIVE_MS 不能小于 GAME_IDLE_ABANDON_MS')
+  }
   return {
     databaseUrl: requiredString(env, 'DATABASE_URL'),
     host: optionalString(env, 'SERVER_HOST', '0.0.0.0'),
@@ -70,6 +84,10 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     schedulerPollIntervalMs: integer(env, 'SCHEDULER_POLL_INTERVAL_MS', 500, {
       min: 100,
       max: 5_000,
+    }),
+    lifecyclePollIntervalMs: integer(env, 'ROOM_LIFECYCLE_POLL_INTERVAL_MS', 60_000, {
+      min: 1_000,
+      max: 300_000,
     }),
     rollRevealMinMs,
     rollRevealMaxMs,
@@ -87,6 +105,18 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
         max: 300_000,
       }),
       maxAutoRetries: integer(env, 'MAX_AUTO_RETRIES', 1, { min: 0, max: 5 }),
+    },
+    lifecycle: {
+      emptyRoomTtlMs: integer(env, 'EMPTY_ROOM_TTL_MS', 60 * 60_000, {
+        min: 60_000,
+        max: 30 * 24 * 60 * 60_000,
+      }),
+      gameIdleAbandonMs,
+      roomIdleArchiveMs,
+      archivedRoomRetentionMs: integer(env, 'ARCHIVED_ROOM_RETENTION_MS', 7 * 24 * 60 * 60_000, {
+        min: 60_000,
+        max: 365 * 24 * 60 * 60_000,
+      }),
     },
   }
 }

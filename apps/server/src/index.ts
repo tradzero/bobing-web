@@ -1,4 +1,4 @@
-import { createServer, type ServerResponse } from 'node:http'
+import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import sirv from 'sirv'
@@ -8,17 +8,13 @@ import { loadProjectEnvFile } from './config/load-env'
 import { migrateDatabase } from './db/migrate'
 import { createDatabasePool } from './db/pool'
 import { RoomHub } from './room/hub'
+import { handleRoomHttpRequest, sendJson } from './room/http'
 import { RoomRepository } from './room/repository'
 import { RoomRollService } from './roll/service'
 import { RoomDeadlineScheduler } from './scheduler/deadlines'
+import { RoomLifecycleScheduler } from './scheduler/room-lifecycle'
 
 loadProjectEnvFile()
-
-function sendJson(response: ServerResponse, status: number, body: unknown): void {
-  response.statusCode = status
-  response.setHeader('content-type', 'application/json; charset=utf-8')
-  response.end(JSON.stringify(body))
-}
 
 async function main(): Promise<void> {
   const config = loadServerConfig()
@@ -33,18 +29,29 @@ async function main(): Promise<void> {
     etag: true,
   })
   const server = createServer((request, response) => {
-    if (request.url === '/healthz') {
-      sendJson(response, 200, { status: 'ok' })
-      return
+    void handleRequest().catch((error) => {
+      console.error('[server] http request failed', error)
+      if (!response.headersSent) sendJson(response, 500, { error: 'internal-error' })
+      else response.destroy(error instanceof Error ? error : undefined)
+    })
+
+    async function handleRequest(): Promise<void> {
+      if (request.url === '/healthz') {
+        sendJson(response, 200, { status: 'ok' })
+        return
+      }
+      if (request.url === '/readyz') {
+        try {
+          await repository.ping()
+          sendJson(response, 200, { status: 'ready' })
+        } catch {
+          sendJson(response, 503, { status: 'not-ready' })
+        }
+        return
+      }
+      if (await handleRoomHttpRequest(request, response, repository)) return
+      staticFiles(request, response, () => sendJson(response, 404, { error: 'not-found' }))
     }
-    if (request.url === '/readyz') {
-      void repository
-        .ping()
-        .then(() => sendJson(response, 200, { status: 'ready' }))
-        .catch(() => sendJson(response, 503, { status: 'not-ready' }))
-      return
-    }
-    staticFiles(request, response, () => sendJson(response, 404, { error: 'not-found' }))
   })
 
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 })
@@ -66,6 +73,18 @@ async function main(): Promise<void> {
       for (const roomId of roomIds) await roomHub.broadcastRoom(roomId)
     },
   })
+  const lifecycleScheduler = new RoomLifecycleScheduler({
+    repository,
+    config: config.lifecycle,
+    defaultRoomId: config.defaultRoomId,
+    pollIntervalMs: config.lifecyclePollIntervalMs,
+    onRoomsAbandoned: async (roomIds) => {
+      for (const roomId of roomIds) await roomHub.broadcastRoom(roomId)
+    },
+    onRoomsArchived: (roomIds) => {
+      for (const roomId of roomIds) roomHub.archiveRoom(roomId)
+    },
+  })
   server.on('upgrade', (request, socket, head) => {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
     if (pathname !== '/ws') {
@@ -80,6 +99,7 @@ async function main(): Promise<void> {
 
   const shutdown = () => {
     deadlineScheduler.stop()
+    lifecycleScheduler.stop()
     sockets.close()
     server.close(() => {
       void pool.end().finally(() => process.exit(0))
@@ -89,6 +109,7 @@ async function main(): Promise<void> {
   process.once('SIGTERM', shutdown)
 
   deadlineScheduler.start()
+  lifecycleScheduler.start()
   server.listen(config.port, config.host, () => {
     console.log(`[server] http://${config.host}:${config.port} room=${config.defaultRoomId}`)
   })

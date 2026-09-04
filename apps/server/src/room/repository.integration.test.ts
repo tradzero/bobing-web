@@ -8,10 +8,13 @@ import { RoomRepository } from './repository'
 const databaseUrl = process.env.TEST_DATABASE_URL
 const describeDatabase = describe.skipIf(!databaseUrl)
 
-describeDatabase('PostgreSQL 单房间 repository', () => {
+describeDatabase('PostgreSQL 房间 repository', () => {
   const roomId = `test-${randomUUID()}`
   const replayRoomId = `test-replay-${randomUUID()}`
   const resetRoomId = `test-reset-${randomUUID()}`
+  const emptyLifecycleRoomId = `test-empty-lifecycle-${randomUUID()}`
+  const permanentDefaultRoomId = `test-default-lifecycle-${randomUUID()}`
+  const createdRoomIds: string[] = []
   const pool = new Pool({ connectionString: databaseUrl, max: 4 })
   const repository = new RoomRepository(pool)
   const timing: GameTimingConfig = {
@@ -20,6 +23,12 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
     endDecisionTimeoutMs: 30_000,
     maxAutoRetries: 1,
   }
+  const lifecycle = {
+    emptyRoomTtlMs: 3_600_000,
+    gameIdleAbandonMs: 1_800_000,
+    roomIdleArchiveMs: 86_400_000,
+    archivedRoomRetentionMs: 604_800_000,
+  }
 
   beforeAll(async () => {
     await repository.ensureOpenRoom(roomId, '集成测试房间')
@@ -27,7 +36,14 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
 
   afterAll(async () => {
     await pool.query('DELETE FROM rooms WHERE id = ANY($1::text[])', [
-      [roomId, replayRoomId, resetRoomId],
+      [
+        roomId,
+        replayRoomId,
+        resetRoomId,
+        emptyLifecycleRoomId,
+        permanentDefaultRoomId,
+        ...createdRoomIds,
+      ],
     ])
     await pool.end()
   })
@@ -48,6 +64,99 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
       expect.objectContaining({ id: alice.playerId, role: 'player', seat: 0, connected: true }),
     ])
     expect(countPrizePool(snapshot.prizePool)).toBe(63)
+  })
+
+  it('创建并列出多个开放房，同名玩家与游戏状态按房间隔离', async () => {
+    const [moonRoom, seaRoom] = await Promise.all([
+      repository.createOpenRoomWithHost({
+        displayName: ' 海上生明月 ',
+        creatorDisplayName: '同名玩家',
+      }),
+      repository.createOpenRoomWithHost({
+        displayName: '天涯共此时',
+        creatorDisplayName: '同名玩家',
+      }),
+    ])
+    createdRoomIds.push(moonRoom.room.id, seaRoom.room.id)
+    expect(moonRoom.room).toMatchObject({
+      displayName: '海上生明月',
+      accessType: 'open',
+      phase: 'lobby',
+      playerCount: 1,
+      spectatorCount: 0,
+    })
+    expect(moonRoom.playerId).toBeTruthy()
+    expect(moonRoom.resumeToken).toBeTruthy()
+
+    expect(moonRoom.playerId).not.toBe(seaRoom.playerId)
+
+    await repository.startGame({
+      roomId: moonRoom.room.id,
+      playerId: moonRoom.playerId,
+      now: 100_000,
+      timing,
+    })
+    const [moonSnapshot, seaSnapshot] = await Promise.all([
+      repository.getRoomSnapshot(moonRoom.room.id, new Set()),
+      repository.getRoomSnapshot(seaRoom.room.id, new Set()),
+    ])
+    expect(moonSnapshot).toMatchObject({ roomId: moonRoom.room.id, phase: 'playing' })
+    expect(seaSnapshot).toMatchObject({ roomId: seaRoom.room.id, phase: 'lobby' })
+    expect(moonSnapshot.gameId).not.toBe(seaSnapshot.gameId)
+
+    const directory = await repository.listOpenRooms()
+    expect(directory.find(({ id }) => id === moonRoom.room.id)).toMatchObject({
+      phase: 'playing',
+      playerCount: 1,
+    })
+    expect(directory.find(({ id }) => id === seaRoom.room.id)).toMatchObject({
+      phase: 'lobby',
+      playerCount: 1,
+    })
+  })
+
+  it('并发重放同一投掷命令只创建一个权威结果', async () => {
+    const created = await repository.createOpenRoomWithHost({
+      displayName: '幂等命令房间',
+      creatorDisplayName: 'IdempotentHost',
+    })
+    const room = created.room
+    const host = created
+    createdRoomIds.push(room.id)
+    await repository.startGame({
+      roomId: room.id,
+      playerId: host.playerId,
+      now: 200_000,
+      timing,
+    })
+    const commandId = randomUUID()
+    const request = {
+      roomId: room.id,
+      playerId: host.playerId,
+      commandId,
+      now: 200_001,
+      seed: 51_000,
+      diceValues: [1, 2, 3, 4, 5, 5],
+      settleReason: 'natural-sleep',
+      revealAt: 201_000,
+      throwAlgorithmVersion: '3',
+      settleAlgorithmVersion: '4',
+      diagnostics: { seed: 51_000 },
+      requiresTiltDecision: false,
+    }
+    const results = await Promise.all([
+      repository.beginAuthoritativeRoll(request),
+      repository.beginAuthoritativeRoll({ ...request, seed: 51_001 }),
+    ])
+
+    expect(new Set(results.map(({ rollId }) => rollId)).size).toBe(1)
+    expect(results.map(({ seed }) => seed)).toEqual([51_000, 51_000])
+    expect(results.map(({ duplicate }) => duplicate).sort()).toEqual([false, true])
+    const count = await pool.query<{ count: string }>(
+      'SELECT count(*)::text AS count FROM roll_attempts WHERE game_id = $1 AND command_id = $2',
+      [(await repository.getRoomSnapshot(room.id, new Set())).gameId, commandId],
+    )
+    expect(count.rows[0]?.count).toBe('1')
   })
 
   it('开局前按加入顺序锁定座位，只有房主可启动', async () => {
@@ -298,6 +407,120 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
       role: 'spectator',
       seat: null,
     })
+  })
+
+  it('进行中对局长期无真实操作时明确废弃，并停止 deadline 自循环', async () => {
+    const created = await repository.createOpenRoomWithHost({
+      displayName: '废弃对局测试',
+      creatorDisplayName: 'IdleHost',
+      now: 0,
+    })
+    createdRoomIds.push(created.room.id)
+    await repository.startGame({
+      roomId: created.room.id,
+      playerId: created.playerId,
+      now: 1_000,
+      timing,
+    })
+    const sameThresholdLifecycle = {
+      ...lifecycle,
+      roomIdleArchiveMs: lifecycle.gameIdleAbandonMs,
+    }
+
+    await expect(
+      repository.processRoomLifecycle(1_800_999, sameThresholdLifecycle, permanentDefaultRoomId),
+    ).resolves.toMatchObject({ abandonedRoomIds: [] })
+    const lifecycleSweep = await repository.processRoomLifecycle(
+      1_801_000,
+      sameThresholdLifecycle,
+      permanentDefaultRoomId,
+    )
+    expect(lifecycleSweep.abandonedRoomIds).toEqual([created.room.id])
+    expect(lifecycleSweep.archivedRoomIds).not.toContain(created.room.id)
+
+    const abandoned = await repository.getRoomSnapshot(created.room.id, new Set())
+    expect(abandoned).toMatchObject({ phase: 'abandoned', currentTurn: null })
+    const stoppedTurn = await pool.query<{ status: string; skip_reason: string }>(
+      `
+        SELECT t.status, t.skip_reason
+        FROM turns t
+        JOIN games g ON g.id = t.game_id
+        WHERE g.id = $1
+      `,
+      [abandoned.gameId],
+    )
+    expect(stoppedTurn.rows).toEqual([{ status: 'skipped', skip_reason: 'room-abandoned' }])
+    const deadlineSweep = await repository.processDueDeadlines(9_999_999, timing)
+    expect(deadlineSweep.changedRoomIds).not.toContain(created.room.id)
+
+    await repository.startGame({
+      roomId: created.room.id,
+      playerId: created.playerId,
+      now: 1_801_001,
+      timing,
+    })
+    const restarted = await repository.getRoomSnapshot(created.room.id, new Set())
+    expect(restarted).toMatchObject({ phase: 'playing' })
+    expect(restarted.gameId).not.toBe(abandoned.gameId)
+  })
+
+  it('空房过期删除、闲置房归档后延迟删除，默认房间始终保留', async () => {
+    await repository.ensureOpenRoom(emptyLifecycleRoomId, '空房清理测试')
+    await repository.ensureOpenRoom(permanentDefaultRoomId, '永久默认房')
+    await pool.query(
+      `
+        UPDATE rooms
+        SET created_at = to_timestamp(0),
+            last_activity_at = to_timestamp(0)
+        WHERE id = ANY($1::text[])
+      `,
+      [[emptyLifecycleRoomId, permanentDefaultRoomId]],
+    )
+    const emptySweep = await repository.processRoomLifecycle(
+      lifecycle.emptyRoomTtlMs,
+      lifecycle,
+      permanentDefaultRoomId,
+    )
+    expect(emptySweep.deletedRoomIds).toContain(emptyLifecycleRoomId)
+    expect(emptySweep.deletedRoomIds).not.toContain(permanentDefaultRoomId)
+
+    const idle = await repository.createOpenRoomWithHost({
+      displayName: '归档测试',
+      creatorDisplayName: 'ArchiveHost',
+      now: 0,
+    })
+    createdRoomIds.push(idle.room.id)
+    await repository.recordPresence(idle.room.id, idle.playerId, 23 * 60 * 60_000)
+    const stillPresent = await repository.processRoomLifecycle(
+      24 * 60 * 60_000,
+      lifecycle,
+      permanentDefaultRoomId,
+    )
+    expect(stillPresent.archivedRoomIds).not.toContain(idle.room.id)
+
+    const archivedAt = 47 * 60 * 60_000
+    const archived = await repository.processRoomLifecycle(
+      archivedAt,
+      lifecycle,
+      permanentDefaultRoomId,
+    )
+    expect(archived.archivedRoomIds).toContain(idle.room.id)
+    await expect(repository.getRoomSnapshot(idle.room.id, new Set())).rejects.toMatchObject({
+      code: 'not-found',
+    })
+    expect((await repository.listOpenRooms()).some(({ id }) => id === idle.room.id)).toBe(false)
+
+    const deleted = await repository.processRoomLifecycle(
+      archivedAt + lifecycle.archivedRoomRetentionMs,
+      lifecycle,
+      permanentDefaultRoomId,
+    )
+    expect(deleted.deletedRoomIds).toContain(idle.room.id)
+    const remaining = await pool.query<{ archived_at: Date | null }>(
+      'SELECT archived_at FROM rooms WHERE id = $1',
+      [permanentDefaultRoomId],
+    )
+    expect(remaining.rows).toEqual([{ archived_at: null }])
   })
 
   it('强制重置保留房间配置，但删除全部成员、对局和旧恢复凭据', async () => {

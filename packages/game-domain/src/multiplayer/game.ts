@@ -22,6 +22,7 @@ export const GamePhase = {
   EndDecision: 'end-decision',
   BonusRound: 'bonus-round',
   Finished: 'finished',
+  Abandoned: 'abandoned',
 } as const
 
 export type GamePhase = (typeof GamePhase)[keyof typeof GamePhase]
@@ -74,7 +75,7 @@ export interface TurnSkipRecord {
   turnId: string
   sequence: number
   playerId: string
-  reason: 'turn-timeout' | 'roll-error-limit' | 'disconnected'
+  reason: 'turn-timeout' | 'roll-error-limit' | 'disconnected' | 'room-abandoned'
   createdAt: number
 }
 
@@ -98,6 +99,7 @@ export interface MultiplayerGameState {
   endDecisionDeadlineAt: number | null
   startedAt: number | null
   finishedAt: number | null
+  abandonedAt: number | null
 }
 
 function requireTimestamp(timestamp: number): void {
@@ -198,6 +200,47 @@ export function createMultiplayerGame(input: {
     endDecisionDeadlineAt: null,
     startedAt: null,
     finishedAt: null,
+    abandonedAt: null,
+  }
+}
+
+/**
+ * 将长期没有真实玩家操作的进行中对局转为明确的废弃终态。
+ * 当前回合只记录为废弃跳过，不创建下一回合，避免后台 deadline 无限自循环。
+ */
+export function abandonMultiplayerGame(
+  state: MultiplayerGameState,
+  now: number,
+): MultiplayerGameState {
+  if (
+    state.phase !== GamePhase.Playing &&
+    state.phase !== GamePhase.BonusRound &&
+    state.phase !== GamePhase.EndDecision
+  ) {
+    throw new Error('只有进行中的游戏可以标记为废弃')
+  }
+  requireTimestamp(now)
+  const turnSkips = state.activeTurn
+    ? [
+        ...state.turnSkips,
+        {
+          turnId: state.activeTurn.id,
+          sequence: state.activeTurn.sequence,
+          playerId: state.activeTurn.playerId,
+          reason: 'room-abandoned' as const,
+          createdAt: now,
+        },
+      ]
+    : [...state.turnSkips]
+  return {
+    ...state,
+    phase: GamePhase.Abandoned,
+    version: state.version + 1,
+    turnSkips,
+    activeTurn: null,
+    bonusQueue: [],
+    endDecisionDeadlineAt: null,
+    abandonedAt: now,
   }
 }
 

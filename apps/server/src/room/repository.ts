@@ -4,6 +4,7 @@ import {
   AwardTier,
   GamePhase,
   INITIAL_PRIZE_POOL,
+  abandonMultiplayerGame,
   chooseGameEndMode,
   createMultiplayerGame,
   expireEndDecision,
@@ -24,11 +25,32 @@ import {
   type TurnSkipRecord,
   type ZhuangyuanClaim,
 } from '@dice/game-domain'
-import { MULTIPLAYER_PROTOCOL_VERSION, type RoomSnapshot } from '@dice/protocol'
+import {
+  MULTIPLAYER_PROTOCOL_VERSION,
+  PLAYER_DISPLAY_NAME_MAX_LENGTH,
+  ROOM_DISPLAY_NAME_MAX_LENGTH,
+  type RoomDirectoryEntry,
+  type RoomSnapshot,
+} from '@dice/protocol'
 
 interface RoomRow extends QueryResultRow {
   id: string
   host_member_id: string | null
+  last_activity_at: Date
+  archived_at: Date | null
+}
+
+interface RoomSnapshotRoomRow extends RoomRow {
+  display_name: string
+}
+
+interface RoomDirectoryRow extends QueryResultRow {
+  id: string
+  display_name: string
+  access_type: 'open' | 'password'
+  phase: string | null
+  player_count: string
+  spectator_count: string
 }
 
 interface RoomResetCountsRow extends QueryResultRow {
@@ -55,6 +77,7 @@ interface GameRow extends QueryResultRow {
   bonus_queue: string[]
   started_at: Date | null
   finished_at: Date | null
+  abandoned_at: Date | null
 }
 
 interface PlayerRow extends QueryResultRow {
@@ -138,6 +161,25 @@ export interface JoinedMember {
   role: 'player' | 'spectator'
 }
 
+interface CreatedOpenRoom {
+  room: RoomDirectoryEntry
+  playerId: string
+  resumeToken: string
+}
+
+export interface RoomLifecycleConfig {
+  emptyRoomTtlMs: number
+  gameIdleAbandonMs: number
+  roomIdleArchiveMs: number
+  archivedRoomRetentionMs: number
+}
+
+export interface RoomLifecycleSweepResult {
+  abandonedRoomIds: string[]
+  archivedRoomIds: string[]
+  deletedRoomIds: string[]
+}
+
 export interface ComputedRollInput {
   roomId: string
   playerId: string
@@ -207,10 +249,29 @@ export interface ForcedRoomResetResult {
 
 function normalizedName(displayName: string): { displayName: string; normalized: string } {
   const trimmed = displayName.trim()
-  if (trimmed.length < 1 || trimmed.length > 24) {
-    throw new RangeError('昵称长度必须在 1..24 之间')
+  if (trimmed.length < 1 || trimmed.length > PLAYER_DISPLAY_NAME_MAX_LENGTH) {
+    throw new RangeError(`昵称长度必须在 1..${PLAYER_DISPLAY_NAME_MAX_LENGTH} 之间`)
   }
   return { displayName: trimmed, normalized: trimmed.toLocaleLowerCase() }
+}
+
+function normalizedRoomDisplayName(displayName: string): string {
+  const trimmed = displayName.trim()
+  if (trimmed.length < 1 || trimmed.length > ROOM_DISPLAY_NAME_MAX_LENGTH) {
+    throw new RangeError(`房间名称长度必须在 1..${ROOM_DISPLAY_NAME_MAX_LENGTH} 之间`)
+  }
+  return trimmed
+}
+
+function directoryEntry(row: RoomDirectoryRow): RoomDirectoryEntry {
+  return {
+    id: row.id,
+    displayName: row.display_name,
+    accessType: row.access_type,
+    phase: row.phase === null ? 'empty' : parsePhase(row.phase),
+    playerCount: Number(row.player_count),
+    spectatorCount: Number(row.spectator_count),
+  }
 }
 
 function hashResumeToken(token: string): Buffer {
@@ -250,14 +311,243 @@ export class RoomRepository {
       `
         INSERT INTO rooms (id, display_name, access_type)
         VALUES ($1, $2, 'open')
-        ON CONFLICT (id) DO NOTHING
+        ON CONFLICT (id) DO UPDATE
+        SET archived_at = NULL
       `,
       [roomId, displayName],
     )
   }
 
+  async createOpenRoomWithHost(input: {
+    displayName: string
+    creatorDisplayName: string
+    now?: number
+  }): Promise<CreatedOpenRoom> {
+    if (input.now !== undefined && (!Number.isFinite(input.now) || input.now < 0)) {
+      throw new RangeError('创建时间必须是非负有限数字')
+    }
+    const roomId = randomUUID()
+    const roomDisplayName = normalizedRoomDisplayName(input.displayName)
+    const creator = normalizedName(input.creatorDisplayName)
+    const playerId = randomUUID()
+    const resumeToken = randomBytes(32).toString('base64url')
+    const timestamp = new Date(input.now ?? Date.now())
+
+    return this.withTransaction(async (client) => {
+      const roomResult = await client.query<RoomDirectoryRow>(
+        `
+          INSERT INTO rooms (
+            id, display_name, access_type, last_activity_at
+          ) VALUES ($1, $2, 'open', $3)
+          RETURNING id, display_name, access_type, 'lobby'::text AS phase,
+                    '1'::text AS player_count, '0'::text AS spectator_count
+        `,
+        [roomId, roomDisplayName, timestamp],
+      )
+      await client.query(
+        `
+          INSERT INTO room_members (
+            id, room_id, display_name, normalized_name, resume_token_hash,
+            seat, member_role, joined_at, last_seen_at
+          ) VALUES ($1, $2, $3, $4, $5, 0, 'player', $6, $6)
+        `,
+        [
+          playerId,
+          roomId,
+          creator.displayName,
+          creator.normalized,
+          hashResumeToken(resumeToken),
+          timestamp,
+        ],
+      )
+      await client.query('UPDATE rooms SET host_member_id = $2 WHERE id = $1', [roomId, playerId])
+      await this.insertLobbyGame(client, {
+        roomId,
+        hostPlayerId: playerId,
+        players: [{ id: playerId, displayName: creator.displayName, seat: 0 }],
+      })
+      const room = roomResult.rows[0]
+      if (!room) throw new Error('创建房间后未返回记录')
+      return { room: directoryEntry(room), playerId, resumeToken }
+    })
+  }
+
+  async listOpenRooms(): Promise<RoomDirectoryEntry[]> {
+    const result = await this.pool.query<RoomDirectoryRow>(
+      `
+        SELECT
+          r.id,
+          r.display_name,
+          r.access_type,
+          latest_game.status AS phase,
+          count(m.id) FILTER (WHERE m.member_role = 'player')::text AS player_count,
+          count(m.id) FILTER (WHERE m.member_role = 'spectator')::text AS spectator_count
+        FROM rooms r
+        LEFT JOIN LATERAL (
+          SELECT status
+          FROM games
+          WHERE room_id = r.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) latest_game ON true
+        LEFT JOIN room_members m ON m.room_id = r.id AND m.retired_at IS NULL
+        WHERE r.access_type = 'open' AND r.archived_at IS NULL
+        GROUP BY r.id, latest_game.status
+        ORDER BY r.created_at DESC, r.id
+      `,
+    )
+    return result.rows.map(directoryEntry)
+  }
+
   async ping(): Promise<void> {
     await this.pool.query('SELECT 1')
+  }
+
+  async recordPresence(roomId: string, playerId: string, now = Date.now()): Promise<void> {
+    if (!Number.isFinite(now) || now < 0) throw new RangeError('在线时间必须是非负有限数字')
+    await this.pool.query(
+      `
+        UPDATE room_members
+        SET last_seen_at = GREATEST(last_seen_at, $3)
+        WHERE id = $2 AND room_id = $1 AND retired_at IS NULL
+      `,
+      [roomId, playerId, new Date(now)],
+    )
+  }
+
+  async processRoomLifecycle(
+    now: number,
+    config: RoomLifecycleConfig,
+    defaultRoomId: string,
+  ): Promise<RoomLifecycleSweepResult> {
+    if (!Number.isFinite(now) || now < 0) throw new RangeError('生命周期时间必须是非负有限数字')
+    if (!defaultRoomId.trim()) throw new RangeError('默认房间 ID 不能为空')
+    for (const [name, duration] of Object.entries(config)) {
+      if (!Number.isFinite(duration) || duration <= 0) {
+        throw new RangeError(`${name} 必须是正有限数字`)
+      }
+    }
+    if (config.roomIdleArchiveMs < config.gameIdleAbandonMs) {
+      throw new RangeError('roomIdleArchiveMs 不能小于 gameIdleAbandonMs')
+    }
+    const emptyCutoff = new Date(now - config.emptyRoomTtlMs)
+    const abandonCutoff = new Date(now - config.gameIdleAbandonMs)
+    const archiveCutoff = new Date(now - config.roomIdleArchiveMs)
+    const deleteCutoff = new Date(now - config.archivedRoomRetentionMs)
+
+    const emptyDeleted = await this.pool.query<{ id: string }>(
+      `
+        DELETE FROM rooms r
+        WHERE r.id <> $1
+          AND r.archived_at IS NULL
+          AND GREATEST(r.created_at, r.last_activity_at) <= $2
+          AND NOT EXISTS (
+            SELECT 1 FROM room_members m WHERE m.room_id = r.id
+          )
+        RETURNING r.id
+      `,
+      [defaultRoomId, emptyCutoff],
+    )
+
+    const candidates = await this.pool.query<{ room_id: string }>(
+      `
+        SELECT g.room_id
+        FROM games g
+        JOIN rooms r ON r.id = g.room_id
+        WHERE g.status IN ('playing', 'end-decision', 'bonus-round')
+          AND r.archived_at IS NULL
+          AND r.last_activity_at <= $1
+        ORDER BY g.room_id
+      `,
+      [abandonCutoff],
+    )
+    const abandonedRoomIds: string[] = []
+    for (const { room_id: roomId } of candidates.rows) {
+      const abandoned = await this.withTransaction(async (client) => {
+        const roomResult = await client.query<Pick<RoomRow, 'last_activity_at' | 'archived_at'>>(
+          'SELECT last_activity_at, archived_at FROM rooms WHERE id = $1 FOR UPDATE',
+          [roomId],
+        )
+        const room = roomResult.rows[0]
+        if (
+          !room ||
+          room.archived_at !== null ||
+          room.last_activity_at.getTime() > abandonCutoff.getTime()
+        ) {
+          return false
+        }
+        const before = await this.loadActiveGame(client, roomId, true)
+        if (
+          before.phase !== GamePhase.Playing &&
+          before.phase !== GamePhase.EndDecision &&
+          before.phase !== GamePhase.BonusRound
+        ) {
+          return false
+        }
+        if (before.activeTurn) {
+          await client.query(
+            `
+              UPDATE roll_attempts
+              SET status = 'rejected'
+              WHERE turn_id = $1 AND status IN ('computed', 'awaiting-tilt')
+            `,
+            [before.activeTurn.id],
+          )
+        }
+        const after = abandonMultiplayerGame(before, now)
+        await this.persistStateTransition(client, before, after, 'game-abandoned-idle')
+        return true
+      })
+      if (abandoned) abandonedRoomIds.push(roomId)
+    }
+
+    const archived = await this.pool.query<{ id: string }>(
+      `
+        UPDATE rooms r
+        SET archived_at = $3, updated_at = $3
+        WHERE r.id <> $1
+          AND r.archived_at IS NULL
+          AND GREATEST(
+            r.last_activity_at,
+            COALESCE((
+              SELECT max(m.last_seen_at)
+              FROM room_members m
+              WHERE m.room_id = r.id AND m.retired_at IS NULL
+            ), r.created_at)
+          ) <= $2
+          AND NOT (r.id = ANY($4::text[]))
+          AND EXISTS (SELECT 1 FROM room_members m WHERE m.room_id = r.id)
+          AND (
+            SELECT g.status
+            FROM games g
+            WHERE g.room_id = r.id
+            ORDER BY g.created_at DESC
+            LIMIT 1
+          ) IN ('lobby', 'finished', 'abandoned')
+        RETURNING r.id
+      `,
+      [defaultRoomId, archiveCutoff, new Date(now), abandonedRoomIds],
+    )
+
+    const archivedDeleted = await this.pool.query<{ id: string }>(
+      `
+        DELETE FROM rooms r
+        WHERE r.id <> $1
+          AND r.archived_at IS NOT NULL
+          AND r.archived_at <= $2
+        RETURNING r.id
+      `,
+      [defaultRoomId, deleteCutoff],
+    )
+
+    return {
+      abandonedRoomIds,
+      archivedRoomIds: archived.rows.map(({ id }) => id),
+      deletedRoomIds: [
+        ...emptyDeleted.rows.map(({ id }) => id),
+        ...archivedDeleted.rows.map(({ id }) => id),
+      ],
+    }
   }
 
   /**
@@ -272,7 +562,10 @@ export class RoomRepository {
 
     return this.withTransaction(async (client) => {
       const roomResult = await client.query<RoomRow>(
-        'SELECT id, host_member_id FROM rooms WHERE id = $1 FOR UPDATE',
+        `
+          SELECT id, host_member_id, last_activity_at, archived_at
+          FROM rooms WHERE id = $1 FOR UPDATE
+        `,
         [normalizedRoomId],
       )
       if (!roomResult.rows[0]) throw new RoomRepositoryError('not-found', '房间不存在')
@@ -292,7 +585,14 @@ export class RoomRepository {
       await client.query('DELETE FROM games WHERE room_id = $1', [normalizedRoomId])
       await client.query('DELETE FROM room_members WHERE room_id = $1', [normalizedRoomId])
       await client.query(
-        'UPDATE rooms SET host_member_id = NULL, updated_at = now() WHERE id = $1',
+        `
+          UPDATE rooms
+          SET host_member_id = NULL,
+              archived_at = NULL,
+              last_activity_at = now(),
+              updated_at = now()
+          WHERE id = $1
+        `,
         [normalizedRoomId],
       )
 
@@ -313,11 +613,17 @@ export class RoomRepository {
     const name = normalizedName(input.displayName)
     return this.withTransaction(async (client) => {
       const roomResult = await client.query<RoomRow>(
-        'SELECT id, host_member_id FROM rooms WHERE id = $1 FOR UPDATE',
+        `
+          SELECT id, host_member_id, last_activity_at, archived_at
+          FROM rooms WHERE id = $1 FOR UPDATE
+        `,
         [input.roomId],
       )
       const room = roomResult.rows[0]
       if (!room) throw new RoomRepositoryError('not-found', '房间不存在')
+      if (room.archived_at !== null) {
+        throw new RoomRepositoryError('not-found', '房间已归档')
+      }
 
       if (input.resumeToken) {
         const resumed = await client.query<MemberRow>(
@@ -346,7 +652,11 @@ export class RoomRepository {
       )
       const latestGame = latestGameResult.rows[0]
       const activeGame =
-        latestGame && latestGame.status !== GamePhase.Finished ? latestGame : undefined
+        latestGame &&
+        latestGame.status !== GamePhase.Finished &&
+        latestGame.status !== GamePhase.Abandoned
+          ? latestGame
+          : undefined
       const playerCountResult = activeGame
         ? await client.query<{ count: string }>(
             'SELECT count(*)::text AS count FROM game_players WHERE game_id = $1',
@@ -398,9 +708,17 @@ export class RoomRepository {
       const hostPlayerId = room.host_member_id ?? playerId
       if (!room.host_member_id) {
         await client.query(
-          'UPDATE rooms SET host_member_id = $2, updated_at = now() WHERE id = $1',
+          `
+            UPDATE rooms
+            SET host_member_id = $2,
+                last_activity_at = now(),
+                updated_at = now()
+            WHERE id = $1
+          `,
           [input.roomId, playerId],
         )
+      } else {
+        await this.touchRoomActivity(client, input.roomId, Date.now())
       }
 
       if (joinsAsPlayer) {
@@ -432,12 +750,13 @@ export class RoomRepository {
     timing: GameTimingConfig
   }): Promise<MultiplayerGameState> {
     return this.withTransaction(async (client) => {
+      await this.lockActiveRoom(client, input.roomId)
       const before = await this.loadActiveGame(client, input.roomId, true)
       if (before.hostPlayerId !== input.playerId) {
         throw new RoomRepositoryError('forbidden', '只有房主可以开始游戏')
       }
       const lobby =
-        before.phase === GamePhase.Finished
+        before.phase === GamePhase.Finished || before.phase === GamePhase.Abandoned
           ? await this.insertLobbyGame(client, {
               roomId: before.roomId,
               hostPlayerId: before.hostPlayerId,
@@ -450,12 +769,14 @@ export class RoomRepository {
         timing: input.timing,
       })
       await this.persistStateTransition(client, lobby, after, 'game-started')
+      await this.touchRoomActivity(client, input.roomId, input.now)
       return after
     })
   }
 
   async beginAuthoritativeRoll(input: ComputedRollInput): Promise<StartedRoll> {
     return this.withTransaction(async (client) => {
+      await this.lockActiveRoom(client, input.roomId)
       const state = await this.loadActiveGame(client, input.roomId, true)
       if (
         (state.phase !== GamePhase.Playing && state.phase !== GamePhase.BonusRound) ||
@@ -486,6 +807,7 @@ export class RoomRepository {
         ) {
           throw new RoomRepositoryError('conflict', '该投掷命令已经终止，请以最新房间状态为准')
         }
+        await this.touchRoomActivity(client, input.roomId, input.now)
         return {
           rollId: existing.id,
           seed: Number(existing.seed),
@@ -567,6 +889,7 @@ export class RoomRepository {
         `,
         [state.id, nextVersion, JSON.stringify({ rollId, playerId: input.playerId })],
       )
+      await this.touchRoomActivity(client, input.roomId, input.now)
       return {
         rollId,
         seed: input.seed,
@@ -581,6 +904,7 @@ export class RoomRepository {
 
   async recordAuthoritativeRollError(input: RollErrorInput): Promise<RollErrorResult> {
     return this.withTransaction(async (client) => {
+      await this.lockActiveRoom(client, input.roomId)
       const before = await this.loadActiveGame(client, input.roomId, true)
       if (
         (before.phase !== GamePhase.Playing && before.phase !== GamePhase.BonusRound) ||
@@ -593,7 +917,10 @@ export class RoomRepository {
         'SELECT id FROM roll_attempts WHERE game_id = $1 AND command_id = $2',
         [before.id, input.commandId],
       )
-      if (existing.rows[0]) return { shouldAutoRetry: false }
+      if (existing.rows[0]) {
+        await this.touchRoomActivity(client, input.roomId, input.now)
+        return { shouldAutoRetry: false }
+      }
 
       const turnResult = await client.query<TurnRow>(
         'SELECT * FROM turns WHERE id = $1 FOR UPDATE',
@@ -635,6 +962,7 @@ export class RoomRepository {
           playerId: input.playerId,
           errorReason: input.errorReason,
         })
+        await this.touchRoomActivity(client, input.roomId, input.now)
         return { shouldAutoRetry: true }
       }
 
@@ -645,12 +973,14 @@ export class RoomRepository {
         timing: input.timing,
       })
       await this.persistStateTransition(client, before, after, 'roll-error-limit')
+      await this.touchRoomActivity(client, input.roomId, input.now)
       return { shouldAutoRetry: false }
     })
   }
 
   async resolveTiltDecision(input: TiltDecisionInput): Promise<void> {
     await this.withTransaction(async (client) => {
+      await this.lockActiveRoom(client, input.roomId)
       const before = await this.loadActiveGame(client, input.roomId, true)
       if (
         (before.phase !== GamePhase.Playing && before.phase !== GamePhase.BonusRound) ||
@@ -695,6 +1025,7 @@ export class RoomRepository {
           input.timing,
           'manual',
         )
+        await this.touchRoomActivity(client, input.roomId, input.now)
         return
       }
 
@@ -708,6 +1039,7 @@ export class RoomRepository {
         timing: input.timing,
       })
       await this.persistRollTransition(client, before, after, roll.id, 'tilt-result-accepted')
+      await this.touchRoomActivity(client, input.roomId, input.now)
     })
   }
 
@@ -719,6 +1051,7 @@ export class RoomRepository {
     timing: GameTimingConfig
   }): Promise<void> {
     await this.withTransaction(async (client) => {
+      await this.lockActiveRoom(client, input.roomId)
       const before = await this.loadActiveGame(client, input.roomId, true)
       if (before.hostPlayerId !== input.playerId) {
         throw new RoomRepositoryError('forbidden', '只有房主可以选择结束方式')
@@ -730,6 +1063,7 @@ export class RoomRepository {
         timing: input.timing,
       })
       await this.persistStateTransition(client, before, after, 'end-mode-chosen')
+      await this.touchRoomActivity(client, input.roomId, input.now)
     })
   }
 
@@ -870,8 +1204,13 @@ export class RoomRepository {
   ): Promise<RoomSnapshot> {
     const client = await this.pool.connect()
     try {
-      const roomResult = await client.query<RoomRow>(
-        'SELECT id, host_member_id FROM rooms WHERE id = $1',
+      const roomResult = await client.query<RoomSnapshotRoomRow>(
+        `
+          SELECT id, display_name, host_member_id,
+                 last_activity_at, archived_at
+          FROM rooms
+          WHERE id = $1 AND archived_at IS NULL
+        `,
         [roomId],
       )
       const room = roomResult.rows[0]
@@ -916,6 +1255,7 @@ export class RoomRepository {
       return {
         protocolVersion: MULTIPLAYER_PROTOCOL_VERSION,
         roomId,
+        roomDisplayName: room.display_name,
         gameId: state.id,
         phase: state.phase,
         revision: state.version,
@@ -1161,6 +1501,7 @@ export class RoomRepository {
       endDecisionDeadlineAt: game.end_decision_deadline_at?.getTime() ?? null,
       startedAt: game.started_at?.getTime() ?? null,
       finishedAt: game.finished_at?.getTime() ?? null,
+      abandonedAt: game.abandoned_at?.getTime() ?? null,
     }
   }
 
@@ -1181,6 +1522,7 @@ export class RoomRepository {
             bonus_queue = $8,
             started_at = $9,
             finished_at = $10,
+            abandoned_at = $11,
             updated_at = now()
         WHERE id = $1 AND version = $2
       `,
@@ -1195,6 +1537,7 @@ export class RoomRepository {
         after.bonusQueue,
         after.startedAt === null ? null : new Date(after.startedAt),
         after.finishedAt === null ? null : new Date(after.finishedAt),
+        after.abandonedAt === null ? null : new Date(after.abandonedAt),
       ],
     )
     if (updated.rowCount !== 1)
@@ -1371,6 +1714,31 @@ export class RoomRepository {
       `,
       [state.id, nextVersion, eventType, JSON.stringify(payload)],
     )
+  }
+
+  private async touchRoomActivity(client: PoolClient, roomId: string, now: number): Promise<void> {
+    const timestamp = new Date(now)
+    await client.query(
+      `
+        UPDATE rooms
+        SET last_activity_at = GREATEST(last_activity_at, $2),
+            updated_at = GREATEST(updated_at, $2)
+        WHERE id = $1 AND archived_at IS NULL
+      `,
+      [roomId, timestamp],
+    )
+  }
+
+  private async lockActiveRoom(client: PoolClient, roomId: string): Promise<void> {
+    const result = await client.query<Pick<RoomRow, 'archived_at'>>(
+      'SELECT archived_at FROM rooms WHERE id = $1 FOR UPDATE',
+      [roomId],
+    )
+    const room = result.rows[0]
+    if (!room) throw new RoomRepositoryError('not-found', '房间不存在')
+    if (room.archived_at !== null) {
+      throw new RoomRepositoryError('not-found', '房间已归档')
+    }
   }
 
   private async withTransaction<T>(action: (client: PoolClient) => Promise<T>): Promise<T> {

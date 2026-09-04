@@ -13,8 +13,21 @@ import { RollErrorPanel } from '@/ui/components/RollErrorPanel'
 import { useGameStore } from '@/ui/components/GameStoreContext'
 import { Prize } from '@dice/game-domain'
 import { MultiplayerApp } from '@/multiplayer/MultiplayerApp'
+import { RoomDirectory } from '@/multiplayer/RoomDirectory'
+import { defaultRoomId } from '@/multiplayer/use-room'
 
 const DISPLAY_PRIZES = Object.values(Prize).filter((prize) => prize !== Prize.None)
+
+function roomIdFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/room\/([^/]+)\/?$/)
+  if (!match?.[1]) return null
+  try {
+    const roomId = decodeURIComponent(match[1]).trim()
+    return roomId.length >= 1 && roomId.length <= 64 ? roomId : null
+  } catch {
+    return null
+  }
+}
 
 export function GameOverlay() {
   const phase = useGameStore((s) => s.phase)
@@ -73,7 +86,13 @@ function App() {
     import.meta.env.MODE !== 'test' &&
     import.meta.env.MODE !== 'e2e' &&
     import.meta.env.VITE_MULTIPLAYER_ENABLED !== 'false'
-  if (multiplayerEnabled) return <MultiplayerApp />
+  if (multiplayerEnabled) {
+    if (window.location.pathname.replace(/\/+$/, '') === '/rooms') return <RoomDirectory />
+    const roomId = roomIdFromPath(window.location.pathname)
+    if (roomId) return <MultiplayerApp roomId={roomId} />
+    if (window.location.pathname.startsWith('/room/')) return <RoomDirectory />
+    return <MultiplayerApp roomId={defaultRoomId()} />
+  }
   return (
     <GameViewport>
       <GameOverlay />

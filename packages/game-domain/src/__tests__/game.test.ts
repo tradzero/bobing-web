@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   GamePhase,
+  abandonMultiplayerGame,
   chooseGameEndMode,
   createMultiplayerGame,
   expireEndDecision,
@@ -116,6 +117,27 @@ describe('多人游戏聚合状态', () => {
     expect(skipped.turnSkips).toEqual([
       expect.objectContaining({ playerId: 'a', reason: 'turn-timeout' }),
     ])
+  })
+
+  it('长期无人操作会废弃对局并终止当前回合，不再创建下一回合', () => {
+    const state = playing()
+    const abandoned = abandonMultiplayerGame(state, 40_000)
+    expect(abandoned).toMatchObject({
+      phase: GamePhase.Abandoned,
+      activeTurn: null,
+      abandonedAt: 40_000,
+      endDecisionDeadlineAt: null,
+      bonusQueue: [],
+    })
+    expect(abandoned.nextTurnSequence).toBe(state.nextTurnSequence)
+    expect(abandoned.turnSkips).toEqual([
+      expect.objectContaining({
+        turnId: 'turn-1',
+        playerId: 'a',
+        reason: 'room-abandoned',
+      }),
+    ])
+    expect(() => abandonMultiplayerGame(lobby(), 40_000)).toThrow(/进行中/)
   })
 
   it('最后一份奖领完后进入有截止时间的结束选择', () => {

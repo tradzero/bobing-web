@@ -5,14 +5,15 @@ if (!databaseUrl) {
   throw new Error('多人 E2E 需要显式设置 TEST_DATABASE_URL')
 }
 
-const roomId = process.env.MULTIPLAYER_E2E_ROOM_ID?.trim()
-if (!roomId) {
-  throw new Error('多人 E2E runner 未提供 MULTIPLAYER_E2E_ROOM_ID')
+const runId = process.env.MULTIPLAYER_E2E_RUN_ID?.trim()
+const defaultRoomId = process.env.MULTIPLAYER_E2E_DEFAULT_ROOM_ID?.trim()
+if (!runId || !defaultRoomId) {
+  throw new Error('多人 E2E runner 未提供运行 ID 或默认房间 ID')
 }
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'multiplayer.spec.ts',
+  testMatch: ['multiplayer.spec.ts', 'multiplayer-restart.spec.ts'],
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
@@ -55,7 +56,7 @@ export default defineConfig({
       DATABASE_URL: databaseUrl,
       SERVER_HOST: '127.0.0.1',
       SERVER_PORT: '4174',
-      DEFAULT_ROOM_ID: roomId,
+      DEFAULT_ROOM_ID: defaultRoomId,
       AUTO_MIGRATE: 'true',
       MAX_ROOM_PLAYERS: '12',
       TURN_ACTION_TIMEOUT_MS: '30000',

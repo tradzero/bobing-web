@@ -168,4 +168,55 @@ describe('多人浏览器身份绑定', () => {
 
     hook.unmount()
   })
+
+  it('加入后定期发送在线心跳，但不把心跳伪装成游戏命令', async () => {
+    const hook = renderHook(() => useMultiplayerRoom())
+    act(() => hook.result.current.connect('Alice'))
+    const socket = FakeWebSocket.instances[0]
+    act(() => {
+      socket?.open()
+      socket?.receive(joinedMessage('stable-token'))
+    })
+
+    act(() => vi.advanceTimersByTime(20_000))
+    expect(JSON.parse(socket?.sent[1] ?? '{}')).toMatchObject({ type: 'ping' })
+    expect(JSON.parse(socket?.sent[1] ?? '{}')).not.toHaveProperty('commandId')
+
+    hook.unmount()
+  })
+
+  it('为每个动态房间分别保存身份与恢复令牌', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ displayName: 'Default Alice', resumeToken: 'default-token' }),
+    )
+    const secondRoomKey = 'dice-room:room-b:session-v1'
+    localStorage.setItem(
+      secondRoomKey,
+      JSON.stringify({ displayName: 'Room Bob', resumeToken: 'room-b-token' }),
+    )
+
+    const hook = renderHook(() => useMultiplayerRoom('room-b'))
+    await flushMicrotasks()
+    const socket = FakeWebSocket.instances[0]
+    act(() => socket?.open())
+    expect(JSON.parse(socket?.sent[0] ?? '{}')).toMatchObject({
+      type: 'join-room',
+      roomId: 'room-b',
+      displayName: 'Room Bob',
+      resumeToken: 'room-b-token',
+    })
+
+    act(() => socket?.receive(joinedMessage('room-b-replacement-token')))
+    expect(JSON.parse(localStorage.getItem(secondRoomKey) ?? '{}')).toEqual({
+      displayName: 'Room Bob',
+      resumeToken: 'room-b-replacement-token',
+    })
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')).toEqual({
+      displayName: 'Default Alice',
+      resumeToken: 'default-token',
+    })
+
+    hook.unmount()
+  })
 })

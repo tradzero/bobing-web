@@ -72,6 +72,19 @@ export class RoomHub {
     })
   }
 
+  archiveRoom(roomId: string): void {
+    for (const [socket, session] of this.sessions) {
+      if (session.roomId !== roomId) continue
+      this.send(socket, {
+        type: 'error',
+        code: 'not-found',
+        message: '房间长期闲置，已归档',
+      })
+      this.sessions.delete(socket)
+      socket.close(4001, 'room archived')
+    }
+  }
+
   private send(socket: WebSocket, message: ServerMessage): void {
     if (socket.readyState === WebSocket.OPEN) socket.send(serializeServerMessage(message))
   }
@@ -125,6 +138,10 @@ export class RoomHub {
 
   private async handleMessage(socket: WebSocket, message: ClientMessage): Promise<void> {
     if (message.type === 'ping') {
+      const session = this.sessions.get(socket)
+      if (session) {
+        await this.repository.recordPresence(session.roomId, session.playerId)
+      }
       this.send(socket, {
         type: 'pong',
         clientTime: message.clientTime,

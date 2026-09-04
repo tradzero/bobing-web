@@ -19,10 +19,10 @@ Node/V8 会影响 IEEE-754 末位和 canonical hash，因此 `.nvmrc`、`engines
 ```text
 apps/
 ├── web/                    React UI、Three 渲染、单机产品、多人客户端
-└── server/                 HTTP/WebSocket、deadline、PostgreSQL repository
+└── server/                 HTTP/WebSocket、deadline/生命周期、PostgreSQL repository
 packages/
 ├── game-domain/            判奖、63 份奖池、回合、抢状元纯领域逻辑
-├── protocol/               WebSocket 命令和 RoomSnapshot 契约
+├── protocol/               WebSocket、房间目录和 RoomSnapshot 契约
 └── physics-core/           共享 Cannon 配置、刚体、读面、调度、诊断和 headless 编排
 scripts/                    物理验收、A/B、迁移与运维入口
 sweep/                      保留的参数扫描/诊断脚本
@@ -33,12 +33,14 @@ e2e/                        单机浏览器流程、soak 与隔离性能实验
 
 ## 单机与多人产品入口
 
-`App.tsx` 保留两个入口：
+`App.tsx` 保留单机与多人入口；多人入口再按 URL 选择房间：
 
 - `VITE_MULTIPLAYER_ENABLED=false`：单机 `GameViewport + GameOverlay`；
-- 默认：`MultiplayerApp`，连接同源 `/ws` 并加入 `VITE_DEFAULT_ROOM_ID`。
+- `/`：兼容入口，加入 `VITE_DEFAULT_ROOM_ID`；
+- `/rooms`：开放房大厅，通过同源 `GET/POST /api/rooms` 列出或创建房间；
+- `/room/<id>`：连接同源 `/ws` 并加入指定房间，可直接分享 URL。
 
-普通测试/e2e 构建强制走单机入口，避免数据库成为物理/UI 浏览器门禁的隐式依赖。`test:e2e:multiplayer` 独立构建多人入口，启动真实 HTTP/WebSocket 服务和随机 PostgreSQL 房间，并使用两个隔离 BrowserContext 验证多人链路。
+普通测试/e2e 构建强制走单机入口，避免数据库成为物理/UI 浏览器门禁的隐式依赖。`test:e2e:multiplayer` 独立构建多人入口，启动真实 HTTP/WebSocket 服务，并使用四个隔离 BrowserContext 从公开大厅创建两个房间，验证房间发现、并行对局、广播隔离和身份恢复。
 
 ## 多人权威链路
 
@@ -60,19 +62,24 @@ RoomRepository ── PostgreSQL 事务
 game-domain ── 回合推进、库存扣减、抢状元、结束/加投语义
 ```
 
-服务端先在数据库事务外完成 CPU 物理，再以短事务锁定当前 game/turn。投掷使用 UUID command ID 幂等；同一事务提交 attempt、奖项、状元归属和下一回合，避免错误重试造成双扣奖或双推进。
+服务端先在数据库事务外完成 CPU 物理，再以短事务锁定当前 room/game/turn。投掷使用 UUID command ID 幂等；同一事务提交 attempt、奖项、状元归属和下一回合，避免错误重试造成双扣奖或双推进。
 
 客户端收到 seed 后播放同一初始条件，但客户端读面和判奖仅供画面核对，不具备权威写入权。服务端发生 timeout、NaN、越界、guard 介入、floor tracker 不可用/命中或预算耗尽时，只记录错误并按配置重试/结束当前操作。
 
 ### 房间与身份
 
-- 进程启动时确保 `DEFAULT_ROOM_ID` 对应的开放房间存在；room ID、访问类型和 password hash 已在持久层保留扩展位。
-- 首位成员成为房主；开局按加入顺序锁定座位，开局后成员为旁观者。
-- 浏览器在同源 `localStorage` 保存昵称和 256-bit 恢复令牌，PostgreSQL 只保存令牌 SHA-256。普通刷新、断线和服务重启会自动恢复。
+- 进程启动时确保 `DEFAULT_ROOM_ID` 对应的永久开放房存在；此外可由 `POST /api/rooms` 创建服务端 UUID 标识的开放房，`GET /api/rooms` 只列出未归档房间的名称、阶段和成员计数。
+- 当前没有账户或管理员鉴权，因此能访问服务的局域网用户都能创建开放房。创建请求必须同时提交房间名和创建者昵称；room、房主成员、恢复令牌和 lobby 在同一事务生成，创建者不会被并发加入者抢走房主。接口限制 JSON 类型、4 KiB 请求体、32 字符房间名和 24 字符昵称，但暂未设置用户配额或速率限制。
+- `POST /api/rooms` 只把新房主的原始恢复令牌返回一次；GET 目录不返回奖项、投掷或身份信息。实际恢复/加入仍走带 `roomId` 的 WebSocket protocol v1。password hash 和访问类型继续保留扩展位，但当前 API 不创建或加入密码房。
+- 开局按加入顺序锁定座位，开局后以及结束/废弃后才加入的成员为旁观者。
+- 浏览器按 `roomId` 在同源 `localStorage` 分别保存昵称和 256-bit 恢复令牌，受限时回退到同标签页 `sessionStorage`；PostgreSQL 只保存令牌 SHA-256。普通刷新、断线和服务重启会自动恢复，不同房间不会覆盖彼此身份。
 - 强制清房后旧令牌失效；客户端只在首次恢复收到 `not-found` 时保留昵称、丢弃旧令牌并无令牌重绑一次。
 - 切换 host/IP/port、浏览器或无痕窗口会形成不同 origin/身份，这是当前局域网 MVP 的明确边界。
+- WebSocket 关闭只改变内存中的 `connected` 展示，不会立即退房、释放昵称或删除对局；加入/恢复和 20 秒在线心跳把 presence 持久化，但心跳不算游戏操作。
+- 生命周期以 PostgreSQL 时间列为真值：未加入过的非默认空房 1 小时后删除；进行中的游戏 30 分钟没有真实命令后转为 `abandoned`，当前 turn 以 `room-abandoned` 跳过且不再创建下一 turn；lobby/finished/abandoned 非默认房在真实活动和最后在线心跳都超过 24 小时后归档并从大厅隐藏；归档 7 天后硬删除。上述时长和 60 秒轮询均可由环境变量调整。
+- `DEFAULT_ROOM_ID` 不参与归档和删除，但其中的闲置进行中游戏仍会废弃，避免默认房产生无限 timeout 写入。废弃局保留奖项和投掷历史，原房主可按锁定阵容再开一局。
 
-### Deadline 与重置
+### Deadline、生命周期与重置
 
 PostgreSQL 中的绝对时间是 deadline 真值，scheduler 的 interval 只负责唤醒：
 
@@ -82,6 +89,8 @@ PostgreSQL 中的绝对时间是 deadline 真值，scheduler 的 interval 只负
 - `end-decision` 到期：默认立即结束。
 
 所有时限来自环境变量，重启后可继续。强制重置只提供停服 CLI：
+
+独立 lifecycle scheduler 同样只负责唤醒：断线人数不是删除依据；房间真实操作使用 `last_activity_at`，在线事实直接复用成员 `last_seen_at`，归档和废弃分别由 `archived_at` 与 `games.abandoned_at` 表达。活动命令与归档采用 room 行锁串行化，避免开局/投掷与归档交叉产生“已归档但仍在进行”的状态。
 
 ```bash
 pnpm room:reset -- --room=<id> --confirm=<id>
@@ -185,7 +194,7 @@ error/result ── reset ──▶ idle (round 1)
 - `pnpm test:slow` / `pnpm test:collision:acceptance`：200-seed projected-AABB 完整结果与 canonical 严格等价。
 - `pnpm test:physics`、`test:seed`、`test:acceptance`、`test:physics:ab`、`test:physics:cadence`：从 watch seed 到长样本/A-B 的物理门禁。
 - `pnpm test:e2e` / `test:e2e:soak`：桌面、移动、错误恢复、静态调度和连续投掷。
-- `pnpm test:e2e:multiplayer`：随机房间、真实服务与数据库、双浏览器加入、房主权限、权威投掷、同步、轮次交接和刷新恢复。
+- `pnpm test:e2e:multiplayer`：从大厅创建两个随机房间，使用真实服务、数据库和六个浏览器上下文验证分别加入/开局/投掷、广播隔离、定向 WebSocket 中断重连、重复命令幂等、真实进程重启、deadline 推进和身份恢复。
 - `bench:browser:*`：隔离 e2e 构建中的结构预算与配对性能实验。
 - PostgreSQL repository 与多人 E2E 只使用显式 `TEST_DATABASE_URL`；测试房间随机生成并精确清理。开发者明确授权时可指向可丢弃的本地开发库，不能指向生产库。
 

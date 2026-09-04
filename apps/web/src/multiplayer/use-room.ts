@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   MULTIPLAYER_PROTOCOL_VERSION,
+  PLAYER_DISPLAY_NAME_MAX_LENGTH,
   type ActiveRollSnapshot,
   type ClientMessage,
   type RoomSnapshot,
@@ -24,9 +25,16 @@ export type RoomCommand =
   | { type: 'tilt-decision'; decision: 'accept' | 'retry' }
   | { type: 'choose-end'; mode: 'immediate' | 'bonus-round' }
 
-const ROOM_ID = import.meta.env.VITE_DEFAULT_ROOM_ID?.trim() || 'default'
-const STORAGE_KEY = `dice-room:${ROOM_ID}:session-v1`
 const RECONNECT_DELAY_MS = 1_500
+const PRESENCE_HEARTBEAT_MS = 20_000
+
+export function defaultRoomId(): string {
+  return import.meta.env.VITE_DEFAULT_ROOM_ID?.trim() || 'default'
+}
+
+function sessionStorageKey(roomId: string): string {
+  return `dice-room:${roomId}:session-v1`
+}
 
 function socketUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -38,14 +46,15 @@ interface StoredIdentity {
   resumeToken?: string
 }
 
-function loadSession(): StoredIdentity | null {
+function loadSession(roomId: string): StoredIdentity | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const key = sessionStorageKey(roomId)
+    const raw = localStorage.getItem(key) ?? sessionStorage.getItem(key)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Record<string, unknown>
     if (typeof parsed.displayName !== 'string') return null
     const displayName = parsed.displayName.trim()
-    if (displayName.length < 1 || displayName.length > 24) return null
+    if (displayName.length < 1 || displayName.length > PLAYER_DISPLAY_NAME_MAX_LENGTH) return null
     if (
       parsed.resumeToken !== undefined &&
       (typeof parsed.resumeToken !== 'string' ||
@@ -63,15 +72,23 @@ function loadSession(): StoredIdentity | null {
   }
 }
 
-function saveSession(displayName: string, resumeToken?: string): boolean {
+export function saveRoomSession(
+  roomId: string,
+  displayName: string,
+  resumeToken?: string,
+): boolean {
+  const key = sessionStorageKey(roomId)
+  const value = JSON.stringify({ displayName, ...(resumeToken ? { resumeToken } : {}) })
   try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ displayName, ...(resumeToken ? { resumeToken } : {}) }),
-    )
+    localStorage.setItem(key, value)
     return true
   } catch {
-    return false
+    try {
+      sessionStorage.setItem(key, value)
+      return true
+    } catch {
+      return false
+    }
   }
 }
 
@@ -84,149 +101,175 @@ const INITIAL_STATE: MultiplayerRoomState = {
   pendingCommand: null,
 }
 
-export function useMultiplayerRoom() {
+export function useMultiplayerRoom(roomId = defaultRoomId()) {
   const socketRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
   const connectRef = useRef<(displayName: string, resumeToken?: string) => void>(() => undefined)
   const nameRef = useRef<string>('')
   const [state, setState] = useState<MultiplayerRoomState>(INITIAL_STATE)
 
-  const connect = useCallback((rawDisplayName: string, resumeToken?: string) => {
-    const displayName = rawDisplayName.trim()
-    if (!displayName) {
-      setState((current) => ({ ...current, status: 'error', error: '请输入昵称' }))
-      return
-    }
-    if (reconnectTimerRef.current !== null) {
-      window.clearTimeout(reconnectTimerRef.current)
-      reconnectTimerRef.current = null
-    }
-    socketRef.current?.close()
-    nameRef.current = displayName
-    const identitySaved = saveSession(displayName, resumeToken)
-    setState((current) =>
-      current.playerId
-        ? {
-            ...current,
-            status: 'connecting',
-            error: identitySaved ? null : '浏览器无法保存身份，关闭页面后需要重新输入昵称',
-            pendingCommand: null,
-          }
-        : {
-            ...INITIAL_STATE,
-            status: 'connecting',
-            error: identitySaved ? null : '浏览器无法保存身份，关闭页面后需要重新输入昵称',
-          },
-    )
-    const socket = new WebSocket(socketUrl())
-    socketRef.current = socket
-    let joined = false
-    let retryingWithoutToken = false
-    socket.addEventListener('open', () => {
-      const message: ClientMessage = {
-        type: 'join-room',
-        protocolVersion: MULTIPLAYER_PROTOCOL_VERSION,
-        roomId: ROOM_ID,
-        displayName,
-        ...(resumeToken ? { resumeToken } : {}),
-      }
-      socket.send(JSON.stringify(message))
-    })
-    socket.addEventListener('message', (event) => {
-      let message: ServerMessage
-      try {
-        message = JSON.parse(String(event.data)) as ServerMessage
-      } catch {
-        setState((current) => ({ ...current, status: 'error', error: '服务端消息格式错误' }))
+  const connect = useCallback(
+    (rawDisplayName: string, resumeToken?: string) => {
+      const displayName = rawDisplayName.trim()
+      if (!displayName) {
+        setState((current) => ({ ...current, status: 'error', error: '请输入昵称' }))
         return
       }
-      if (message.type === 'joined') {
-        joined = true
-        const saved = saveSession(displayName, message.resumeToken)
-        setState({
-          status: 'joined',
-          playerId: message.playerId,
-          snapshot: message.snapshot,
-          activeRoll: message.snapshot.activeRoll,
-          error: saved ? null : '浏览器无法保存身份，关闭页面后需要重新输入昵称',
-          pendingCommand: null,
-        })
-        return
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
       }
-      if (message.type === 'snapshot') {
-        setState((current) => ({
-          ...current,
-          status: 'joined',
-          snapshot: message.snapshot,
-          activeRoll: message.snapshot.activeRoll,
-          pendingCommand: null,
-        }))
-        return
-      }
-      if (message.type === 'roll-started') {
-        setState((current) => ({
-          ...current,
-          activeRoll: {
-            id: message.rollId,
+      socketRef.current?.close()
+      nameRef.current = displayName
+      const identitySaved = saveRoomSession(roomId, displayName, resumeToken)
+      setState((current) =>
+        current.playerId
+          ? {
+              ...current,
+              status: 'connecting',
+              error: identitySaved ? null : '浏览器无法保存身份，关闭页面后需要重新输入昵称',
+              pendingCommand: null,
+            }
+          : {
+              ...INITIAL_STATE,
+              status: 'connecting',
+              error: identitySaved ? null : '浏览器无法保存身份，关闭页面后需要重新输入昵称',
+            },
+      )
+      const socket = new WebSocket(socketUrl())
+      socketRef.current = socket
+      let joined = false
+      let retryingWithoutToken = false
+      socket.addEventListener('open', () => {
+        const message: ClientMessage = {
+          type: 'join-room',
+          protocolVersion: MULTIPLAYER_PROTOCOL_VERSION,
+          roomId,
+          displayName,
+          ...(resumeToken ? { resumeToken } : {}),
+        }
+        socket.send(JSON.stringify(message))
+      })
+      socket.addEventListener('message', (event) => {
+        let message: ServerMessage
+        try {
+          message = JSON.parse(String(event.data)) as ServerMessage
+        } catch {
+          setState((current) => ({ ...current, status: 'error', error: '服务端消息格式错误' }))
+          return
+        }
+        if (message.type === 'joined') {
+          joined = true
+          const saved = saveRoomSession(roomId, displayName, message.resumeToken)
+          setState({
+            status: 'joined',
             playerId: message.playerId,
-            seed: message.seed,
-            revealAt: message.revealAt,
-            throwAlgorithmVersion: message.throwAlgorithmVersion,
-            settleAlgorithmVersion: message.settleAlgorithmVersion,
-          },
-          pendingCommand: null,
-        }))
-        return
-      }
-      if (message.type === 'error') {
-        if (!joined && resumeToken && message.code === 'not-found' && !retryingWithoutToken) {
-          retryingWithoutToken = true
-          saveSession(displayName)
-          setState({ ...INITIAL_STATE, status: 'connecting' })
-          queueMicrotask(() => {
-            if (socketRef.current === socket) connectRef.current(displayName)
+            snapshot: message.snapshot,
+            activeRoll: message.snapshot.activeRoll,
+            error: saved ? null : '浏览器无法保存身份，关闭页面后需要重新输入昵称',
+            pendingCommand: null,
           })
           return
         }
+        if (message.type === 'snapshot') {
+          setState((current) => ({
+            ...current,
+            status: 'joined',
+            snapshot: message.snapshot,
+            activeRoll: message.snapshot.activeRoll,
+            pendingCommand: null,
+          }))
+          return
+        }
+        if (message.type === 'roll-started') {
+          setState((current) => ({
+            ...current,
+            activeRoll: {
+              id: message.rollId,
+              playerId: message.playerId,
+              seed: message.seed,
+              revealAt: message.revealAt,
+              throwAlgorithmVersion: message.throwAlgorithmVersion,
+              settleAlgorithmVersion: message.settleAlgorithmVersion,
+            },
+            pendingCommand: null,
+          }))
+          return
+        }
+        if (message.type === 'error') {
+          if (!joined && resumeToken && message.code === 'not-found' && !retryingWithoutToken) {
+            retryingWithoutToken = true
+            saveRoomSession(roomId, displayName)
+            setState({ ...INITIAL_STATE, status: 'connecting' })
+            queueMicrotask(() => {
+              if (socketRef.current === socket) connectRef.current(displayName)
+            })
+            return
+          }
+          if (!joined && message.code === 'not-found') {
+            setState({
+              ...INITIAL_STATE,
+              status: 'error',
+              error: message.message,
+            })
+            return
+          }
+          setState((current) => ({
+            ...current,
+            status: current.playerId ? current.status : 'error',
+            error: message.message,
+            pendingCommand: null,
+          }))
+        }
+      })
+      socket.addEventListener('close', () => {
+        if (socketRef.current !== socket) return
         setState((current) => ({
           ...current,
-          status: current.playerId ? current.status : 'error',
-          error: message.message,
+          status: current.playerId
+            ? 'disconnected'
+            : current.status === 'error'
+              ? 'error'
+              : 'disconnected',
           pendingCommand: null,
         }))
-      }
-    })
-    socket.addEventListener('close', () => {
-      if (socketRef.current !== socket) return
-      setState((current) => ({
-        ...current,
-        status: current.playerId
-          ? 'disconnected'
-          : current.status === 'error'
-            ? 'error'
-            : 'disconnected',
-        pendingCommand: null,
-      }))
-      const session = loadSession()
-      if (session) {
-        reconnectTimerRef.current = window.setTimeout(() => {
-          reconnectTimerRef.current = null
-          if (socketRef.current === socket) {
-            connectRef.current(session.displayName, session.resumeToken)
-          }
-        }, RECONNECT_DELAY_MS)
-      }
-    })
-    socket.addEventListener('error', () => {
-      setState((current) => ({ ...current, error: '无法连接房间服务' }))
-    })
-  }, [])
+        const session = loadSession(roomId)
+        if (session) {
+          reconnectTimerRef.current = window.setTimeout(() => {
+            reconnectTimerRef.current = null
+            if (socketRef.current === socket) {
+              connectRef.current(session.displayName, session.resumeToken)
+            }
+          }, RECONNECT_DELAY_MS)
+        }
+      })
+      socket.addEventListener('error', () => {
+        setState((current) => ({ ...current, error: '无法连接房间服务' }))
+      })
+    },
+    [roomId],
+  )
   useEffect(() => {
     connectRef.current = connect
   }, [connect])
 
   useEffect(() => {
-    const session = loadSession()
+    if (state.status !== 'joined') return
+    const timer = window.setInterval(() => {
+      const socket = socketRef.current
+      if (!socket || socket.readyState !== WebSocket.OPEN) return
+      socket.send(
+        JSON.stringify({
+          type: 'ping',
+          clientTime: new Date().toISOString(),
+        } satisfies ClientMessage),
+      )
+    }, PRESENCE_HEARTBEAT_MS)
+    return () => window.clearInterval(timer)
+  }, [state.status])
+
+  useEffect(() => {
+    const session = loadSession(roomId)
     let active = true
     if (session) {
       queueMicrotask(() => {
@@ -243,7 +286,7 @@ export function useMultiplayerRoom() {
       socketRef.current = null
       socket?.close()
     }
-  }, [connect])
+  }, [connect, roomId])
 
   const sendCommand = useCallback((message: RoomCommand) => {
     const socket = socketRef.current
@@ -255,15 +298,15 @@ export function useMultiplayerRoom() {
   }, [])
 
   const reconnect = useCallback(() => {
-    const session = loadSession()
+    const session = loadSession(roomId)
     connect(session?.displayName || nameRef.current, session?.resumeToken)
-  }, [connect])
+  }, [connect, roomId])
 
   return {
     state,
     connect,
     reconnect,
     sendCommand,
-    storedDisplayName: loadSession()?.displayName ?? '',
+    storedDisplayName: loadSession(roomId)?.displayName ?? '',
   }
 }

@@ -8,7 +8,12 @@ if (!databaseUrl) {
   process.exit(2)
 }
 
-const roomId = `e2e-${randomUUID()}`
+const runId = randomUUID()
+const defaultRoomId = `e2e-default-${runId}`
+const restartDefaultRoomId = `e2e-restart-default-${runId}`
+const displayRunId = runId.slice(0, 12)
+const roomNames = [`多人 E2E ${displayRunId} 甲`, `多人 E2E ${displayRunId} 乙`]
+const restartRoomName = `重启 E2E ${displayRunId}`
 const packageManager = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 class CommandError extends Error {
@@ -32,7 +37,7 @@ let exitCode = 0
 try {
   run(['run', 'build:server'])
   run(['exec', 'vite', 'build', '--mode', 'multiplayer-e2e'], {
-    VITE_DEFAULT_ROOM_ID: roomId,
+    VITE_DEFAULT_ROOM_ID: defaultRoomId,
   })
   run(
     [
@@ -40,10 +45,15 @@ try {
       'playwright',
       'test',
       'e2e/multiplayer.spec.ts',
+      'e2e/multiplayer-restart.spec.ts',
       '--config',
       'playwright.multiplayer.config.ts',
     ],
-    { MULTIPLAYER_E2E_ROOM_ID: roomId },
+    {
+      MULTIPLAYER_E2E_RUN_ID: runId,
+      MULTIPLAYER_E2E_DEFAULT_ROOM_ID: defaultRoomId,
+      MULTIPLAYER_E2E_RESTART_DEFAULT_ROOM_ID: restartDefaultRoomId,
+    },
   )
 } catch (error) {
   if (!(error instanceof CommandError)) throw error
@@ -51,7 +61,13 @@ try {
 } finally {
   const pool = new Pool({ connectionString: databaseUrl, max: 1 })
   try {
-    await pool.query('DELETE FROM rooms WHERE id = $1', [roomId])
+    await pool.query(
+      'DELETE FROM rooms WHERE id = ANY($1::text[]) OR display_name = ANY($2::text[])',
+      [
+        [defaultRoomId, restartDefaultRoomId],
+        [...roomNames, restartRoomName],
+      ],
+    )
   } catch (error) {
     console.error('[multiplayer-e2e] 清理随机测试房间失败', error)
     if (exitCode === 0) exitCode = 1

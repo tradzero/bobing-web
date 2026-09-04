@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { AwardTier, type AwardTier as AwardTierType } from '@dice/game-domain'
-import type { RoomSnapshot } from '@dice/protocol'
+import { PLAYER_DISPLAY_NAME_MAX_LENGTH, type RoomSnapshot } from '@dice/protocol'
 import { GameViewport } from '@/ui/components/GameViewport'
 import { useGameController } from '@/ui/components/GameControllerContext'
 import { useMultiplayerRoom, type MultiplayerRoomState, type RoomCommand } from './use-room'
@@ -159,11 +159,16 @@ function RoomAction({
     )
   }
 
-  if (snapshot.phase === 'finished') {
+  if (snapshot.phase === 'finished' || snapshot.phase === 'abandoned') {
+    const abandoned = snapshot.phase === 'abandoned'
     return (
       <div className="room-action-card">
-        <strong>本局已结束</strong>
-        <span>{isHost ? '最终结果已保存，可以按原阵容再开一局' : '等待房主再开一局'}</span>
+        <strong>{abandoned ? '本局因长期无人操作已停止' : '本局已结束'}</strong>
+        <span>
+          {isHost
+            ? `${abandoned ? '当前奖项记录已保留，' : '最终结果已保存，'}可以按原阵容再开一局`
+            : '等待房主再开一局'}
+        </span>
         {isHost && (
           <button
             className="room-primary-button"
@@ -251,12 +256,15 @@ function RoomOverlay({
       <RollSeedBridge activeRoll={state.activeRoll} />
       <header className="room-header">
         <div>
-          <small>局域网房间 · {snapshot.roomId}</small>
-          <strong>中秋博饼</strong>
+          <small>房间 · {snapshot.roomId}</small>
+          <strong>{snapshot.roomDisplayName}</strong>
         </div>
         <div className="room-header-status">
           <span>第 {snapshot.currentTurn?.cycleNumber ?? 0} 轮</span>
           <span>{snapshot.members.find(({ id }) => id === playerId)?.displayName}</span>
+          <a className="room-directory-link" href="/rooms">
+            房间大厅
+          </a>
         </div>
       </header>
       {state.status === 'disconnected' && (
@@ -284,11 +292,13 @@ function RoomOverlay({
 }
 
 function JoinRoom({
+  roomId,
   initialName,
   error,
   connecting,
   onJoin,
 }: {
+  roomId: string
   initialName: string
   error: string | null
   connecting: boolean
@@ -302,13 +312,13 @@ function JoinRoom({
   return (
     <main className="room-join">
       <form onSubmit={submit}>
-        <small>局域网联机 · 单房间实例</small>
+        <small>局域网联机 · 房间 {roomId}</small>
         <h1>中秋博饼</h1>
         <p>首次输入昵称后会绑定当前浏览器；以后打开同一访问地址将自动恢复身份。</p>
         <label htmlFor="room-display-name">玩家昵称</label>
         <input
           id="room-display-name"
-          maxLength={24}
+          maxLength={PLAYER_DISPLAY_NAME_MAX_LENGTH}
           autoFocus
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -318,16 +328,20 @@ function JoinRoom({
         <button disabled={connecting || !name.trim()}>
           {connecting ? '正在加入…' : '加入房间'}
         </button>
+        <a className="room-back-link" href="/rooms">
+          返回房间大厅
+        </a>
       </form>
     </main>
   )
 }
 
-export function MultiplayerApp() {
-  const { state, connect, reconnect, sendCommand, storedDisplayName } = useMultiplayerRoom()
+export function MultiplayerApp({ roomId }: { roomId: string }) {
+  const { state, connect, reconnect, sendCommand, storedDisplayName } = useMultiplayerRoom(roomId)
   if (!state.snapshot || !state.playerId) {
     return (
       <JoinRoom
+        roomId={roomId}
         initialName={storedDisplayName}
         error={state.error}
         connecting={state.status === 'connecting'}

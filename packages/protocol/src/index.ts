@@ -2,6 +2,32 @@ import type { AwardTier, GamePhase, JudgeResult, PrizePoolCounts } from '@dice/g
 
 export const MULTIPLAYER_PROTOCOL_VERSION = 1 as const
 
+export const ROOM_DISPLAY_NAME_MAX_LENGTH = 32 as const
+export const PLAYER_DISPLAY_NAME_MAX_LENGTH = 24 as const
+
+export interface RoomDirectoryEntry {
+  id: string
+  displayName: string
+  accessType: 'open' | 'password'
+  phase: GamePhase | 'empty'
+  playerCount: number
+  spectatorCount: number
+}
+
+export interface RoomDirectoryResponse {
+  rooms: RoomDirectoryEntry[]
+}
+
+export interface CreateOpenRoomRequest {
+  displayName: string
+  creatorDisplayName: string
+}
+
+export interface CreateOpenRoomResponse {
+  roomId: string
+  resumeToken: string
+}
+
 export interface RoomMemberSnapshot {
   id: string
   displayName: string
@@ -49,6 +75,7 @@ export interface ZhuangyuanSnapshot {
 export interface RoomSnapshot {
   protocolVersion: typeof MULTIPLAYER_PROTOCOL_VERSION
   roomId: string
+  roomDisplayName: string
   gameId: string | null
   phase: GamePhase
   revision: number
@@ -116,6 +143,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+export function parseCreateOpenRoomRequest(value: unknown): CreateOpenRoomRequest {
+  if (!isRecord(value)) throw new TypeError('创建房间请求必须是对象')
+  return {
+    displayName: stringField(value, 'displayName', {
+      min: 1,
+      max: ROOM_DISPLAY_NAME_MAX_LENGTH,
+    }),
+    creatorDisplayName: stringField(value, 'creatorDisplayName', {
+      min: 1,
+      max: PLAYER_DISPLAY_NAME_MAX_LENGTH,
+    }),
+  }
+}
+
 function stringField(
   value: Record<string, unknown>,
   name: string,
@@ -167,7 +208,10 @@ export function parseClientMessage(raw: string): ClientMessage {
         type: 'join-room',
         protocolVersion: MULTIPLAYER_PROTOCOL_VERSION,
         roomId: stringField(decoded, 'roomId', { min: 1, max: 64 }),
-        displayName: stringField(decoded, 'displayName', { min: 1, max: 24 }),
+        displayName: stringField(decoded, 'displayName', {
+          min: 1,
+          max: PLAYER_DISPLAY_NAME_MAX_LENGTH,
+        }),
         ...(resumeToken ? { resumeToken } : {}),
       }
     }

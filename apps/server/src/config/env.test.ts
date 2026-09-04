@@ -11,6 +11,7 @@ describe('服务端环境变量', () => {
       maxRoomPlayers: 12,
       autoMigrate: false,
       schedulerPollIntervalMs: 500,
+      lifecyclePollIntervalMs: 60_000,
       rollRevealMinMs: 1_200,
       rollRevealMaxMs: 10_000,
       timing: {
@@ -18,6 +19,12 @@ describe('服务端环境变量', () => {
         tiltDecisionTimeoutMs: 10_000,
         endDecisionTimeoutMs: 30_000,
         maxAutoRetries: 1,
+      },
+      lifecycle: {
+        emptyRoomTtlMs: 3_600_000,
+        gameIdleAbandonMs: 1_800_000,
+        roomIdleArchiveMs: 86_400_000,
+        archivedRoomRetentionMs: 604_800_000,
       },
     })
   })
@@ -29,6 +36,11 @@ describe('服务端环境变量', () => {
       TILT_DECISION_TIMEOUT_MS: '15000',
       END_DECISION_TIMEOUT_MS: '60000',
       MAX_AUTO_RETRIES: '2',
+      EMPTY_ROOM_TTL_MS: '7200000',
+      GAME_IDLE_ABANDON_MS: '3600000',
+      ROOM_IDLE_ARCHIVE_MS: '172800000',
+      ARCHIVED_ROOM_RETENTION_MS: '1209600000',
+      ROOM_LIFECYCLE_POLL_INTERVAL_MS: '30000',
     })
     expect(config.timing).toEqual({
       turnActionTimeoutMs: 45_000,
@@ -36,6 +48,13 @@ describe('服务端环境变量', () => {
       endDecisionTimeoutMs: 60_000,
       maxAutoRetries: 2,
     })
+    expect(config.lifecycle).toEqual({
+      emptyRoomTtlMs: 7_200_000,
+      gameIdleAbandonMs: 3_600_000,
+      roomIdleArchiveMs: 172_800_000,
+      archivedRoomRetentionMs: 1_209_600_000,
+    })
+    expect(config.lifecyclePollIntervalMs).toBe(30_000)
   })
 
   it('拒绝过短倒计时、非整数端口和非法布尔值', () => {
@@ -58,5 +77,12 @@ describe('服务端环境变量', () => {
         ROLL_REVEAL_MAX_MS: '8000',
       }),
     ).toThrow(/ROLL_REVEAL_MAX_MS/)
+    expect(() =>
+      loadServerConfig({
+        DATABASE_URL: 'postgresql://localhost/dice',
+        GAME_IDLE_ABANDON_MS: '120000',
+        ROOM_IDLE_ARCHIVE_MS: '60000',
+      }),
+    ).toThrow(/ROOM_IDLE_ARCHIVE_MS/)
   })
 })
