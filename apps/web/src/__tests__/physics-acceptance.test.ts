@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { ROLL_DIAGNOSTICS_SCHEMA_VERSION, runRoll } from '@/physics/roll-runner'
+import { ROLL_DIAGNOSTICS_SCHEMA_VERSION, runRoll } from '@dice/physics-core'
 import { WALL_RADIUS } from '@/physics/bowl-body'
 import { SETTLE } from '@/config/settle'
 import { PHYSICS } from '@/config/physics'
-import { judge } from '@/rules/judge'
+import { judge } from '@dice/game-domain'
 
 /**
  * 每次提交使用的固定回归种子。

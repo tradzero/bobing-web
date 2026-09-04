@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { runRoll } from '@/physics/roll-runner'
+import { runRoll } from '@dice/physics-core'
 import { WALL_RADIUS } from '@/physics/bowl-body'
 
 /**

@@ -1,5 +1,5 @@
 import { createStore } from 'zustand/vanilla'
-import { Prize, type JudgeResult } from '@/rules/types'
+import { Prize, type JudgeResult } from '@dice/game-domain'
 import { UI } from '@/config/ui'
 import type { RollError } from './roll-error'
 

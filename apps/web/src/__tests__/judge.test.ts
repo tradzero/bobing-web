@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
-import { judge } from '@/rules/judge'
-import { Prize } from '@/rules/types'
+import { judge, Prize } from '@dice/game-domain'
 
 describe('输入契约', () => {
   it.each([

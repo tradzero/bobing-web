@@ -9,7 +9,7 @@ import {
 } from '@/physics/cadence-comparison'
 import { parsePhysicsCadenceArgs } from '@/physics/cadence-cli-options'
 import type { CadenceRollOptions, CadenceRollReport } from '@/physics/cadence-roll-runner'
-import type { RollRunResult } from '@/physics/roll-runner'
+import type { RollRunResult } from '@dice/physics-core'
 
 function canonicalState(seed: number) {
   return {

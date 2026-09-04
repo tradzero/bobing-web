@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { SETTLE } from '@/config/settle'
-import { runRoll } from '@/physics/roll-runner'
-import { judge } from '@/rules/judge'
+import { runRoll } from '@dice/physics-core'
+import { judge } from '@dice/game-domain'
 
 /**
  * 对历史上确实触发 cluster-assist 的固定 seed 做反事实：默认路径必须继续到

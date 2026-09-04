@@ -16,7 +16,7 @@ import {
   FLOOR_RELAUNCH_TRACKER_VERSION,
   FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
 } from '../apps/web/src/physics/floor-relaunch.ts'
-import { ROLL_DIAGNOSTICS_SCHEMA_VERSION, runRoll } from '../apps/web/src/physics/roll-runner.ts'
+import { ROLL_DIAGNOSTICS_SCHEMA_VERSION, runRoll } from '@dice/physics-core'
 import {
   PHYSICS_AB_SCHEMA_VERSION,
   buildPhysicsAbSeedSet,

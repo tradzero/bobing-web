@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ServerConfig } from '../config/env'
 import { RoomRepository, type StartedRoll, type TiltDecisionInput } from '../room/repository'
-import { RollAuthority } from './authority'
+import { computeAuthoritativeRoll, type RollAuthorityOptions } from './authority'
 
 export interface RoomRollRequest {
   roomId: string
@@ -15,7 +15,7 @@ export interface RoomRollRequest {
  */
 export class RoomRollService {
   private readonly repository: RoomRepository
-  private readonly authority: RollAuthority
+  private readonly authorityOptions: RollAuthorityOptions
   private readonly config: ServerConfig
   private readonly now: () => number
 
@@ -26,17 +26,17 @@ export class RoomRollService {
   ) {
     this.repository = repository
     this.config = config
-    this.authority = new RollAuthority({
+    this.authorityOptions = {
       revealMinMs: config.rollRevealMinMs,
       revealMaxMs: config.rollRevealMaxMs,
-    })
+    }
     this.now = options.now ?? Date.now
   }
 
   async requestRoll(request: RoomRollRequest): Promise<StartedRoll | null> {
     let commandId = request.commandId
     for (;;) {
-      const outcome = this.authority.compute()
+      const outcome = computeAuthoritativeRoll(this.authorityOptions)
       const now = this.now()
       if (outcome.kind === 'error') {
         const recorded = await this.repository.recordAuthoritativeRollError({

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createGameStore } from '@/game/store'
-import { judge } from '@/rules/judge'
-import { Prize } from '@/rules/types'
+import { judge, Prize } from '@dice/game-domain'
 
 describe('GameStore 异常状态契约', () => {
   it('setRollError 只终止当前轮，不推进轮次或改写既有历史与奖级记录', () => {

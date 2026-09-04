@@ -17,7 +17,7 @@ import { reseed } from '@/utils/random'
 import { throwDice } from '@/dice/throw'
 import { checkSettled, createSettleState } from '@/dice/settle'
 import { readAllFacesDetailed } from '@/dice/read-face'
-import { judge } from '@/rules/judge'
+import { judge } from '@dice/game-domain'
 import { SETTLE } from '@/config/settle'
 import * as CANNON from 'cannon-es'
 

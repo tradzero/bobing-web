@@ -1,7 +1,6 @@
 import * as CANNON from 'cannon-es'
-import type { DicePair } from './create'
 import { THROW, type ThrowPlacementAlgorithm } from '@/config/throw'
-import { syncBodyInterpolationState } from '@/physics/body-transform'
+import { syncBodyInterpolationState } from '@/physics/body-interpolation'
 import {
   createRandomSubstream,
   getCurrentSeed,
@@ -9,51 +8,33 @@ import {
   randomRange,
   type RandomFn,
 } from '@/utils/random'
+import {
+  THROW_LAYOUT_RANDOM_SALT,
+  applyThrowDynamics,
+  createThrowRandomPlan,
+  throwStratifiedRing,
+  type FallbackLayout,
+  type Slot,
+  type ThrowDiagnostics,
+  type ThrowBodyPair,
+  type ThrowDiceOptions,
+} from './throw-runtime'
 
 export type { ThrowPlacementAlgorithm } from '@/config/throw'
-
-/** seed 复现记录使用；v3 新增分层环形布局。 */
-export const THROW_ALGORITHM_VERSION = 3
-
-/** 动力学单位值的消费顺序或子流 salt 改变时必须递增。 */
-export const THROW_RANDOM_PLAN_VERSION = 1
-
-/** 固定子流 salt 是 random plan 的一部分，不能在不升版本时修改。 */
-const LAYOUT_RANDOM_SALT = 0x4c41594f
-const DYNAMICS_RANDOM_SALT = 0x44594e41
-
-// ─── Slot 类型：位置 + 可选高度带 ───────────────────────────
-export type ThrowHeightBand = 'high' | 'low' | null
-
-/** fallback 布局槽位，带高度带标记用于碰撞时序分层 */
-export interface Slot {
-  x: number
-  z: number
-  /** high = 高带（晚落），low = 低带（先落）；rejection 路径为 null */
-  heightBand: ThrowHeightBand
-}
-
-/** fallback 使用的构造式布局 */
-export type FallbackLayout = 'ring6' | 'dual33' | 'center15'
-
-interface ThrowDiagnosticsBase {
-  algorithm: ThrowPlacementAlgorithm
-  /** rejection 候选点的总采样数；不包含 fallback 的旋转和布局抽签。 */
-  attempts: number
-  /** 已丢弃的整组布局数；uniform-area-restarts 的范围为 0..4。 */
-  restarts: number
-  /** 实际执行的整组布局尝试数；legacy/radial 固定为 1。 */
-  groupAttempts: number
-  /** legacy-v1 沿用共享随机流，因此没有 v2 random plan。 */
-  randomPlanVersion: typeof THROW_RANDOM_PLAN_VERSION | null
-}
-
-/** 单次投掷的位置采样诊断，不参与投掷行为 */
-export type ThrowDiagnostics = ThrowDiagnosticsBase &
-  (
-    | { placementPath: 'rejection' | 'constructive'; fallbackLayout: null }
-    | { placementPath: 'fallback'; fallbackLayout: FallbackLayout }
-  )
+export {
+  THROW_ALGORITHM_VERSION,
+  THROW_RANDOM_PLAN_VERSION,
+  createThrowRandomPlan,
+  mapThrowHeightUnit,
+  type FallbackLayout,
+  type Slot,
+  type ThrowDiagnostics,
+  type ThrowBodyPair,
+  type ThrowDiceOptions,
+  type ThrowDynamicsUnits,
+  type ThrowHeightBand,
+  type ThrowRandomPlan,
+} from './throw-runtime'
 
 interface SlotSample {
   slots: Slot[]
@@ -68,27 +49,6 @@ interface RejectionGroupSample {
   slots: Slot[]
   attempts: number
   complete: boolean
-}
-
-export interface ThrowDiceOptions {
-  /** split-stream 算法的主 seed；省略时读取 reseed() 设置的当前 seed。 */
-  seed?: number
-  algorithm?: ThrowPlacementAlgorithm
-}
-
-/** 每颗骰子固定消费的 10 个动力学单位值。 */
-export interface ThrowDynamicsUnits {
-  height: number
-  quaternion: readonly [number, number, number]
-  velocity: readonly [number, number, number]
-  angularVelocity: readonly [number, number, number]
-}
-
-/** 与位置 sampler 无关的动力学随机计划，可用于 A/B 复现核对。 */
-export interface ThrowRandomPlan {
-  version: typeof THROW_RANDOM_PLAN_VERSION
-  seed: number
-  dice: ThrowDynamicsUnits[]
 }
 
 // ─── 三种纯几何 helper（不消费随机流，可确定性测试） ────────
@@ -279,115 +239,6 @@ function samplePlannedSlots(
 }
 
 /**
- * 六扇区分层环：随机整体旋转，并随机打乱“骰子索引 → 槽位”的对应关系。
- * 该构造始终满足初始间距，不再让 fallback 拓扑成为多数主路径。
- */
-function sampleStratifiedRingSlots(count: number, nextRandom: RandomFn): SlotSample {
-  if (count !== 6) {
-    throw new RangeError(`stratified-ring requires exactly 6 dice, received ${count}`)
-  }
-
-  const rotation = nextRandom() * Math.PI * 2
-  const slots = Array.from({ length: count }, (_, index): Slot => {
-    const angle = rotation + (index / count) * Math.PI * 2
-    return {
-      x: Math.cos(angle) * THROW.stratifiedRingRadius,
-      z: Math.sin(angle) * THROW.stratifiedRingRadius,
-      heightBand: null,
-    }
-  })
-
-  for (let index = slots.length - 1; index > 0; index--) {
-    const swapIndex = Math.floor(nextRandom() * (index + 1))
-    ;[slots[index], slots[swapIndex]] = [slots[swapIndex], slots[index]]
-  }
-
-  return {
-    slots,
-    attempts: 0,
-    restarts: 0,
-    groupAttempts: 1,
-    placementPath: 'constructive',
-    fallbackLayout: null,
-  }
-}
-
-function tuple3(nextRandom: RandomFn): [number, number, number] {
-  return [nextRandom(), nextRandom(), nextRandom()]
-}
-
-/**
- * 为指定 seed 生成与位置 sampler 无关的动力学单位值。
- * 每骰严格消费 height 1 + quaternion 3 + velocity 3 + angularVelocity 3。
- */
-export function createThrowRandomPlan(seed: number, diceCount: number): ThrowRandomPlan {
-  if (!Number.isFinite(seed)) throw new TypeError('throw seed must be finite')
-  if (!Number.isInteger(diceCount) || diceCount < 0) {
-    throw new RangeError('diceCount must be a non-negative integer')
-  }
-
-  const nextRandom = createRandomSubstream(seed, DYNAMICS_RANDOM_SALT)
-  const dice: ThrowDynamicsUnits[] = []
-  for (let i = 0; i < diceCount; i++) {
-    dice.push({
-      height: nextRandom(),
-      quaternion: tuple3(nextRandom),
-      velocity: tuple3(nextRandom),
-      angularVelocity: tuple3(nextRandom),
-    })
-  }
-  return { version: THROW_RANDOM_PLAN_VERSION, seed, dice }
-}
-
-function rangeFromUnit(unit: number, min: number, max: number): number {
-  return min + unit * (max - min)
-}
-
-/** 同一个高度单位值按采样路径映射到 normal/high/low 区间。 */
-export function mapThrowHeightUnit(unit: number, heightBand: ThrowHeightBand): number {
-  if (heightBand === 'high') {
-    return rangeFromUnit(unit, THROW.heightMax - 0.15, THROW.heightMax)
-  }
-  if (heightBand === 'low') {
-    return rangeFromUnit(unit, THROW.heightMin, THROW.heightMin + 0.15)
-  }
-  return rangeFromUnit(unit, THROW.heightMin, THROW.heightMax)
-}
-
-function applyThrowDynamics(body: CANNON.Body, slot: Slot, units: ThrowDynamicsUnits): void {
-  body.wakeUp()
-  body.position.set(slot.x, mapThrowHeightUnit(units.height, slot.heightBand), slot.z)
-  body.aabbNeedsUpdate = true
-
-  const [u1, u2, u3] = units.quaternion
-  const sqrt1MinusU1 = Math.sqrt(1 - u1)
-  const sqrtU1 = Math.sqrt(u1)
-  body.quaternion.set(
-    sqrt1MinusU1 * Math.sin(2 * Math.PI * u2),
-    sqrt1MinusU1 * Math.cos(2 * Math.PI * u2),
-    sqrtU1 * Math.sin(2 * Math.PI * u3),
-    sqrtU1 * Math.cos(2 * Math.PI * u3),
-  )
-
-  // teleport 完整 pose 后同步历史与插值状态，避免首帧从旧位置/旋转插值
-  syncBodyInterpolationState(body)
-
-  const [vxUnit, vyUnit, vzUnit] = units.velocity
-  body.velocity.set(
-    rangeFromUnit(vxUnit, THROW.horizontalSpeedMin, THROW.horizontalSpeedMax) - slot.x * 0.5,
-    rangeFromUnit(vyUnit, THROW.downSpeedMin, THROW.downSpeedMax),
-    rangeFromUnit(vzUnit, THROW.horizontalSpeedMin, THROW.horizontalSpeedMax) - slot.z * 0.5,
-  )
-
-  const [avxUnit, avyUnit, avzUnit] = units.angularVelocity
-  body.angularVelocity.set(
-    rangeFromUnit(avxUnit, THROW.angularSpeedMin, THROW.angularSpeedMax),
-    rangeFromUnit(avyUnit, THROW.angularSpeedMin, THROW.angularSpeedMax),
-    rangeFromUnit(avzUnit, THROW.angularSpeedMin, THROW.angularSpeedMax),
-  )
-}
-
-/**
  * 为单个骰子 body 设置投掷初始条件（旋转、速度、角速度）。
  * 这是 legacy-v1 的共享随机流入口，保留旧调用与随机消费顺序。
  */
@@ -442,7 +293,7 @@ export function initThrowBody(body: CANNON.Body, pos?: { x: number; z: number })
   )
 }
 
-function throwLegacy(dicePairs: DicePair[]): ThrowDiagnostics {
+function throwLegacy(dicePairs: ThrowBodyPair[]): ThrowDiagnostics {
   const sample = sampleLegacySlots(dicePairs.length)
   for (let i = 0; i < dicePairs.length; i++) {
     const slot = sample.slots[i]
@@ -469,15 +320,13 @@ function throwLegacy(dicePairs: DicePair[]): ThrowDiagnostics {
 }
 
 function throwPlanned(
-  dicePairs: DicePair[],
+  dicePairs: ThrowBodyPair[],
   seed: number,
   algorithm: Exclude<ThrowPlacementAlgorithm, 'legacy-v1'>,
 ): ThrowDiagnostics {
-  const layoutRandom = createRandomSubstream(seed, LAYOUT_RANDOM_SALT)
-  const sample =
-    algorithm === 'stratified-ring'
-      ? sampleStratifiedRingSlots(dicePairs.length, layoutRandom)
-      : samplePlannedSlots(dicePairs.length, algorithm, layoutRandom)
+  if (algorithm === 'stratified-ring') return throwStratifiedRing(dicePairs, seed)
+  const layoutRandom = createRandomSubstream(seed, THROW_LAYOUT_RANDOM_SALT)
+  const sample = samplePlannedSlots(dicePairs.length, algorithm, layoutRandom)
   const plan = createThrowRandomPlan(seed, dicePairs.length)
 
   for (let i = 0; i < dicePairs.length; i++) {
@@ -501,7 +350,10 @@ function throwPlanned(
  * - v2+ sampler 使用 seed 派生独立 layout/dynamics 子流；默认 stratified-ring。
  * - 没有显式 seed 且检测到 setRandom() 时回退 legacy-v1，保留旧测试/调用兼容性。
  */
-export function throwDice(dicePairs: DicePair[], options: ThrowDiceOptions = {}): ThrowDiagnostics {
+export function throwDice(
+  dicePairs: ThrowBodyPair[],
+  options: ThrowDiceOptions = {},
+): ThrowDiagnostics {
   const algorithm = options.algorithm ?? THROW.placementAlgorithm
   if (algorithm === 'legacy-v1') return throwLegacy(dicePairs)
 

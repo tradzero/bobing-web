@@ -7,11 +7,8 @@ import {
 import type { DicePair } from '@/dice/create'
 import { checkSettled, createSettleState, type SettleResult, type SettleState } from '@/dice/settle'
 import { applyEscapeGuard } from '@/physics/escape-guard'
-import {
-  copyBodyTransformToObject,
-  interpolateBodyTransform,
-  syncBodyInterpolationState,
-} from '@/physics/body-transform'
+import { copyBodyTransformToObject } from '@/physics/body-transform'
+import { interpolateBodyTransform, syncBodyInterpolationState } from '@/physics/body-interpolation'
 import {
   CONSERVATIVE_DICE_CENTER_RADIUS,
   WALL_INNER_RADIUS,
@@ -31,13 +28,13 @@ import {
   DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID,
   getPhysicsSchedulerVariant,
   type PhysicsSchedulerVariant,
-} from './physics-scheduler-experiment'
+} from '@/game/physics-scheduler-experiment'
 import type { RollError } from './roll-error'
 import {
   createRollingCpuProfileAccumulator,
   type RollingCpuFrameSample,
   type RollingCpuProfileSnapshot,
-} from './performance-profile'
+} from '@/game/performance-profile'
 import {
   createRollingShadowScheduler,
   type RollingShadowPreset,

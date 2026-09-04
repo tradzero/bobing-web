@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { SETTLE } from '@/config/settle'
-import { runRoll } from '@/physics/roll-runner'
+import { runRoll } from '@dice/physics-core'
 
 /**
  * 旧套件曾在这里复制 world/throw/escape/settle 链路，并用已经过期的旧随机轨迹

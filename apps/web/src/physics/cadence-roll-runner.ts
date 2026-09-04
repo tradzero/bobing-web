@@ -21,7 +21,7 @@ import {
   createHeadlessRollSimulation,
   type HeadlessRollSimulationOptions,
   type RollRunResult,
-} from './roll-runner'
+} from '@dice/physics-core'
 import type { RollStepSessionDiagnostics } from './roll-step-session'
 
 /** cadence 报告字段或终止语义变化时必须递增。 */

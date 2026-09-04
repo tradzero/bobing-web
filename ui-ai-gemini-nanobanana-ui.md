@@ -437,4 +437,4 @@ docs/
 [^11]: `public/` 和 `src/assets/` 目录均为空
 [^12]: `src/ui/styles/game.css` — 完整样式文件 371 行
 [^13]: `src/ui/components/SoundToggle.tsx:17` — 使用 emoji 🔊/🔇 和 `src/ui/components/ResetButton.tsx:14` — 使用字符 ↺
-[^14]: `src/scene/` 目录下：setup.ts、table.ts、bowl.ts、decorations.ts — 3D 场景独立管理
+[^14]: `apps/web/src/scene/` 当前包含 setup.ts、table.ts、bowl.ts；旧 decorations 实验未接入运行时，已删除。

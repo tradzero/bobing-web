@@ -378,21 +378,6 @@ function disposeVisualResources(resources: DiceVisualResources): void {
 }
 
 /**
- * 创建单颗骰子 mesh + body
- */
-export function createDice(): DicePair {
-  const resources = createVisualResources()
-  const mesh = new THREE.Mesh(resources.geometry, resources.material)
-  mesh.castShadow = true
-  mesh.receiveShadow = true
-
-  // 物理 body：委托给 physics-only 工厂
-  const body = createDiceBody()
-
-  return { mesh, body }
-}
-
-/**
  * 批量创建 6 颗骰子。
  *
  * 视觉层只有一个单材质 InstancedMesh；六面通过 UV 映射到同一张 atlas，

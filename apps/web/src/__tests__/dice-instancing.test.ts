@@ -7,10 +7,8 @@ import {
   DICE_ATLAS,
   FACE_NORMALS,
   canvasTextureSource,
-  createDice,
   createDiceSet,
   setTextureSource,
-  type DicePair,
 } from '@/dice/create'
 import { copyBodyTransformToObject } from '@/physics/body-transform'
 
@@ -33,17 +31,6 @@ function averageFaceNormal(geometry: THREE.BufferGeometry, groupIndex: number): 
 
 function makeAtlasTexture(): THREE.Texture {
   return Object.assign(new THREE.Texture(), { name: 'dice-atlas' })
-}
-
-function disposeStandaloneDice(pair: DicePair): void {
-  const mesh = pair.mesh as THREE.Mesh<THREE.BufferGeometry, THREE.Material>
-  const textures = new Set<THREE.Texture>()
-  for (const value of Object.values(mesh.material)) {
-    if (value instanceof THREE.Texture) textures.add(value)
-  }
-  for (const texture of textures) texture.dispose()
-  mesh.material.dispose()
-  mesh.geometry.dispose()
 }
 
 function faceUvBounds(geometry: THREE.BufferGeometry, groupIndex: number) {
@@ -208,20 +195,5 @@ describe('Dice GPU instancing', () => {
 
     diceSet.dispose()
     for (const dispose of disposes) expect(dispose).toHaveBeenCalledOnce()
-  })
-
-  it('createDice 仍返回可独立渲染的单颗 Mesh API', () => {
-    const pair = createDice()
-    expect(pair.mesh).toBeInstanceOf(THREE.Mesh)
-    expect(pair.mesh).not.toBeInstanceOf(THREE.InstancedMesh)
-    expect((pair.mesh as THREE.Mesh).castShadow).toBe(true)
-    expect((pair.mesh as THREE.Mesh).receiveShadow).toBe(true)
-    expect((pair.mesh as THREE.Mesh<THREE.BufferGeometry, THREE.Material>).material).toBeInstanceOf(
-      THREE.MeshPhysicalMaterial,
-    )
-    expect(pair.syncVisual).toBeUndefined()
-    expect(pair.body.shapes).toHaveLength(1)
-
-    disposeStandaloneDice(pair)
   })
 })

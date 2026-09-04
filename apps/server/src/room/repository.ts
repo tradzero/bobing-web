@@ -733,14 +733,6 @@ export class RoomRepository {
     })
   }
 
-  /**
-   * 绝对截止时间由 PostgreSQL 保存；调度器只负责唤醒。
-   * 每个房间都会在事务内重新加锁和校验，重复 tick 不会跳过两次。
-   */
-  async expireDueDeadlines(now: number, timing: GameTimingConfig): Promise<string[]> {
-    return (await this.processDueDeadlines(now, timing)).changedRoomIds
-  }
-
   async processDueDeadlines(now: number, timing: GameTimingConfig): Promise<DeadlineSweepResult> {
     const dueResult = await this.pool.query<{ room_id: string }>(
       `

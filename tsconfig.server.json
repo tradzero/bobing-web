@@ -2,7 +2,7 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo",
     "target": "es2023",
-    "lib": ["ES2023", "DOM"],
+    "lib": ["ES2023"],
     "module": "esnext",
     "types": ["node"],
     "skipLibCheck": true,
@@ -25,12 +25,9 @@
   },
   "include": [
     "apps/server/src",
-    "apps/web/src/config",
-    "apps/web/src/dice",
-    "apps/web/src/physics",
-    "apps/web/src/utils",
     "packages/game-domain/src",
     "packages/physics-core/src",
     "packages/protocol/src"
-  ]
+  ],
+  "exclude": ["apps/server/src/**/*.test.ts", "apps/web/src/__tests__", "packages/**/__tests__"]
 }

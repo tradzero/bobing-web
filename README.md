@@ -6,8 +6,8 @@
 
 ## 运行要求
 
-- Node.js 22+
-- pnpm
+- Node.js 24.11.1（见 `.nvmrc`；物理复现依赖固定 Node/V8）
+- pnpm 10.14.0（见 `packageManager`）
 - PostgreSQL
 
 项目不会通过 Docker Compose 启动或管理 PostgreSQL。数据库需要提前创建，连接信息通过环境变量传入。
@@ -58,7 +58,9 @@ pnpm dev:server
 | `pnpm dev:server` | 启动服务端源码                         |
 | `pnpm build`      | 构建 Web 和服务端生产产物              |
 | `pnpm start`      | 启动生产服务                           |
-| `pnpm test`       | 运行 Vitest 测试                       |
+| `pnpm typecheck`  | 检查生产、测试与 e2e TypeScript        |
+| `pnpm test`       | 运行快速 Vitest 默认门禁               |
+| `pnpm test:slow`  | 运行独立的慢速物理等价验收             |
 | `pnpm test:e2e`   | 运行桌面端和移动端 Playwright 流程测试 |
 | `pnpm lint`       | 运行 ESLint                            |
 

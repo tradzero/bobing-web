@@ -5,7 +5,7 @@ import {
   runRoll,
   serializeRollResult,
   type RollRunResult,
-} from '../apps/web/src/physics/roll-runner.ts'
+} from '@dice/physics-core'
 import { THROW } from '../apps/web/src/config/throw.ts'
 import { PHYSICS } from '../apps/web/src/config/physics.ts'
 import { SETTLE } from '../apps/web/src/config/settle.ts'

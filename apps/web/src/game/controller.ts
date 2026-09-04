@@ -1,7 +1,7 @@
 import type { DicePair } from '@/dice/create'
 import { THROW_ALGORITHM_VERSION, throwDice, type ThrowDiagnostics } from '@/dice/throw'
 import { readAllFacesDetailed } from '@/dice/read-face'
-import { judge } from '@/rules/judge'
+import { judge } from '@dice/game-domain'
 import { SETTLE } from '@/config/settle'
 import { reseed, getCurrentSeed } from '@/utils/random'
 import { soundManager } from '@/audio/sound'

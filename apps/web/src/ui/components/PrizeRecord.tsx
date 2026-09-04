@@ -1,6 +1,5 @@
 import { useGameStore } from './GameStoreContext'
-import { Prize } from '@/rules/types'
-import { PRIZE_NAMES } from '@/rules/judge'
+import { PRIZE_NAMES, Prize } from '@dice/game-domain'
 
 /** 需要显示的奖级列表（排除"未中奖"） */
 const DISPLAY_PRIZES = Object.values(Prize).filter((p) => p !== Prize.None)

@@ -1,6 +1,5 @@
 import { useGameStore } from './GameStoreContext'
-import { Prize } from '@/rules/types'
-import { PRIZE_NAMES } from '@/rules/judge'
+import { PRIZE_NAMES, Prize } from '@dice/game-domain'
 import { DiceFace } from './DiceFace'
 
 /** 结果面板：显示当轮点数、奖级、带数 */

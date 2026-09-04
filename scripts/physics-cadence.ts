@@ -12,7 +12,7 @@ import {
   FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
 } from '../apps/web/src/physics/floor-relaunch.ts'
 import { SETTLE_ALGORITHM_VERSION } from '../apps/web/src/dice/settle.ts'
-import { ROLL_DIAGNOSTICS_SCHEMA_VERSION } from '../apps/web/src/physics/roll-runner.ts'
+import { ROLL_DIAGNOSTICS_SCHEMA_VERSION } from '@dice/physics-core'
 import {
   CADENCE_COMPARISON_SCHEMA_VERSION,
   CADENCE_EXECUTION_PLAN_VERSION,

@@ -7,6 +7,9 @@ export default defineConfig({
   root: repositoryRoot,
   resolve: {
     alias: {
+      '@/dice/throw': path.resolve(repositoryRoot, 'apps/web/src/dice/throw-runtime.ts'),
+      '@/dice/settle': path.resolve(repositoryRoot, 'apps/web/src/dice/settle-runtime.ts'),
+      '@/physics/world': path.resolve(repositoryRoot, 'apps/web/src/physics/world-runtime.ts'),
       '@': path.resolve(repositoryRoot, 'apps/web/src'),
       '@dice/game-domain': path.resolve(repositoryRoot, 'packages/game-domain/src/index.ts'),
       '@dice/physics-core': path.resolve(repositoryRoot, 'packages/physics-core/src/index.ts'),
@@ -18,7 +21,7 @@ export default defineConfig({
   },
   build: {
     ssr: path.resolve(repositoryRoot, 'apps/server/src/index.ts'),
-    target: 'node22',
+    target: 'node24',
     outDir: path.resolve(repositoryRoot, 'dist-server'),
     emptyOutDir: true,
     rollupOptions: {

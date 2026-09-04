@@ -1,6 +1,6 @@
-import { createPhysicsWorld, type HeightfieldNarrowphaseMode } from './world'
-import { createBowlBodies } from './bowl-body'
-import { setupContactMaterials } from './materials'
+import { createPhysicsWorld, type HeightfieldNarrowphaseMode } from '@/physics/world'
+import { createBowlBodies } from '@/physics/bowl-body'
+import { setupContactMaterials } from '@/physics/materials'
 import { createDiceBody } from '@/dice/dice-body'
 import {
   captureCanonicalBodyState,
@@ -18,15 +18,15 @@ import { throwDice, type ThrowDiagnostics, type ThrowPlacementAlgorithm } from '
 import { PHYSICS } from '@/config/physics'
 import { SETTLE } from '@/config/settle'
 import { reseed } from '@/utils/random'
-import { type FloorRelaunchDiagnostics } from './floor-relaunch'
-import type { RollFrameDiagnostics } from './roll-diagnostics'
+import { type FloorRelaunchDiagnostics } from '@/physics/floor-relaunch'
+import type { RollFrameDiagnostics } from '@/physics/roll-diagnostics'
 import {
   createRollStepSession,
   type RollSettlementPolicy,
   type RollStepAdvanceResult,
   type RollStepSessionDiagnostics,
   type RollStepSessionSnapshot,
-} from './roll-step-session'
+} from '@/physics/roll-step-session'
 
 /** 结构化验收报告 schema；字段语义发生不兼容变化时必须递增。 */
 export const ROLL_DIAGNOSTICS_SCHEMA_VERSION = 4

@@ -10,7 +10,7 @@ import {
   getPhysicsCadenceScheduler,
   type PhysicsCadenceId,
 } from '@/config/physics-cadence'
-import { judge } from '@/rules/judge'
+import { judge } from '@dice/game-domain'
 import type { SettleResult } from '@/dice/settle'
 import {
   CADENCE_ROLL_REPORT_SCHEMA_VERSION,
@@ -18,7 +18,7 @@ import {
   type CadenceRollReport,
   type SettledCadenceRollReport,
 } from '@/physics/cadence-roll-runner'
-import { createHeadlessRollSimulation, runRoll } from '@/physics/roll-runner'
+import { createHeadlessRollSimulation, runRoll } from '@dice/physics-core'
 
 const NORMAL_CADENCES: readonly PhysicsCadenceId[] = [
   'steady60',

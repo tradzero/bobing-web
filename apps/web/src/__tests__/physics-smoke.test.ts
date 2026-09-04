@@ -4,7 +4,7 @@ import { createDiceBody } from '@/dice/dice-body'
 import type { DicePair } from '@/dice/create'
 import { throwDice } from '@/dice/throw'
 import { THROW } from '@/config/throw'
-import { runRoll } from '@/physics/roll-runner'
+import { runRoll } from '@dice/physics-core'
 import { WALL_RADIUS } from '@/physics/bowl-body'
 import { reseed, resetRandom } from '@/utils/random'
 

@@ -1,4 +1,4 @@
-import { judge } from '@/rules/judge'
+import { judge } from '@dice/game-domain'
 import {
   PHYSICS_VARIANTS,
   getPhysicsVariant,
@@ -6,7 +6,7 @@ import {
   type PhysicsVariantId,
 } from '@/config/physics-variants'
 import { SETTLE } from '@/config/settle'
-import type { RollRunOptions, RollRunResult } from './roll-runner'
+import type { RollRunOptions, RollRunResult } from '@dice/physics-core'
 
 export const PHYSICS_AB_SCHEMA_VERSION = 4
 

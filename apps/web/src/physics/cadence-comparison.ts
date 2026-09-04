@@ -3,7 +3,7 @@ import {
   type PhysicsCadenceId,
   type PhysicsCadenceSchedulerId,
 } from '@/config/physics-cadence'
-import { judge } from '@/rules/judge'
+import { judge } from '@dice/game-domain'
 import { WALL_RADIUS } from './bowl-body'
 import {
   runCadenceRoll,
@@ -11,7 +11,7 @@ import {
   type CadenceRollReport,
   type SettledCadenceRollReport,
 } from './cadence-roll-runner'
-import type { RollRunResult } from './roll-runner'
+import type { RollRunResult } from '@dice/physics-core'
 
 /** cadence comparison report、计划或 gate 语义发生不兼容变化时必须递增。 */
 export const CADENCE_COMPARISON_SCHEMA_VERSION = 1

@@ -12,7 +12,7 @@ import {
   summarizeRollResults,
   type PhysicsAbPair,
 } from '@/physics/roll-comparison'
-import type { RollRunOptions, RollRunResult } from '@/physics/roll-runner'
+import type { RollRunOptions, RollRunResult } from '@dice/physics-core'
 
 function noFloorRelaunch() {
   return {

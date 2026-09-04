@@ -73,8 +73,12 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
       [0, 1],
     )
 
-    await expect(repository.expireDueDeadlines(39_999, timing)).resolves.toEqual([])
-    await expect(repository.expireDueDeadlines(40_000, timing)).resolves.toEqual([roomId])
+    await expect(repository.processDueDeadlines(39_999, timing)).resolves.toMatchObject({
+      changedRoomIds: [],
+    })
+    await expect(repository.processDueDeadlines(40_000, timing)).resolves.toMatchObject({
+      changedRoomIds: [roomId],
+    })
     const advanced = await repository.getRoomSnapshot(roomId, new Set())
     expect(advanced.currentTurn).toMatchObject({ playerId: bob.playerId, sequence: 2 })
   })
@@ -109,8 +113,12 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
       requiresTiltDecision: false,
     })
     expect(roll.duplicate).toBe(false)
-    await expect(repository.expireDueDeadlines(40_999, timing)).resolves.toEqual([])
-    await expect(repository.expireDueDeadlines(41_000, timing)).resolves.toEqual([roomId])
+    await expect(repository.processDueDeadlines(40_999, timing)).resolves.toMatchObject({
+      changedRoomIds: [],
+    })
+    await expect(repository.processDueDeadlines(41_000, timing)).resolves.toMatchObject({
+      changedRoomIds: [roomId],
+    })
 
     const after = await repository.getRoomSnapshot(roomId, new Set())
     expect(after.prizePool.yixiu).toBe(yixiuBefore - 1)
@@ -142,7 +150,9 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
       diagnostics: { seed: 50_001, ambiguousDiceCount: 1 },
       requiresTiltDecision: true,
     })
-    await expect(repository.expireDueDeadlines(42_000, timing)).resolves.toEqual([roomId])
+    await expect(repository.processDueDeadlines(42_000, timing)).resolves.toMatchObject({
+      changedRoomIds: [roomId],
+    })
     const awaitingDecision = await repository.getRoomSnapshot(roomId, new Set())
     expect(awaitingDecision.currentTurn).toMatchObject({
       playerId: currentPlayerId,
@@ -178,7 +188,9 @@ describeDatabase('PostgreSQL 单房间 repository', () => {
       diagnostics: { seed: 50_002 },
       requiresTiltDecision: false,
     })
-    await expect(repository.expireDueDeadlines(43_000, timing)).resolves.toEqual([roomId])
+    await expect(repository.processDueDeadlines(43_000, timing)).resolves.toMatchObject({
+      changedRoomIds: [roomId],
+    })
     const committed = await repository.getRoomSnapshot(roomId, new Set())
     expect(committed.recentRolls[0]).toMatchObject({ id: second.rollId })
     expect(committed.recentRolls.some(({ id }) => id === first.rollId)).toBe(false)

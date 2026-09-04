@@ -1,5 +1,5 @@
 import { useGameStore } from './GameStoreContext'
-import { PRIZE_NAMES } from '@/rules/judge'
+import { PRIZE_NAMES } from '@dice/game-domain'
 import { DiceFace } from './DiceFace'
 
 /** 最近 N 轮历史记录 */

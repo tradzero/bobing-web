@@ -12,13 +12,6 @@ const TASKS = {
   contactGrid: 'sweep/contact-equation-grid.ts',
   contactValidate: 'sweep/contact-equation-validate.ts',
   solverAB: 'sweep/solver-ab.ts',
-  bounce: 'sweep/bounce-baseline.ts',
-  combo: 'sweep/combo-sweep.ts',
-  boxTilt: 'sweep/box-tilt-200seed.ts',
-  floorRest: 'sweep/floor-restitution-sweep.ts',
-  floorRestMulti: 'sweep/floor-restitution-multiseed.ts',
-  hf: 'sweep/hf-resolution-sweep.ts',
-  chamfer: 'sweep/chamfer-sweep.ts',
 }
 
 const DEFAULT_TASKS = ['sleep', 'timeout', 'tilt']
@@ -97,10 +90,14 @@ function prefixStream(stream, prefix) {
 function runTask(taskName) {
   return new Promise((resolve) => {
     const prefix = `[${taskName}]`
-    const child = spawn('pnpm', ['exec', 'vite-node', TASKS[taskName], ...forwardedArgs], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
-    })
+    const child = spawn(
+      'pnpm',
+      ['exec', 'vite-node', '--mode', 'lab', TASKS[taskName], ...forwardedArgs],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: process.env,
+      },
+    )
 
     prefixStream(child.stdout, prefix)
     prefixStream(child.stderr, prefix)

@@ -6,12 +6,37 @@ import path from 'node:path'
 export default defineConfig(({ mode }) => {
   const repositoryRoot = __dirname
   const webRoot = path.resolve(repositoryRoot, 'apps/web')
+  const runtimeOnlyAliases: Record<string, string> =
+    mode === 'e2e' || mode === 'lab'
+      ? {}
+      : {
+          '@/dice/throw': path.resolve(webRoot, 'src/dice/throw-runtime.ts'),
+          '@/dice/settle': path.resolve(webRoot, 'src/dice/settle-runtime.ts'),
+          '@/physics/world': path.resolve(webRoot, 'src/physics/world-runtime.ts'),
+          '@/game/physics-collision-experiment': path.resolve(
+            webRoot,
+            'src/game/physics-collision-runtime.ts',
+          ),
+          '@/game/physics-scheduler-experiment': path.resolve(
+            webRoot,
+            'src/game/physics-scheduler-runtime.ts',
+          ),
+          '@/game/render-performance-experiment': path.resolve(
+            webRoot,
+            'src/game/render-performance-runtime.ts',
+          ),
+          '@/game/performance-profile': path.resolve(
+            webRoot,
+            'src/game/performance-profile-runtime.ts',
+          ),
+        }
 
   return {
     root: webRoot,
     plugins: [react()],
     resolve: {
       alias: {
+        ...runtimeOnlyAliases,
         '@': path.resolve(webRoot, 'src'),
         '@dice/game-domain': path.resolve(repositoryRoot, 'packages/game-domain/src/index.ts'),
         '@dice/physics-core': path.resolve(repositoryRoot, 'packages/physics-core/src/index.ts'),
