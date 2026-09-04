@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es'
-import { SETTLE } from '@/config/settle'
+import { SETTLE } from '../config/settle'
 import { readAllFacesDetailed } from './read-face'
 
 /** seed 复现记录使用；改变停稳状态机语义时必须递增。 */

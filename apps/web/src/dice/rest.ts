@@ -1,7 +1,7 @@
 import type { DicePair } from '@/dice/create'
-import { bowlInnerHeight } from '@/config/bowl'
-import { PHYSICS } from '@/config/physics'
-import { syncBodyInterpolationState } from '@/physics/body-interpolation'
+import { bowlInnerHeight } from '@dice/physics-core/config/bowl'
+import { PHYSICS } from '@dice/physics-core/config/physics'
+import { syncBodyInterpolationState } from '@dice/physics-core/physics/body-interpolation'
 
 /** 静态首屏/重置时的骰子环半径，六颗之间保留少量间隙。 */
 export const REST_RING_RADIUS = 0.3

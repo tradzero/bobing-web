@@ -5,7 +5,7 @@ import { createGameStore } from '@/game/store'
 import type { Engine } from '@/game/engine'
 import type { DicePair } from '@/dice/create'
 import * as CANNON from 'cannon-es'
-import { SETTLE } from '@/config/settle'
+import { SETTLE } from '@dice/physics-core/config/settle'
 import { soundManager } from '@/audio/sound'
 
 /**

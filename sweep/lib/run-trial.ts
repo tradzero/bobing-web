@@ -3,18 +3,25 @@
  * 封装物理世界创建 → 投掷 → 步进 → 结算 → 读面 的通用流程
  */
 import * as CANNON from 'cannon-es'
-import { createPhysicsWorld, type SolverMode } from '@/physics/world'
-import { createBowlBodies } from '@/physics/bowl-body'
-import { applyEscapeGuard } from '@/physics/escape-guard'
+import { createPhysicsWorld, type SolverMode } from '@dice/physics-core/physics/world'
+import { createBowlBodies } from '@dice/physics-core/physics/bowl-body'
+import { applyEscapeGuard } from '@dice/physics-core/physics/escape-guard'
 import type { DicePair } from '@/dice/create'
-import { setupContactMaterials, type ContactMaterialOverrides } from '@/physics/materials'
-import { createDiceBody, type DiceBodyOptions, type ShapeMode } from '@/dice/dice-body'
-import { PHYSICS } from '@/config/physics'
-import { SETTLE } from '@/config/settle'
-import { reseed } from '@/utils/random'
-import { throwDice } from '@/dice/throw'
-import { readAllFacesDetailed, type FaceReadResult } from '@/dice/read-face'
-import { checkSettled, createSettleState, type SettleReason } from '@/dice/settle'
+import {
+  setupContactMaterials,
+  type ContactMaterialOverrides,
+} from '@dice/physics-core/physics/materials'
+import {
+  createDiceBody,
+  type DiceBodyOptions,
+  type ShapeMode,
+} from '@dice/physics-core/dice/dice-body'
+import { PHYSICS } from '@dice/physics-core/config/physics'
+import { SETTLE } from '@dice/physics-core/config/settle'
+import { reseed } from '@dice/physics-core/random'
+import { throwDice } from '@dice/physics-core/dice/throw'
+import { readAllFacesDetailed, type FaceReadResult } from '@dice/physics-core/dice/read-face'
+import { checkSettled, createSettleState, type SettleReason } from '@dice/physics-core/dice/settle'
 
 /** sweep 对外保留旧类型名，实际值与运行时停稳原因完全一致。 */
 export type SettlePath = SettleReason

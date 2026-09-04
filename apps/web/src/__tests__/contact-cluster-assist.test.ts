@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { SETTLE } from '@/config/settle'
+import { SETTLE } from '@dice/physics-core/config/settle'
 import {
   applyContactClusterSettleAssist,
   createContactClusterAssistState,
-} from '@/dice/contact-cluster-assist'
+} from '@dice/physics-core/dice/contact-cluster-assist'
 
 function makeBody(speed = 0, angularSpeed = 0): CANNON.Body {
   const body = new CANNON.Body({ mass: 0.03, allowSleep: true })

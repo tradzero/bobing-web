@@ -3,9 +3,9 @@
  * 不依赖随机流，直接断言 pairwise 间距 ≥ minSeparation + heightBand 标记正确
  */
 import { describe, it, expect } from 'vitest'
-import { center15Slots, dual33Slots, ring6Slots, throwDice } from '@/dice/throw'
-import { THROW } from '@/config/throw'
-import { createDiceBody } from '@/dice/dice-body'
+import { center15Slots, dual33Slots, ring6Slots, throwDice } from '@dice/physics-core/dice/throw'
+import { THROW } from '@dice/physics-core/config/throw'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
 import type { DicePair } from '@/dice/create'
 
 const minSep = THROW.minSeparation

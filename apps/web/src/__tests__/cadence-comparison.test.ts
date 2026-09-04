@@ -6,9 +6,12 @@ import {
   CADENCE_WATCH_SEEDS,
   createCadenceComparisonPlan,
   executeCadenceComparison,
-} from '@/physics/cadence-comparison'
-import { parsePhysicsCadenceArgs } from '@/physics/cadence-cli-options'
-import type { CadenceRollOptions, CadenceRollReport } from '@/physics/cadence-roll-runner'
+} from '@dice/physics-core/lab/cadence-comparison'
+import { parsePhysicsCadenceArgs } from '@dice/physics-core/lab/cadence-cli-options'
+import type {
+  CadenceRollOptions,
+  CadenceRollReport,
+} from '@dice/physics-core/lab/cadence-roll-runner'
 import type { RollRunResult } from '@dice/physics-core'
 
 function canonicalState(seed: number) {

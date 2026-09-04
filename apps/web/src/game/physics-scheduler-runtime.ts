@@ -1,4 +1,4 @@
-import { getPhysicsCadenceScheduler } from '@/config/physics-cadence'
+import { getPhysicsCadenceScheduler } from '@dice/physics-core/config/physics-cadence'
 
 export const PHYSICS_SCHEDULER_EXPERIMENT_VERSION = 1
 export const DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID = 'exact-cap6' as const

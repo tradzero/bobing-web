@@ -50,19 +50,31 @@ pnpm dev:server
 
 ## 常用命令
 
-| 命令              | 说明                                   |
-| ----------------- | -------------------------------------- |
-| `pnpm db:migrate` | 应用并校验 PostgreSQL 迁移             |
-| `pnpm room:reset` | 强制清空指定房间（破坏性运维命令）     |
-| `pnpm dev`        | 启动 Vite 开发服务器                   |
-| `pnpm dev:server` | 启动服务端源码                         |
-| `pnpm build`      | 构建 Web 和服务端生产产物              |
-| `pnpm start`      | 启动生产服务                           |
-| `pnpm typecheck`  | 检查生产、测试与 e2e TypeScript        |
-| `pnpm test`       | 运行快速 Vitest 默认门禁               |
-| `pnpm test:slow`  | 运行独立的慢速物理等价验收             |
-| `pnpm test:e2e`   | 运行桌面端和移动端 Playwright 流程测试 |
-| `pnpm lint`       | 运行 ESLint                            |
+| 命令                        | 说明                                        |
+| --------------------------- | ------------------------------------------- |
+| `pnpm db:migrate`           | 应用并校验 PostgreSQL 迁移                  |
+| `pnpm room:reset`           | 强制清空指定房间（破坏性运维命令）          |
+| `pnpm dev`                  | 启动 Vite 开发服务器                        |
+| `pnpm dev:server`           | 启动服务端源码                              |
+| `pnpm build`                | 构建 Web 和服务端生产产物                   |
+| `pnpm start`                | 启动生产服务                                |
+| `pnpm typecheck`            | 检查生产、测试与 e2e TypeScript             |
+| `pnpm test`                 | 运行快速 Vitest 默认门禁                    |
+| `pnpm test:slow`            | 运行独立的慢速物理等价验收                  |
+| `pnpm test:e2e`             | 运行桌面端和移动端 Playwright 流程测试      |
+| `pnpm test:e2e:multiplayer` | 运行真实服务、PostgreSQL 和双浏览器多人流程 |
+| `pnpm test:db`              | 运行 PostgreSQL repository 集成测试         |
+| `pnpm lint`                 | 运行 ESLint                                 |
+
+数据库测试不会自动读取普通 `DATABASE_URL`，需要显式提供：
+
+```bash
+TEST_DATABASE_URL=postgresql://... pnpm test:db
+TEST_DATABASE_URL=postgresql://... pnpm test:e2e:multiplayer
+```
+
+两者都使用随机测试房间并精确清理。本地开发库可在确认数据可丢弃后显式作为
+`TEST_DATABASE_URL`，生产库不得这样使用。
 
 强制重置房间时先停止应用服务，再显式确认目标房间 ID：
 
@@ -83,7 +95,7 @@ apps/
 packages/
 ├── game-domain/         # 判奖、奖池、抢状元和回合领域逻辑
 ├── protocol/            # WebSocket 协议与房间快照
-└── physics-core/        # 服务端权威物理入口
+└── physics-core/        # 共享 Cannon 物理、调度、诊断和服务端权威入口
 ```
 
 ## 文档

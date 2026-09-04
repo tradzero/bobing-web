@@ -1,4 +1,4 @@
-import { getPhysicsCadenceScheduler } from '@/config/physics-cadence'
+import { getPhysicsCadenceScheduler } from '@dice/physics-core/config/physics-cadence'
 
 /** preset 字段或调度语义变化时必须递增。 */
 export const PHYSICS_SCHEDULER_EXPERIMENT_VERSION = 1

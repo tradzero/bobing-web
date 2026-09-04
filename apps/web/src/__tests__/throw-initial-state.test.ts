@@ -1,8 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { captureCanonicalBodyState, cloneCanonicalBodyState } from '@/dice/canonical-body-state'
-import { captureThrowInitialState, cloneThrowInitialState } from '@/dice/throw-initial-state'
+import {
+  captureCanonicalBodyState,
+  cloneCanonicalBodyState,
+} from '@dice/physics-core/dice/canonical-body-state'
+import {
+  captureThrowInitialState,
+  cloneThrowInitialState,
+} from '@dice/physics-core/dice/throw-initial-state'
 
 function makeBody(offset: number): CANNON.Body {
   const body = new CANNON.Body({ mass: 1 })

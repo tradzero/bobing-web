@@ -45,10 +45,10 @@
 
 - React 负责 DOM overlay；Three.js/cannon-es 保持命令式、可独立驱动。`GameController`（或等价编排层）拥有业务写入，Zustand store 不自行组合矛盾状态。
 - `packages/game-domain` 是判奖、奖池和多人聚合真源；Web 不再维护规则 façade。
-- `packages/physics-core` 持有服务端与浏览器共享的 headless roll 编排。服务端不得直接引入 DOM/React/Three 渲染代码。
+- `packages/physics-core` 持有服务端与浏览器共享的 Cannon 配置、PRNG、刚体、读面、停稳、调度、诊断和 headless roll 编排。服务端不得直接引入 DOM/React/Three 渲染代码；`apps/web` 只持有 Three 网格、渲染同步和 UI。
 - 正式物理与实验物理分层：生产构建使用 `throw-runtime`、`settle-runtime`、`world-runtime`、`exact-cap6`、`cannon-default`；历史 throw、contact-cluster assist、projected-AABB、legacy/cap4 scheduler、CPU profile 和渲染候选只允许从测试、显式 `lab` mode 脚本或 `e2e` 构建进入。
 - 正式路径和实验路径必须复用当前算法的同一实现，不允许复制一套近似生产算法供测试。
-- 物理/投掷/停稳/UI 参数集中在 `apps/web/src/config/`；服务端连接与时限集中在 `apps/server/src/config/` 并从环境变量读取。
+- 共享物理/投掷/停稳参数集中在 `packages/physics-core/src/config/`，Web 渲染/UI 参数集中在 `apps/web/src/config/`；服务端连接与时限集中在 `apps/server/src/config/` 并从环境变量读取。
 - 骰面材质映射与读面法线共享真源。关键中文注释解释规则优先级、读面、碰撞边界、停稳原因和非直观兜底。
 
 ## 物理与诊断原则
@@ -98,14 +98,14 @@ pnpm exec vitest run packages/game-domain/src/__tests__/game.test.ts packages/ga
 pnpm exec vitest run apps/server/src/scheduler/deadlines.test.ts apps/server/src/roll/authority.test.ts
 ```
 
-数据库集成测试只允许连接明确的专用测试库：
+数据库集成测试只接受显式 `TEST_DATABASE_URL`：
 
 ```bash
-TEST_DATABASE_URL=<postgres-test-url> pnpm exec vitest run apps/server/src/room/repository.integration.test.ts
+TEST_DATABASE_URL=<postgres-test-url> pnpm test:db
 DATABASE_URL=<postgres-url> pnpm db:migrate
 ```
 
-不得把 `.env` 中的普通 `DATABASE_URL` 当成测试库，不得删除非本测试随机 room ID 的数据，也不得为验收启动 Compose。
+不得自动把 `.env` 中的普通 `DATABASE_URL` 当成测试库，不得删除非本测试随机 room ID 的数据，也不得为验收启动 Compose。经开发者明确确认数据可丢弃时，可把本地开发库显式传作 `TEST_DATABASE_URL`；生产库禁止这样测试。
 
 ### 物理与浏览器门禁
 
@@ -117,13 +117,14 @@ DATABASE_URL=<postgres-url> pnpm db:migrate
 | `pnpm test:physics:ab`                    | 历史/current 命名 preset A/B                 |
 | `pnpm test:physics:cadence`               | reference/cap6/cap4 cadence、守恒和 overload |
 | `pnpm test:e2e`                           | 桌面/移动单机流程、异常恢复和静态调度        |
+| `pnpm test:e2e:multiplayer`               | 真实服务、PostgreSQL、双浏览器同步与身份恢复 |
 | `pnpm test:e2e:soak`                      | 正式调度桌面/移动连续多轮                    |
 | `pnpm bench:browser`                      | idle/rolling/settled 结构和性能诊断          |
 | `pnpm bench:browser:render-ab`            | 隔离渲染候选 A/B                             |
 | `pnpm bench:browser:physics-scheduler-ab` | 隔离调度 A/B                                 |
 | `pnpm bench:browser:collision-ab`         | 隔离窄相 A/B                                 |
 
-浏览器 e2e 当前强制走单机入口，不得把其结果描述成多人 WebSocket 浏览器验收。严格 FPS/毫秒门槛只能在记录机器、浏览器、DPR、电源和 warm-up 的稳定环境中判断；不稳定环境只报告观测值和相对趋势。
+普通浏览器 e2e 强制走单机入口；只有 `test:e2e:multiplayer` 启动真实服务和随机数据库房间。严格 FPS/毫秒门槛只能在记录机器、浏览器、DPR、电源和 warm-up 的稳定环境中判断；不稳定环境只报告观测值和相对趋势。
 
 稳定 sweep 入口通过 `pnpm sweep:parallel -- --list` 查询。sweep 会写 `logs/`，属于诊断工具，除非脚本含与本次目标一致的失败退出码，否则不能当作合并门禁。
 

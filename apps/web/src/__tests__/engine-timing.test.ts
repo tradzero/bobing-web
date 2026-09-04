@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as CANNON from 'cannon-es'
 import * as THREE from 'three'
 import type { DicePair } from '@/dice/create'
-import type { SettleResult } from '@/dice/settle'
+import type { SettleResult } from '@dice/physics-core/dice/settle'
 import { createEngine, type Engine, type EngineDiagnostics } from '@/game/engine'
 import {
   ROLLING_CPU_PROFILE_METRICS,
@@ -12,8 +12,11 @@ import {
 import type { RollingShadowPreset } from '@/game/rolling-shadow'
 import type { SceneContext } from '@/scene/setup'
 import type { RenderPhase } from '@/config/render'
-import { CONSERVATIVE_DICE_CENTER_RADIUS, WALL_INNER_RADIUS } from '@/physics/roll-diagnostics'
-import { PHYSICS } from '@/config/physics'
+import {
+  CONSERVATIVE_DICE_CENTER_RADIUS,
+  WALL_INNER_RADIUS,
+} from '@dice/physics-core/physics/roll-diagnostics'
+import { PHYSICS } from '@dice/physics-core/config/physics'
 import {
   getPhysicsSchedulerVariant,
   type PhysicsSchedulerVariant,

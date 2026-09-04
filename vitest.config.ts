@@ -8,7 +8,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, 'apps/web/src'),
       '@dice/game-domain': path.resolve(__dirname, 'packages/game-domain/src/index.ts'),
-      '@dice/physics-core': path.resolve(__dirname, 'packages/physics-core/src/index.ts'),
+      '@dice/physics-core': path.resolve(__dirname, 'packages/physics-core/src'),
       '@dice/protocol': path.resolve(__dirname, 'packages/protocol/src/index.ts'),
     },
   },

@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { ROLL_DIAGNOSTICS_SCHEMA_VERSION, runRoll } from '@dice/physics-core'
-import { WALL_RADIUS } from '@/physics/bowl-body'
-import { SETTLE } from '@/config/settle'
-import { PHYSICS } from '@/config/physics'
+import { WALL_RADIUS } from '@dice/physics-core/physics/bowl-body'
+import { SETTLE } from '@dice/physics-core/config/settle'
+import { PHYSICS } from '@dice/physics-core/config/physics'
 import { judge } from '@dice/game-domain'
 
 /**

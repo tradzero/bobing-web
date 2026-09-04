@@ -10,7 +10,7 @@
  */
 import { DEFAULT_SWEEP_CHAMFER_RATIO, runTrial, parseArgs, formatDuration } from './lib/run-trial'
 import { createLogger } from './lib/log'
-import type { ShapeMode } from '@/dice/dice-body'
+import type { ShapeMode } from '@dice/physics-core/dice/dice-body'
 
 interface Variant {
   label: string

@@ -1,6 +1,6 @@
 import * as CANNON from 'cannon-es'
-import { PHYSICS } from '@/config/physics'
-import { diceMaterial } from '@/physics/materials'
+import { PHYSICS } from '../config/physics'
+import { diceMaterial } from '../physics/materials'
 import { createChamferedCubeHull } from './chamfer'
 
 /** 碰撞体形状模式 */

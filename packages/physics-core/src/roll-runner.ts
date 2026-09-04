@@ -1,32 +1,39 @@
-import { createPhysicsWorld, type HeightfieldNarrowphaseMode } from '@/physics/world'
-import { createBowlBodies } from '@/physics/bowl-body'
-import { setupContactMaterials } from '@/physics/materials'
-import { createDiceBody } from '@/dice/dice-body'
+import {
+  createPhysicsWorld,
+  type HeightfieldNarrowphaseMode,
+} from '@dice/physics-core/physics/world'
+import { createBowlBodies } from './physics/bowl-body'
+import { setupContactMaterials } from './physics/materials'
+import { createDiceBody } from './dice/dice-body'
 import {
   captureCanonicalBodyState,
   cloneCanonicalBodyState,
   type CanonicalBodyStateDiagnostics,
-} from '@/dice/canonical-body-state'
-import { readAllFacesDetailed, type FaceReadResult } from '@/dice/read-face'
-import type { SettleReason, SettleResult } from '@/dice/settle'
+} from './dice/canonical-body-state'
+import { readAllFacesDetailed, type FaceReadResult } from './dice/read-face'
+import type { SettleReason, SettleResult } from '@dice/physics-core/dice/settle'
 import {
   captureThrowInitialState,
   cloneThrowInitialState,
   type ThrowInitialStateDiagnostics,
-} from '@/dice/throw-initial-state'
-import { throwDice, type ThrowDiagnostics, type ThrowPlacementAlgorithm } from '@/dice/throw'
-import { PHYSICS } from '@/config/physics'
-import { SETTLE } from '@/config/settle'
-import { reseed } from '@/utils/random'
-import { type FloorRelaunchDiagnostics } from '@/physics/floor-relaunch'
-import type { RollFrameDiagnostics } from '@/physics/roll-diagnostics'
+} from './dice/throw-initial-state'
+import {
+  throwDice,
+  type ThrowDiagnostics,
+  type ThrowPlacementAlgorithm,
+} from '@dice/physics-core/dice/throw'
+import { PHYSICS } from './config/physics'
+import { SETTLE } from './config/settle'
+import { reseed } from './random'
+import { type FloorRelaunchDiagnostics } from './physics/floor-relaunch'
+import type { RollFrameDiagnostics } from './physics/roll-diagnostics'
 import {
   createRollStepSession,
   type RollSettlementPolicy,
   type RollStepAdvanceResult,
   type RollStepSessionDiagnostics,
   type RollStepSessionSnapshot,
-} from '@/physics/roll-step-session'
+} from './physics/roll-step-session'
 
 /** 结构化验收报告 schema；字段语义发生不兼容变化时必须递增。 */
 export const ROLL_DIAGNOSTICS_SCHEMA_VERSION = 4

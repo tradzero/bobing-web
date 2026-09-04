@@ -10,10 +10,10 @@ import {
   type ThrowDiagnostics,
   type ThrowHeightBand,
   type ThrowPlacementAlgorithm,
-} from '@/dice/throw'
-import { THROW } from '@/config/throw'
-import { createDiceBody } from '@/dice/dice-body'
-import { setRandom, resetRandom } from '@/utils/random'
+} from '@dice/physics-core/dice/throw'
+import { THROW } from '@dice/physics-core/config/throw'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
+import { setRandom, resetRandom } from '@dice/physics-core/random'
 
 /**
  * 投掷初始化不变量测试

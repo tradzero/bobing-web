@@ -1,11 +1,9 @@
 import * as THREE from 'three'
 import * as CANNON from 'cannon-es'
-import { PHYSICS } from '@/config/physics'
-import { createDiceBody } from './dice-body'
+import { PHYSICS } from '@dice/physics-core/config/physics'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
+import { DICE_RENDER } from '@/config/render'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
-
-// 从 dice-body.ts 重新导出，保持现有外部导入路径兼容
-export { FACE_NORMALS } from './dice-body'
 
 /** 骰子 mesh 与 body 的配对 */
 export interface DicePair {
@@ -356,7 +354,7 @@ function createVisualResources(): DiceVisualResources {
   })
 
   const hs = PHYSICS.diceHalfSize
-  const chamferRadius = hs * PHYSICS.diceVisualChamferRatio
+  const chamferRadius = hs * DICE_RENDER.chamferRatio
   const geometry =
     chamferRadius > 0
       ? new RoundedBoxGeometry(hs * 2, hs * 2, hs * 2, 6, chamferRadius)

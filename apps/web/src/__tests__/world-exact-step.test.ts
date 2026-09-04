@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { PHYSICS } from '@/config/physics'
-import { createPhysicsWorld } from '@/physics/world'
+import { PHYSICS } from '@dice/physics-core/config/physics'
+import { createPhysicsWorld } from '@dice/physics-core/physics/world'
 
 describe('PhysicsWorld exact step', () => {
   it('每次只推进一个固定步，且不向 Cannon accumulator 留下整步债务', () => {

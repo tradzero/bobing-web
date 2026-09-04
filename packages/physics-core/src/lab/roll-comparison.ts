@@ -4,8 +4,8 @@ import {
   getPhysicsVariant,
   type PhysicsVariant,
   type PhysicsVariantId,
-} from '@/config/physics-variants'
-import { SETTLE } from '@/config/settle'
+} from '@dice/physics-core/config/physics-variants'
+import { SETTLE } from '@dice/physics-core/config/settle'
 import type { RollRunOptions, RollRunResult } from '@dice/physics-core'
 
 export const PHYSICS_AB_SCHEMA_VERSION = 4

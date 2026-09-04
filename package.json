@@ -27,6 +27,8 @@
     "test:watch": "vitest",
     "pretest:e2e": "pnpm run build:e2e",
     "test:e2e": "playwright test e2e/game.spec.ts",
+    "test:e2e:multiplayer": "node scripts/run-multiplayer-e2e.mjs",
+    "test:db": "vitest run apps/server/src/room/repository.integration.test.ts",
     "pretest:e2e:soak": "pnpm run build:e2e",
     "test:e2e:soak": "playwright test e2e/soak.spec.ts --grep @soak-default",
     "pretest:e2e:soak:legacy": "pnpm run build:e2e",

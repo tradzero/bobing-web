@@ -1,11 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { PHYSICS } from '@/config/physics'
-import { ESCAPE_Y } from '@/physics/bowl-body'
-import { createBowlBodies } from '@/physics/bowl-body'
-import { createRollStepSession } from '@/physics/roll-step-session'
-import { createPhysicsWorld } from '@/physics/world'
+import { PHYSICS } from '@dice/physics-core/config/physics'
+import { ESCAPE_Y, createBowlBodies } from '@dice/physics-core/physics/bowl-body'
+import { createRollStepSession } from '@dice/physics-core/physics/roll-step-session'
+import { createPhysicsWorld } from '@dice/physics-core/physics/world'
 
 function createFixture() {
   const physics = createPhysicsWorld()

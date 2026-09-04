@@ -4,7 +4,7 @@ import {
   BOWL_THICKNESS,
   BOWL_INNER_RADIUS,
   sampleBowlInnerProfile,
-} from '@/config/bowl'
+} from '@dice/physics-core/config/bowl'
 import bowlPatternUrl from '@/assets/bowl-blue-white-seamless-v2.webp'
 
 /** 视觉碗内壁采样段数（48 段保证俯视近景曲线光滑） */

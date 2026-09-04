@@ -1,7 +1,10 @@
 import type * as CANNON from 'cannon-es'
 import type * as THREE from 'three'
 
-export { interpolateBodyTransform, syncBodyInterpolationState } from './body-interpolation'
+export {
+  interpolateBodyTransform,
+  syncBodyInterpolationState,
+} from '@dice/physics-core/physics/body-interpolation'
 
 /** body → 渲染对象时使用的变换来源。 */
 export type BodyTransformMode = 'raw' | 'interpolated'

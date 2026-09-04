@@ -2,13 +2,13 @@
  * 碰撞体性能基准：Box(8v/6f) vs Chamfer(24v/14f)
  * 用法: pnpm sweep:bench [--frames=300] [--rounds=3]
  */
-import { createPhysicsWorld } from '@/physics/world'
-import { createBowlBodies } from '@/physics/bowl-body'
-import { setupContactMaterials } from '@/physics/materials'
-import { createDiceBody, type ShapeMode } from '@/dice/dice-body'
-import { PHYSICS } from '@/config/physics'
-import { reseed } from '@/utils/random'
-import { throwDice } from '@/dice/throw'
+import { createPhysicsWorld } from '@dice/physics-core/physics/world'
+import { createBowlBodies } from '@dice/physics-core/physics/bowl-body'
+import { setupContactMaterials } from '@dice/physics-core/physics/materials'
+import { createDiceBody, type ShapeMode } from '@dice/physics-core/dice/dice-body'
+import { PHYSICS } from '@dice/physics-core/config/physics'
+import { reseed } from '@dice/physics-core/random'
+import { throwDice } from '@dice/physics-core/dice/throw'
 import type { DicePair } from '@/dice/create'
 import { DEFAULT_SWEEP_CHAMFER_RATIO, parseArgs } from './lib/run-trial'
 

@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es'
-import { SETTLE } from '@/config/settle'
+import { SETTLE } from '../config/settle'
 
 export interface ContactClusterAssistState {
   /** 某个接触簇第一次被连续观测到的时间 */

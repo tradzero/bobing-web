@@ -1,13 +1,13 @@
 import * as CANNON from 'cannon-es'
-import { THROW, type ThrowPlacementAlgorithm } from '@/config/throw'
-import { syncBodyInterpolationState } from '@/physics/body-interpolation'
+import { THROW, type ThrowPlacementAlgorithm } from '../config/throw'
+import { syncBodyInterpolationState } from '../physics/body-interpolation'
 import {
   createRandomSubstream,
   getCurrentSeed,
   random,
   randomRange,
   type RandomFn,
-} from '@/utils/random'
+} from '../random'
 import {
   THROW_LAYOUT_RANDOM_SALT,
   applyThrowDynamics,
@@ -20,7 +20,7 @@ import {
   type ThrowDiceOptions,
 } from './throw-runtime'
 
-export type { ThrowPlacementAlgorithm } from '@/config/throw'
+export type { ThrowPlacementAlgorithm } from '../config/throw'
 export {
   THROW_ALGORITHM_VERSION,
   THROW_RANDOM_PLAN_VERSION,

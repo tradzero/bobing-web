@@ -9,7 +9,7 @@
  */
 import { runTrial, parseArgs, formatDuration, type SettlePath } from './lib/run-trial'
 import { createLogger } from './lib/log'
-import { SETTLE } from '@/config/settle'
+import { SETTLE } from '@dice/physics-core/config/settle'
 
 // ── CLI 参数 ──
 const args = parseArgs()

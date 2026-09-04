@@ -12,8 +12,8 @@
 import * as CANNON from 'cannon-es'
 import { DEFAULT_SWEEP_CHAMFER_RATIO, runTrial, parseArgs, formatDuration } from './lib/run-trial'
 import { createLogger } from './lib/log'
-import { SETTLE } from '@/config/settle'
-import type { ShapeMode } from '@/dice/dice-body'
+import { SETTLE } from '@dice/physics-core/config/settle'
+import type { ShapeMode } from '@dice/physics-core/dice/dice-body'
 
 /** 六面法线（用于帧级倾角追踪） */
 const FACE_NORMALS = [

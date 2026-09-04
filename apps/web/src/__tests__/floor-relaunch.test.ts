@@ -6,12 +6,12 @@ import {
   createFloorRelaunchTracker,
   FLOOR_RELAUNCH_SUPPORT_CLEARANCE_TOLERANCE,
   type FloorRelaunchFrameSample,
-} from '@/physics/floor-relaunch'
-import { createBowlBodies } from '@/physics/bowl-body'
-import { createDiceBody } from '@/dice/dice-body'
-import { createPhysicsWorld } from '@/physics/world'
-import { setupContactMaterials } from '@/physics/materials'
-import { PHYSICS } from '@/config/physics'
+} from '@dice/physics-core/physics/floor-relaunch'
+import { createBowlBodies } from '@dice/physics-core/physics/bowl-body'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
+import { createPhysicsWorld } from '@dice/physics-core/physics/world'
+import { setupContactMaterials } from '@dice/physics-core/physics/materials'
+import { PHYSICS } from '@dice/physics-core/config/physics'
 
 const floor = (worldY = 0.12): FloorRelaunchFrameSample => ({
   floorContact: true,

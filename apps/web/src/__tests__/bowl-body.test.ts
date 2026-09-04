@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import type * as THREE from 'three'
 import * as CANNON from 'cannon-es'
-import { createPhysicsWorld } from '@/physics/world'
+import { createPhysicsWorld } from '@dice/physics-core/physics/world'
 import {
   createBowlBodies,
   bowlCurveHeight,
@@ -13,15 +13,15 @@ import {
   WALL_RADIUS,
   WALL_HEIGHT,
   WALL_BURY,
-} from '@/physics/bowl-body'
-import { setupContactMaterials } from '@/physics/materials'
+} from '@dice/physics-core/physics/bowl-body'
+import { setupContactMaterials } from '@dice/physics-core/physics/materials'
 
-import { createDiceBody } from '@/dice/dice-body'
-import { setRandom, resetRandom, reseed } from '@/utils/random'
-import { throwDice, initThrowBody } from '@/dice/throw'
-import { checkSettled, createSettleState } from '@/dice/settle'
-import { SETTLE } from '@/config/settle'
-import { ESCAPE_Y } from '@/physics/bowl-body'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
+import { setRandom, resetRandom, reseed } from '@dice/physics-core/random'
+import { throwDice, initThrowBody } from '@dice/physics-core/dice/throw'
+import { checkSettled, createSettleState } from '@dice/physics-core/dice/settle'
+import { SETTLE } from '@dice/physics-core/config/settle'
+import { ESCAPE_Y } from '@dice/physics-core/physics/bowl-body'
 
 /**
  * 碗碰撞体回归测试（Heightfield + 挡墙方案）
@@ -420,7 +420,7 @@ describe('T7: 视觉碗内壁与物理碗对齐', () => {
   /** 从轮廓中提取内壁段（跳过外壁、翻边、底盘封口点） */
   async function extractInnerWall() {
     const { generateBowlProfile } = await import('@/scene/bowl')
-    const { BOWL_HEIGHT } = await import('@/config/bowl')
+    const { BOWL_HEIGHT } = await import('@dice/physics-core/config/bowl')
     const profile = generateBowlProfile()
 
     // 翻边圆弧的最高点 y > BOWL_HEIGHT，找到翻边结束位置
@@ -442,7 +442,7 @@ describe('T7: 视觉碗内壁与物理碗对齐', () => {
   }
 
   it('视觉内壁各采样点与 bowlInnerHeight 最大偏差 < 5mm', async () => {
-    const { bowlInnerHeight } = await import('@/config/bowl')
+    const { bowlInnerHeight } = await import('@dice/physics-core/config/bowl')
     const innerPoints = await extractInnerWall()
 
     expect(innerPoints.length).toBeGreaterThan(10)
@@ -458,7 +458,7 @@ describe('T7: 视觉碗内壁与物理碗对齐', () => {
   })
 
   it('视觉内壁覆盖从 r≈rFlat 到 r≈BOWL_INNER_RADIUS 的完整范围', async () => {
-    const { BOWL_INNER_RADIUS, BOWL_THICKNESS } = await import('@/config/bowl')
+    const { BOWL_INNER_RADIUS, BOWL_THICKNESS } = await import('@dice/physics-core/config/bowl')
     const innerPoints = await extractInnerWall()
 
     const radii = innerPoints.map((pt: { x: number }) => pt.x)
@@ -531,7 +531,7 @@ describe('T7b: 碗底盖结构与朝向', () => {
 
   it('轮廓中 (BOWL_THICKNESS, 0) 坐标最多出现一次', async () => {
     const { generateBowlProfile } = await import('@/scene/bowl')
-    const { BOWL_THICKNESS } = await import('@/config/bowl')
+    const { BOWL_THICKNESS } = await import('@dice/physics-core/config/bowl')
 
     const profile = generateBowlProfile()
     const matches = profile.filter(

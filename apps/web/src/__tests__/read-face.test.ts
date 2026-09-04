@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { readFace, readFaceDetailed } from '@/dice/read-face'
+import { readFace, readFaceDetailed } from '@dice/physics-core/dice/read-face'
 
 /**
  * 创建一个带有指定四元数的 body

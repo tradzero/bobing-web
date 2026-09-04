@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es'
-import { SETTLE } from '@/config/settle'
+import { SETTLE } from '../config/settle'
 import { applyContactClusterSettleAssist } from './contact-cluster-assist'
 import { checkSettledRuntime, type SettleResult, type SettleState } from './settle-runtime'
 

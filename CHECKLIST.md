@@ -53,7 +53,8 @@
 
 ## 待办：多人扩展
 
-- [ ] 多浏览器同时在线的自动化 WebSocket/e2e，覆盖断线重连、并发命令和服务重启恢复
+- [x] 双 BrowserContext 真实 WebSocket/PostgreSQL E2E：加入、房主权限、开局、权威投掷、同步、轮次交接和刷新恢复
+- [ ] 扩展多人 E2E：WebSocket 中断自动重连、并发重复命令、服务重启后 deadline/身份恢复，以及整局结束/加投/再开一局
 - [ ] 多人长时间 soak：多人轮转、deadline 自动操作、奖池耗尽、结束选择和再开一局
 - [ ] 房间列表、创建、密码验证和访问控制；保持 protocol v1 默认房间兼容
 - [ ] 明确离房、踢人、房主转移和座位回收语义后，再提供切换身份入口
@@ -61,7 +62,7 @@
 
 ## 待办：架构与运维
 
-- [ ] 将剩余 DOM-free 物理叶模块从 `apps/web/src` 机械迁入 `packages/physics-core`；server tsconfig 已不再依赖 DOM lib
+- [x] DOM-free 物理、调度与 lab 比较模块迁入 `packages/physics-core`；Web 仅保留 Three/UI 所有权，server 不再依赖 DOM lib 或 Web 路径
 - [ ] 为 migration/reset 增加备份与恢复操作文档；不增加无认证远程 reset API
 - [ ] 评估生产日志留存、隐私字段和诊断采样策略
 - [ ] 根据真实部署环境决定 health/readiness、优雅停机和数据库连接池告警门槛

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { runRoll } from '@dice/physics-core'
-import { WALL_RADIUS } from '@/physics/bowl-body'
+import { WALL_RADIUS } from '@dice/physics-core/physics/bowl-body'
 
 /**
  * 逃逸验收使用真实 throwDice 与统一物理 runner，并检查完整轨迹而非宽松外部范围。

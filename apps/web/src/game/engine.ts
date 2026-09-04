@@ -1,29 +1,40 @@
 import type * as CANNON from 'cannon-es'
-import { PHYSICS } from '@/config/physics'
+import { PHYSICS } from '@dice/physics-core/config/physics'
 import {
   PHYSICS_CADENCE_MAX_ACCEPTED_WALL_DELTA_MS,
   PHYSICS_CADENCE_OVERLOAD_HIGH_WATER_MS,
-} from '@/config/physics-cadence'
+} from '@dice/physics-core/config/physics-cadence'
 import type { DicePair } from '@/dice/create'
-import { checkSettled, createSettleState, type SettleResult, type SettleState } from '@/dice/settle'
-import { applyEscapeGuard } from '@/physics/escape-guard'
+import {
+  checkSettled,
+  createSettleState,
+  type SettleResult,
+  type SettleState,
+} from '@dice/physics-core/dice/settle'
+import { applyEscapeGuard } from '@dice/physics-core/physics/escape-guard'
 import { copyBodyTransformToObject } from '@/physics/body-transform'
-import { interpolateBodyTransform, syncBodyInterpolationState } from '@/physics/body-interpolation'
+import {
+  interpolateBodyTransform,
+  syncBodyInterpolationState,
+} from '@dice/physics-core/physics/body-interpolation'
 import {
   CONSERVATIVE_DICE_CENTER_RADIUS,
   WALL_INNER_RADIUS,
   createRollFrameDiagnostics,
   sampleRollBodyDiagnostics,
   sampleRollFrameDiagnostics,
-} from '@/physics/roll-diagnostics'
+} from '@dice/physics-core/physics/roll-diagnostics'
 import {
   createRollStepSession,
   type RollStepSession,
   type RollStepSessionSnapshot,
-} from '@/physics/roll-step-session'
+} from '@dice/physics-core/physics/roll-step-session'
 import { soundManager } from '@/audio/sound'
 import type { SceneContext } from '@/scene/setup'
-import { createFixedStepAccumulator, type FixedStepAccumulator } from './fixed-step-accumulator'
+import {
+  createFixedStepAccumulator,
+  type FixedStepAccumulator,
+} from '@dice/physics-core/physics/fixed-step-accumulator'
 import {
   DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID,
   getPhysicsSchedulerVariant,

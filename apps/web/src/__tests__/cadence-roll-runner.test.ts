@@ -9,15 +9,15 @@ import {
   getPhysicsCadenceFrame,
   getPhysicsCadenceScheduler,
   type PhysicsCadenceId,
-} from '@/config/physics-cadence'
+} from '@dice/physics-core/config/physics-cadence'
 import { judge } from '@dice/game-domain'
-import type { SettleResult } from '@/dice/settle'
+import type { SettleResult } from '@dice/physics-core/dice/settle'
 import {
   CADENCE_ROLL_REPORT_SCHEMA_VERSION,
   runCadenceRoll,
   type CadenceRollReport,
   type SettledCadenceRollReport,
-} from '@/physics/cadence-roll-runner'
+} from '@dice/physics-core/lab/cadence-roll-runner'
 import { createHeadlessRollSimulation, runRoll } from '@dice/physics-core'
 
 const NORMAL_CADENCES: readonly PhysicsCadenceId[] = [

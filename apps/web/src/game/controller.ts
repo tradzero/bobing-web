@@ -1,24 +1,28 @@
 import type { DicePair } from '@/dice/create'
-import { THROW_ALGORITHM_VERSION, throwDice, type ThrowDiagnostics } from '@/dice/throw'
-import { readAllFacesDetailed } from '@/dice/read-face'
+import {
+  THROW_ALGORITHM_VERSION,
+  throwDice,
+  type ThrowDiagnostics,
+} from '@dice/physics-core/dice/throw'
+import { readAllFacesDetailed } from '@dice/physics-core/dice/read-face'
 import { judge } from '@dice/game-domain'
-import { SETTLE } from '@/config/settle'
-import { reseed, getCurrentSeed } from '@/utils/random'
+import { SETTLE } from '@dice/physics-core/config/settle'
+import { reseed, getCurrentSeed } from '@dice/physics-core/random'
 import { soundManager } from '@/audio/sound'
 import type { createGameStore } from './store'
 import type { Engine } from './engine'
-import { SETTLE_ALGORITHM_VERSION, type SettleResult } from '@/dice/settle'
+import { SETTLE_ALGORITHM_VERSION, type SettleResult } from '@dice/physics-core/dice/settle'
 import { placeDiceAtRest } from '@/dice/rest'
 import {
   captureThrowInitialState,
   cloneThrowInitialState,
   type ThrowInitialStateDiagnostics,
-} from '@/dice/throw-initial-state'
+} from '@dice/physics-core/dice/throw-initial-state'
 import {
   captureCanonicalBodyState,
   cloneCanonicalBodyState,
   type CanonicalBodyStateDiagnostics,
-} from '@/dice/canonical-body-state'
+} from '@dice/physics-core/dice/canonical-body-state'
 import type { RollError } from './roll-error'
 
 export interface GameControllerDeps {

@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es'
-import { PHYSICS } from '@/config/physics'
+import { PHYSICS } from '../config/physics'
 
 export interface ContactMaterialTuning {
   friction?: number

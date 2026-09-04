@@ -1,11 +1,11 @@
 import * as CANNON from 'cannon-es'
 import { bowlFloorMaterial, bowlWallMaterial, tableMaterial } from './materials'
-import { BOWL_RADIUS, bowlInnerHeight } from '@/config/bowl'
+import { BOWL_RADIUS, bowlInnerHeight } from '../config/bowl'
 
 // ─── 碗碰撞体参数（导出供测试引用） ───
 
 // 从共享模块 re-export，保持测试导入路径不变
-export { BOWL_RADIUS, BOWL_HEIGHT } from '@/config/bowl'
+export { BOWL_RADIUS, BOWL_HEIGHT } from '../config/bowl'
 
 /** Heightfield 每边网格点数（51：elementSize≈0.052m，骰子底面覆盖约 4.6~5 格，减少三角面棱线微弹跳） */
 export const HF_GRID_SIZE = 51

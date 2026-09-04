@@ -2,9 +2,9 @@ import {
   PHYSICS_CADENCE_OVERLOAD_HIGH_WATER_MS,
   type PhysicsCadenceId,
   type PhysicsCadenceSchedulerId,
-} from '@/config/physics-cadence'
+} from '@dice/physics-core/config/physics-cadence'
 import { judge } from '@dice/game-domain'
-import { WALL_RADIUS } from './bowl-body'
+import { WALL_RADIUS } from '../physics/bowl-body'
 import {
   runCadenceRoll,
   type CadenceRollOptions,

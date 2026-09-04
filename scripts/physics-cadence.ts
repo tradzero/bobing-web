@@ -2,16 +2,16 @@ import { createRequire } from 'node:module'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { arch, platform } from 'node:process'
-import { CANONICAL_BODY_STATE_VERSION } from '../apps/web/src/dice/canonical-body-state.ts'
-import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '../apps/web/src/dice/throw.ts'
-import { ESCAPE_GUARD_VERSION } from '../apps/web/src/physics/escape-guard.ts'
+import { CANONICAL_BODY_STATE_VERSION } from '@dice/physics-core/dice/canonical-body-state'
+import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '@dice/physics-core/dice/throw'
+import { ESCAPE_GUARD_VERSION } from '@dice/physics-core/physics/escape-guard'
 import {
   FLOOR_RELAUNCH_TRACKER_VERSION,
   FLOOR_RELAUNCH_SUPPORT_CLEARANCE_TOLERANCE,
   FLOOR_RELAUNCH_CLEARANCE_THRESHOLD,
   FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
-} from '../apps/web/src/physics/floor-relaunch.ts'
-import { SETTLE_ALGORITHM_VERSION } from '../apps/web/src/dice/settle.ts'
+} from '@dice/physics-core/physics/floor-relaunch'
+import { SETTLE_ALGORITHM_VERSION } from '@dice/physics-core/dice/settle'
 import { ROLL_DIAGNOSTICS_SCHEMA_VERSION } from '@dice/physics-core'
 import {
   CADENCE_COMPARISON_SCHEMA_VERSION,
@@ -20,28 +20,28 @@ import {
   executeCadenceComparison,
   type CadenceComparisonCoreReport,
   type CadenceComparisonFailure,
-} from '../apps/web/src/physics/cadence-comparison.ts'
-import { parsePhysicsCadenceArgs } from '../apps/web/src/physics/cadence-cli-options.ts'
+} from '@dice/physics-core/lab/cadence-comparison'
+import { parsePhysicsCadenceArgs } from '@dice/physics-core/lab/cadence-cli-options'
 import {
   CADENCE_ROLL_REPORT_SCHEMA_VERSION,
   CADENCE_TIME_CONSERVATION_VERSION,
-} from '../apps/web/src/physics/cadence-roll-runner.ts'
+} from '@dice/physics-core/lab/cadence-roll-runner'
 import {
   PHYSICS_CADENCES,
   PHYSICS_CADENCE_SCHEMA_VERSION,
   PHYSICS_CADENCE_SCHEDULERS,
-} from '../apps/web/src/config/physics-cadence.ts'
-import { FIXED_STEP_ACCUMULATOR_VERSION } from '../apps/web/src/game/fixed-step-accumulator.ts'
-import { PHYSICS } from '../apps/web/src/config/physics.ts'
-import { SETTLE } from '../apps/web/src/config/settle.ts'
-import { THROW } from '../apps/web/src/config/throw.ts'
+} from '@dice/physics-core/config/physics-cadence'
+import { FIXED_STEP_ACCUMULATOR_VERSION } from '@dice/physics-core/physics/fixed-step-accumulator'
+import { PHYSICS } from '@dice/physics-core/config/physics'
+import { SETTLE } from '@dice/physics-core/config/settle'
+import { THROW } from '@dice/physics-core/config/throw'
 import {
   HF_GRID_SIZE,
   WALL_COUNT,
   WALL_HEIGHT,
   WALL_RADIUS,
   WALL_THICKNESS,
-} from '../apps/web/src/physics/bowl-body.ts'
+} from '@dice/physics-core/physics/bowl-body'
 import {
   readRepositoryState,
   sameRepositoryState,

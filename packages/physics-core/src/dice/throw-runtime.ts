@@ -1,9 +1,9 @@
 import * as CANNON from 'cannon-es'
-import { THROW, type ThrowPlacementAlgorithm } from '@/config/throw'
-import { syncBodyInterpolationState } from '@/physics/body-interpolation'
-import { createRandomSubstream, getCurrentSeed, type RandomFn } from '@/utils/random'
+import { THROW, type ThrowPlacementAlgorithm } from '../config/throw'
+import { syncBodyInterpolationState } from '../physics/body-interpolation'
+import { createRandomSubstream, getCurrentSeed, type RandomFn } from '../random'
 
-export type { ThrowPlacementAlgorithm } from '@/config/throw'
+export type { ThrowPlacementAlgorithm } from '../config/throw'
 
 export interface ThrowBodyPair {
   body: CANNON.Body

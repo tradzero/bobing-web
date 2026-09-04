@@ -7,9 +7,9 @@ import {
   interpolateBodyTransform,
   syncBodyInterpolationState,
 } from '@/physics/body-transform'
-import { createDiceBody } from '@/dice/dice-body'
-import { throwDice } from '@/dice/throw'
-import { resetRandom, setRandom } from '@/utils/random'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
+import { throwDice } from '@dice/physics-core/dice/throw'
+import { resetRandom, setRandom } from '@dice/physics-core/random'
 
 function expectPosition(
   actual: { x: number; y: number; z: number },

@@ -1,13 +1,16 @@
 // @vitest-environment node
 import * as CANNON from 'cannon-es'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createDiceBody } from '@/dice/dice-body'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
 import {
   HeightfieldProjectedAabbNarrowphase,
   PROJECTED_AABB_NARROWPHASE_UPSTREAM_VERSION,
-} from '@/physics/heightfield-projected-aabb-narrowphase'
-import { createPhysicsWorld, type HeightfieldNarrowphaseMode } from '@/physics/world'
-import { resetRandom } from '@/utils/random'
+} from '@dice/physics-core/physics/heightfield-projected-aabb-narrowphase'
+import {
+  createPhysicsWorld,
+  type HeightfieldNarrowphaseMode,
+} from '@dice/physics-core/physics/world'
+import { resetRandom } from '@dice/physics-core/random'
 
 const ELEMENT_SIZE = 0.08
 const GRID_SIZE = 17

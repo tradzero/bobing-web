@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { createChamferedCubeHull } from '@/dice/chamfer'
-import { PHYSICS } from '@/config/physics'
+import { createChamferedCubeHull } from '@dice/physics-core/dice/chamfer'
+import { PHYSICS } from '@dice/physics-core/config/physics'
 
 /**
  * 截角立方体凸包几何测试

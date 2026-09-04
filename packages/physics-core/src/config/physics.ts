@@ -20,8 +20,6 @@ export const PHYSICS = {
   diceHalfSize: 0.12,
   /** 骰子物理倒角比例（当前默认 0 = 运行时使用 Box 碰撞体；>0 时启用截角立方体凸包） */
   diceChamferRatio: 0,
-  /** 骰子视觉倒角比例（仅影响显示网格，不影响物理碰撞；取 0.14，让 8 个角更圆润，同时仍控制与 box 碰撞体的视觉偏差） */
-  diceVisualChamferRatio: 0.14,
   /** 骰子线性阻尼（保留 0.35，便于与既有 box/chamfer sweep 结果对齐） */
   diceLinearDamping: 0.35,
   /** 骰子角阻尼（与线性阻尼保持一致，减少长尾结算） */

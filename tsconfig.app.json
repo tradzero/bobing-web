@@ -24,6 +24,7 @@
       "@/*": ["./apps/web/src/*"],
       "@dice/game-domain": ["./packages/game-domain/src/index.ts"],
       "@dice/physics-core": ["./packages/physics-core/src/index.ts"],
+      "@dice/physics-core/*": ["./packages/physics-core/src/*"],
       "@dice/protocol": ["./packages/protocol/src/index.ts"]
     }
   },

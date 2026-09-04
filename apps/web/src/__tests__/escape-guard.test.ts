@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import * as CANNON from 'cannon-es'
-import { ESCAPE_Y } from '@/physics/bowl-body'
-import { applyEscapeGuard, ESCAPE_VELOCITY_DAMPING } from '@/physics/escape-guard'
+import { ESCAPE_Y } from '@dice/physics-core/physics/bowl-body'
+import { applyEscapeGuard, ESCAPE_VELOCITY_DAMPING } from '@dice/physics-core/physics/escape-guard'
 
 function makeBody(y: number, velocityY: number): CANNON.Body {
   const body = new CANNON.Body({ mass: 1 })

@@ -5,11 +5,11 @@ import * as THREE from 'three'
 import {
   DICE_COUNT,
   DICE_ATLAS,
-  FACE_NORMALS,
   canvasTextureSource,
   createDiceSet,
   setTextureSource,
 } from '@/dice/create'
+import { FACE_NORMALS } from '@dice/physics-core/dice/dice-body'
 import { copyBodyTransformToObject } from '@/physics/body-transform'
 
 const FACE_MATERIAL_ORDER = [2, 5, 1, 6, 3, 4]

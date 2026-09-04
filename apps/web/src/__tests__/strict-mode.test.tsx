@@ -89,7 +89,7 @@ vi.mock('@/scene/bowl', () => ({
   disposeBowlPatternLoad: vi.fn(),
 }))
 
-vi.mock('@/physics/world', () => ({
+vi.mock('@dice/physics-core/physics/world', () => ({
   createPhysicsWorld: (options?: unknown) => {
     physicsWorldOptions.push(options)
     return {
@@ -104,11 +104,11 @@ vi.mock('@/physics/world', () => ({
   },
 }))
 
-vi.mock('@/physics/materials', () => ({
+vi.mock('@dice/physics-core/physics/materials', () => ({
   setupContactMaterials: vi.fn(),
 }))
 
-vi.mock('@/physics/bowl-body', () => ({
+vi.mock('@dice/physics-core/physics/bowl-body', () => ({
   createBowlBodies: vi.fn(),
   ESCAPE_Y: 0.9,
 }))

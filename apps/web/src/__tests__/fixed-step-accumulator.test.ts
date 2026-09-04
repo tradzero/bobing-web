@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createFixedStepAccumulator } from '@/game/fixed-step-accumulator'
+import { createFixedStepAccumulator } from '@dice/physics-core/physics/fixed-step-accumulator'
 
 const FIXED_STEP_MS = 1000 / 60
 

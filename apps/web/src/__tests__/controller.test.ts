@@ -6,11 +6,11 @@ import { UI } from '@/config/ui'
 import type { Engine } from '@/game/engine'
 import type { DicePair } from '@/dice/create'
 import * as CANNON from 'cannon-es'
-import { bowlInnerHeight } from '@/config/bowl'
-import { PHYSICS } from '@/config/physics'
+import { bowlInnerHeight } from '@dice/physics-core/config/bowl'
+import { PHYSICS } from '@dice/physics-core/config/physics'
 import { REST_RING_RADIUS } from '@/dice/rest'
 import { soundManager } from '@/audio/sound'
-import * as readFace from '@/dice/read-face'
+import * as readFace from '@dice/physics-core/dice/read-face'
 
 /** 创建 mock engine */
 function mockEngine(): Engine {

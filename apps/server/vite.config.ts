@@ -2,17 +2,17 @@ import { defineConfig } from 'vite'
 import path from 'node:path'
 
 const repositoryRoot = path.resolve(__dirname, '../..')
+const physicsCoreRoot = path.resolve(repositoryRoot, 'packages/physics-core/src')
 
 export default defineConfig({
   root: repositoryRoot,
   resolve: {
     alias: {
-      '@/dice/throw': path.resolve(repositoryRoot, 'apps/web/src/dice/throw-runtime.ts'),
-      '@/dice/settle': path.resolve(repositoryRoot, 'apps/web/src/dice/settle-runtime.ts'),
-      '@/physics/world': path.resolve(repositoryRoot, 'apps/web/src/physics/world-runtime.ts'),
-      '@': path.resolve(repositoryRoot, 'apps/web/src'),
+      '@dice/physics-core/dice/throw': path.resolve(physicsCoreRoot, 'dice/throw-runtime.ts'),
+      '@dice/physics-core/dice/settle': path.resolve(physicsCoreRoot, 'dice/settle-runtime.ts'),
+      '@dice/physics-core/physics/world': path.resolve(physicsCoreRoot, 'physics/world-runtime.ts'),
       '@dice/game-domain': path.resolve(repositoryRoot, 'packages/game-domain/src/index.ts'),
-      '@dice/physics-core': path.resolve(repositoryRoot, 'packages/physics-core/src/index.ts'),
+      '@dice/physics-core': physicsCoreRoot,
       '@dice/protocol': path.resolve(repositoryRoot, 'packages/protocol/src/index.ts'),
     },
   },

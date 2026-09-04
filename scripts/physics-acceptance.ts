@@ -6,33 +6,33 @@ import {
   serializeRollResult,
   type RollRunResult,
 } from '@dice/physics-core'
-import { THROW } from '../apps/web/src/config/throw.ts'
-import { PHYSICS } from '../apps/web/src/config/physics.ts'
-import { SETTLE } from '../apps/web/src/config/settle.ts'
+import { THROW } from '@dice/physics-core/config/throw'
+import { PHYSICS } from '@dice/physics-core/config/physics'
+import { SETTLE } from '@dice/physics-core/config/settle'
 import {
   HF_GRID_SIZE,
   WALL_COUNT,
   WALL_HEIGHT,
   WALL_RADIUS,
   WALL_THICKNESS,
-} from '../apps/web/src/physics/bowl-body.ts'
-import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '../apps/web/src/dice/throw.ts'
-import { SETTLE_ALGORITHM_VERSION } from '../apps/web/src/dice/settle.ts'
-import { ESCAPE_GUARD_VERSION } from '../apps/web/src/physics/escape-guard.ts'
+} from '@dice/physics-core/physics/bowl-body'
+import { THROW_ALGORITHM_VERSION, THROW_RANDOM_PLAN_VERSION } from '@dice/physics-core/dice/throw'
+import { SETTLE_ALGORITHM_VERSION } from '@dice/physics-core/dice/settle'
+import { ESCAPE_GUARD_VERSION } from '@dice/physics-core/physics/escape-guard'
 import {
   FLOOR_RELAUNCH_CLEARANCE_THRESHOLD,
   FLOOR_RELAUNCH_SUPPORT_CLEARANCE_TOLERANCE,
   FLOOR_RELAUNCH_TRACKER_VERSION,
   FLOOR_RELAUNCH_WORLD_Y_RISE_THRESHOLD,
-} from '../apps/web/src/physics/floor-relaunch.ts'
+} from '@dice/physics-core/physics/floor-relaunch'
 import {
   compareRollContinuation,
   summarizeRollResults,
-} from '../apps/web/src/physics/roll-comparison.ts'
+} from '@dice/physics-core/lab/roll-comparison'
 import {
   PHYSICS_VARIANTS,
   PHYSICS_VARIANT_SCHEMA_VERSION,
-} from '../apps/web/src/config/physics-variants.ts'
+} from '@dice/physics-core/config/physics-variants'
 
 const PHYSICS_ACCEPTANCE_SCHEMA_VERSION = 3
 

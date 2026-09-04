@@ -3,10 +3,14 @@
  * legacy-v1 的精确计数同时作为旧共享随机流/几何消费顺序的复现门禁。
  */
 import { afterEach, describe, expect, it } from 'vitest'
-import { resetRandom, reseed } from '@/utils/random'
-import { createDiceBody } from '@/dice/dice-body'
+import { resetRandom, reseed } from '@dice/physics-core/random'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
 import type { DicePair } from '@/dice/create'
-import { throwDice, type FallbackLayout, type ThrowPlacementAlgorithm } from '@/dice/throw'
+import {
+  throwDice,
+  type FallbackLayout,
+  type ThrowPlacementAlgorithm,
+} from '@dice/physics-core/dice/throw'
 
 interface RateResult {
   fallbackCount: number

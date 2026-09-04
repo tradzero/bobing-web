@@ -8,21 +8,21 @@ import {
   getPhysicsCadenceScheduler,
   type PhysicsCadenceId,
   type PhysicsCadenceSchedulerId,
-} from '@/config/physics-cadence'
+} from '@dice/physics-core/config/physics-cadence'
 import {
   createFixedStepAccumulator,
   type FixedStepAccumulatorSnapshot,
   type FixedStepFrameResult,
   type FixedStepQueueDiagnostics,
-} from '@/game/fixed-step-accumulator'
-import type { ThrowInitialStateDiagnostics } from '@/dice/throw-initial-state'
-import type { ThrowDiagnostics } from '@/dice/throw'
+} from '../physics/fixed-step-accumulator'
+import type { ThrowInitialStateDiagnostics } from '@dice/physics-core/dice/throw-initial-state'
+import type { ThrowDiagnostics } from '@dice/physics-core/dice/throw'
 import {
   createHeadlessRollSimulation,
   type HeadlessRollSimulationOptions,
   type RollRunResult,
 } from '@dice/physics-core'
-import type { RollStepSessionDiagnostics } from './roll-step-session'
+import type { RollStepSessionDiagnostics } from '../physics/roll-step-session'
 
 /** cadence 报告字段或终止语义变化时必须递增。 */
 export const CADENCE_ROLL_REPORT_SCHEMA_VERSION = 1

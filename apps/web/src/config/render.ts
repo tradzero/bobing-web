@@ -12,6 +12,11 @@ export const RENDER_QUALITY = {
   reducedShadowMapSize: 512,
 } as const
 
+/** 只影响 Three.js 骰子网格，不进入共享物理配置。 */
+export const DICE_RENDER = {
+  chamferRatio: 0.14,
+} as const
+
 export type RenderQualityTier = 'full' | 'reduced'
 export type RenderPhase = 'static' | 'rolling'
 export type RollingDprPreset = 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier'

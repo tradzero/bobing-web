@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest'
-import { createDiceBody } from '@/dice/dice-body'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
 import type { DicePair } from '@/dice/create'
-import { throwDice } from '@/dice/throw'
-import { THROW } from '@/config/throw'
+import { throwDice } from '@dice/physics-core/dice/throw'
+import { THROW } from '@dice/physics-core/config/throw'
 import { runRoll } from '@dice/physics-core'
-import { WALL_RADIUS } from '@/physics/bowl-body'
-import { reseed, resetRandom } from '@/utils/random'
+import { WALL_RADIUS } from '@dice/physics-core/physics/bowl-body'
+import { reseed, resetRandom } from '@dice/physics-core/random'
 
 /**
  * 物理烟雾测试只驱动统一 runner，避免测试复制一份近似的运行时循环。

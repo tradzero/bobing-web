@@ -23,13 +23,13 @@ apps/
 packages/
 ├── game-domain/            判奖、63 份奖池、回合、抢状元纯领域逻辑
 ├── protocol/               WebSocket 命令和 RoomSnapshot 契约
-└── physics-core/           共享 headless roll 编排和权威结果结构
+└── physics-core/           共享 Cannon 配置、刚体、读面、调度、诊断和 headless 编排
 scripts/                    物理验收、A/B、迁移与运维入口
 sweep/                      保留的参数扫描/诊断脚本
 e2e/                        单机浏览器流程、soak 与隔离性能实验
 ```
 
-浏览器规则层直接依赖 `@dice/game-domain`，不存在第二套 Web façade。`packages/physics-core/src/roll-runner.ts` 持有服务端与浏览器复用的 headless 编排，所有调用方直接依赖 `@dice/physics-core`。Cannon 插值与 Three 对象映射已经分离，server tsconfig 不再声明 DOM lib；更底层的 DOM-free 物理叶模块仍位于 `apps/web/src`，后续可机械迁移，但不得重新把顶层权威编排放回 Web。
+浏览器规则层直接依赖 `@dice/game-domain`，不存在第二套 Web façade。`packages/physics-core` 持有共享物理配置、PRNG、Cannon 刚体/世界、读面、投掷、停稳、逐步诊断、调度累加器和 headless 编排。`apps/web/src/dice` 仅保留 Three 骰子网格与初始展示摆放，`apps/web/src/physics` 仅保留 Three transform 映射；server tsconfig 不再声明 DOM lib，也不再解析 `@/` Web 路径。
 
 ## 单机与多人产品入口
 
@@ -38,7 +38,7 @@ e2e/                        单机浏览器流程、soak 与隔离性能实验
 - `VITE_MULTIPLAYER_ENABLED=false`：单机 `GameViewport + GameOverlay`；
 - 默认：`MultiplayerApp`，连接同源 `/ws` 并加入 `VITE_DEFAULT_ROOM_ID`。
 
-测试/e2e 构建当前强制走单机入口，避免数据库成为物理/UI 浏览器门禁的隐式依赖。因此现有 Playwright 结果不能代表多人浏览器链路；多人多客户端 e2e 仍是独立待办。
+普通测试/e2e 构建强制走单机入口，避免数据库成为物理/UI 浏览器门禁的隐式依赖。`test:e2e:multiplayer` 独立构建多人入口，启动真实 HTTP/WebSocket 服务和随机 PostgreSQL 房间，并使用两个隔离 BrowserContext 验证多人链路。
 
 ## 多人权威链路
 
@@ -185,7 +185,8 @@ error/result ── reset ──▶ idle (round 1)
 - `pnpm test:slow` / `pnpm test:collision:acceptance`：200-seed projected-AABB 完整结果与 canonical 严格等价。
 - `pnpm test:physics`、`test:seed`、`test:acceptance`、`test:physics:ab`、`test:physics:cadence`：从 watch seed 到长样本/A-B 的物理门禁。
 - `pnpm test:e2e` / `test:e2e:soak`：桌面、移动、错误恢复、静态调度和连续投掷。
+- `pnpm test:e2e:multiplayer`：随机房间、真实服务与数据库、双浏览器加入、房主权限、权威投掷、同步、轮次交接和刷新恢复。
 - `bench:browser:*`：隔离 e2e 构建中的结构预算与配对性能实验。
-- PostgreSQL repository 测试只使用显式 `TEST_DATABASE_URL` 指向专用测试库。
+- PostgreSQL repository 与多人 E2E 只使用显式 `TEST_DATABASE_URL`；测试房间随机生成并精确清理。开发者明确授权时可指向可丢弃的本地开发库，不能指向生产库。
 
 稳定 sweep 仅保留 param、sleep、timeout、jitter、tilt、bench、contact equation/grid/validate 和 solver A/B，可用 `pnpm sweep:parallel -- --list` 查询。一次性历史诊断脚本已删除；Git 仍保存其历史。

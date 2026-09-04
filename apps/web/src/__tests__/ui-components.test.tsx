@@ -17,7 +17,7 @@ import { RollErrorPanel } from '@/ui/components/RollErrorPanel'
 import { GameOverlay } from '@/App'
 import { Prize } from '@dice/game-domain'
 import type { DicePair } from '@/dice/create'
-import { createDiceBody } from '@/dice/dice-body'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
 import type { ReactNode } from 'react'
 
 /**

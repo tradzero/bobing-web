@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest'
 import * as CANNON from 'cannon-es'
 import { placeDiceAtRest, REST_RING_RADIUS } from '@/dice/rest'
-import { createDiceBody } from '@/dice/dice-body'
-import { bowlInnerHeight } from '@/config/bowl'
-import { PHYSICS } from '@/config/physics'
+import { createDiceBody } from '@dice/physics-core/dice/dice-body'
+import { bowlInnerHeight } from '@dice/physics-core/config/bowl'
+import { PHYSICS } from '@dice/physics-core/config/physics'
 import type { DicePair } from '@/dice/create'
 
 function createPairs(count = 6): DicePair[] {

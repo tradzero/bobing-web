@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { SETTLE } from '@/config/settle'
+import { SETTLE } from '@dice/physics-core/config/settle'
 import { runRoll } from '@dice/physics-core'
 
 /**

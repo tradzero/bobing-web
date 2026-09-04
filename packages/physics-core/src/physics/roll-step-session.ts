@@ -1,8 +1,8 @@
 import * as CANNON from 'cannon-es'
-import { PHYSICS } from '@/config/physics'
-import { SETTLE } from '@/config/settle'
-import { readAllFacesDetailed } from '@/dice/read-face'
-import { checkSettled, createSettleState, type SettleResult } from '@/dice/settle'
+import { PHYSICS } from '../config/physics'
+import { SETTLE } from '../config/settle'
+import { readAllFacesDetailed } from '../dice/read-face'
+import { checkSettled, createSettleState, type SettleResult } from '@dice/physics-core/dice/settle'
 import { applyEscapeGuard } from './escape-guard'
 import {
   createBoxFloorFrameSampler,

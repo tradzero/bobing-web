@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { PHYSICS_VARIANTS } from '@/config/physics-variants'
-import { SETTLE } from '@/config/settle'
+import { PHYSICS_VARIANTS } from '@dice/physics-core/config/physics-variants'
+import { SETTLE } from '@dice/physics-core/config/settle'
 import {
   DEFAULT_PHYSICS_AB_BUDGETS,
   buildPhysicsAbSeedSet,
@@ -11,7 +11,7 @@ import {
   parsePhysicsAbArgs,
   summarizeRollResults,
   type PhysicsAbPair,
-} from '@/physics/roll-comparison'
+} from '@dice/physics-core/lab/roll-comparison'
 import type { RollRunOptions, RollRunResult } from '@dice/physics-core'
 
 function noFloorRelaunch() {

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { getPhysicsCadenceScheduler } from '@/config/physics-cadence'
+import { getPhysicsCadenceScheduler } from '@dice/physics-core/config/physics-cadence'
 import {
   DEFAULT_RUNTIME_PHYSICS_SCHEDULER_VARIANT_ID,
   getPhysicsSchedulerVariant,

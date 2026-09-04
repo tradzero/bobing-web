@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach } from 'vitest'
-import { checkSettled, createSettleState, type SettleState } from '@/dice/settle'
-import { SETTLE } from '@/config/settle'
+import { checkSettled, createSettleState, type SettleState } from '@dice/physics-core/dice/settle'
+import { SETTLE } from '@dice/physics-core/config/settle'
 import * as CANNON from 'cannon-es'
 
 /** 创建 mock body */

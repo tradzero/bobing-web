@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es'
-import { PHYSICS } from '@/config/physics'
+import { PHYSICS } from '../config/physics'
 import { WALL_RADIUS, WALL_THICKNESS } from './bowl-body'
 
 /** 骰子中心到物理挡墙内表面的半径。 */
