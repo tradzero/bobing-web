@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { AwardTier, type AwardTier as AwardTierType } from '@dice/game-domain'
-import { PLAYER_DISPLAY_NAME_MAX_LENGTH, type RoomSnapshot } from '@dice/protocol'
+import {
+  PLAYER_DISPLAY_NAME_MAX_LENGTH,
+  ROOM_PASSWORD_MAX_LENGTH,
+  ROOM_PASSWORD_MIN_LENGTH,
+  type RoomSnapshot,
+} from '@dice/protocol'
 import { GameViewport } from '@/ui/components/GameViewport'
 import { useGameController } from '@/ui/components/GameControllerContext'
 import { useMultiplayerRoom, type MultiplayerRoomState, type RoomCommand } from './use-room'
@@ -250,7 +255,9 @@ function RoomOverlay({
   sendCommand: (message: RoomCommand) => boolean
 }) {
   const { snapshot, playerId } = state
+  const [confirmingClose, setConfirmingClose] = useState(false)
   if (!snapshot || !playerId) return null
+  const isHost = snapshot.hostPlayerId === playerId
   return (
     <div className="room-overlay">
       <RollSeedBridge activeRoll={state.activeRoll} />
@@ -265,6 +272,21 @@ function RoomOverlay({
           <a className="room-directory-link" href="/rooms">
             房间大厅
           </a>
+          {isHost && (
+            <button
+              className={confirmingClose ? 'room-close-button is-confirming' : 'room-close-button'}
+              disabled={state.pendingCommand !== null}
+              onClick={() => {
+                if (!confirmingClose) {
+                  setConfirmingClose(true)
+                  return
+                }
+                if (!sendCommand({ type: 'close-room' })) setConfirmingClose(false)
+              }}
+            >
+              {confirmingClose ? '确认关闭' : '关闭房间'}
+            </button>
+          )}
         </div>
       </header>
       {state.status === 'disconnected' && (
@@ -302,12 +324,13 @@ function JoinRoom({
   initialName: string
   error: string | null
   connecting: boolean
-  onJoin: (name: string) => void
+  onJoin: (name: string, password?: string) => void
 }) {
   const [name, setName] = useState(initialName)
+  const [password, setPassword] = useState('')
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    onJoin(name)
+    onJoin(name, password || undefined)
   }
   return (
     <main className="room-join">
@@ -324,6 +347,17 @@ function JoinRoom({
           onChange={(event) => setName(event.target.value)}
           placeholder="例如：阿明"
         />
+        <label htmlFor="room-password">房间密码（开放房可留空）</label>
+        <input
+          id="room-password"
+          type="password"
+          minLength={ROOM_PASSWORD_MIN_LENGTH}
+          maxLength={ROOM_PASSWORD_MAX_LENGTH}
+          autoComplete="current-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder={`密码房至少 ${ROOM_PASSWORD_MIN_LENGTH} 位`}
+        />
         {error && <div className="room-join-error">{error}</div>}
         <button disabled={connecting || !name.trim()}>
           {connecting ? '正在加入…' : '加入房间'}
@@ -336,8 +370,24 @@ function JoinRoom({
   )
 }
 
+function ClosedRoom({ message }: { message: string | null }) {
+  return (
+    <main className="room-join">
+      <section className="room-closed-card">
+        <small>局域网联机</small>
+        <h1>房间已关闭</h1>
+        <p>{message ?? '该房间已归档，不再接受加入或恢复。'}</p>
+        <a className="room-back-link" href="/rooms">
+          返回房间大厅
+        </a>
+      </section>
+    </main>
+  )
+}
+
 export function MultiplayerApp({ roomId }: { roomId: string }) {
-  const { state, connect, reconnect, sendCommand, storedDisplayName } = useMultiplayerRoom(roomId)
+  const { state, join, reconnect, sendCommand, storedDisplayName } = useMultiplayerRoom(roomId)
+  if (state.status === 'closed') return <ClosedRoom message={state.error} />
   if (!state.snapshot || !state.playerId) {
     return (
       <JoinRoom
@@ -345,7 +395,7 @@ export function MultiplayerApp({ roomId }: { roomId: string }) {
         initialName={storedDisplayName}
         error={state.error}
         connecting={state.status === 'connecting'}
-        onJoin={connect}
+        onJoin={join}
       />
     )
   }

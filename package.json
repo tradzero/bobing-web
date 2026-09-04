@@ -8,7 +8,8 @@
     "node": ">=24.11.1 <25"
   },
   "scripts": {
-    "dev": "vite",
+    "dev:singleplayer": "vite --mode singleplayer",
+    "dev:multiplayer": "pnpm run build:web && pnpm run dev:server",
     "dev:server": "vite-node --config apps/server/vite.config.ts apps/server/src/index.ts",
     "build": "pnpm run build:web && pnpm run build:server",
     "typecheck": "tsc -b && tsc -p tsconfig.test.json",
@@ -28,6 +29,7 @@
     "pretest:e2e": "pnpm run build:e2e",
     "test:e2e": "playwright test e2e/game.spec.ts",
     "test:e2e:multiplayer": "node scripts/run-multiplayer-e2e.mjs",
+    "test:e2e:multiplayer:soak": "node scripts/run-multiplayer-e2e.mjs --soak",
     "test:db": "vitest run apps/server/src/room/repository.integration.test.ts",
     "pretest:e2e:soak": "pnpm run build:e2e",
     "test:e2e:soak": "playwright test e2e/soak.spec.ts --grep @soak-default",

@@ -14,7 +14,6 @@ import { useGameStore } from '@/ui/components/GameStoreContext'
 import { Prize } from '@dice/game-domain'
 import { MultiplayerApp } from '@/multiplayer/MultiplayerApp'
 import { RoomDirectory } from '@/multiplayer/RoomDirectory'
-import { defaultRoomId } from '@/multiplayer/use-room'
 
 const DISPLAY_PRIZES = Object.values(Prize).filter((prize) => prize !== Prize.None)
 
@@ -85,13 +84,14 @@ function App() {
   const multiplayerEnabled =
     import.meta.env.MODE !== 'test' &&
     import.meta.env.MODE !== 'e2e' &&
+    import.meta.env.MODE !== 'singleplayer' &&
     import.meta.env.VITE_MULTIPLAYER_ENABLED !== 'false'
   if (multiplayerEnabled) {
-    if (window.location.pathname.replace(/\/+$/, '') === '/rooms') return <RoomDirectory />
+    const pathname = window.location.pathname.replace(/\/+$/, '') || '/'
+    if (pathname === '/' || pathname === '/rooms') return <RoomDirectory />
     const roomId = roomIdFromPath(window.location.pathname)
     if (roomId) return <MultiplayerApp roomId={roomId} />
-    if (window.location.pathname.startsWith('/room/')) return <RoomDirectory />
-    return <MultiplayerApp roomId={defaultRoomId()} />
+    return <RoomDirectory />
   }
   return (
     <GameViewport>

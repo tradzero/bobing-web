@@ -33,14 +33,15 @@ e2e/                        单机浏览器流程、soak 与隔离性能实验
 
 ## 单机与多人产品入口
 
-`App.tsx` 保留单机与多人入口；多人入口再按 URL 选择房间：
+`App.tsx` 保留单机与多人入口；多人入口按 URL 选择房间：
 
-- `VITE_MULTIPLAYER_ENABLED=false`：单机 `GameViewport + GameOverlay`；
-- `/`：兼容入口，加入 `VITE_DEFAULT_ROOM_ID`；
-- `/rooms`：开放房大厅，通过同源 `GET/POST /api/rooms` 列出或创建房间；
+- `dev:singleplayer` 或 `VITE_MULTIPLAYER_ENABLED=false`：单机 `GameViewport + GameOverlay`；
+- `/`、`/rooms`：房间大厅，通过同源 `GET/POST /api/rooms` 列出或创建开放/密码房；
 - `/room/<id>`：连接同源 `/ws` 并加入指定房间，可直接分享 URL。
 
-普通测试/e2e 构建强制走单机入口，避免数据库成为物理/UI 浏览器门禁的隐式依赖。`test:e2e:multiplayer` 独立构建多人入口，启动真实 HTTP/WebSocket 服务，并使用四个隔离 BrowserContext 从公开大厅创建两个房间，验证房间发现、并行对局、广播隔离和身份恢复。
+不保留只启动 Vite 的通用 `dev` 脚本：多人开发入口必须同时提供 HTTP、WebSocket 和静态产物。浏览器命令 UUID 优先使用 `crypto.randomUUID()`；普通局域网 HTTP 不提供该 API 时，使用 `crypto.getRandomValues()` 生成符合 RFC 4122 variant/version 位的 v4 UUID。
+
+普通测试/e2e 构建强制走单机入口，避免数据库成为物理/UI 浏览器门禁的隐式依赖。`test:e2e:multiplayer` 独立构建多人入口并启动真实 HTTP/WebSocket/PostgreSQL 链路，覆盖多房隔离、密码验证、房主关闭、完整结束分支、断线与进程重启恢复。
 
 ## 多人权威链路
 
@@ -68,14 +69,15 @@ game-domain ── 回合推进、库存扣减、抢状元、结束/加投语义
 
 ### 房间与身份
 
-- 进程启动时确保 `DEFAULT_ROOM_ID` 对应的永久开放房存在；此外可由 `POST /api/rooms` 创建服务端 UUID 标识的开放房，`GET /api/rooms` 只列出未归档房间的名称、阶段和成员计数。
-- 当前没有账户或管理员鉴权，因此能访问服务的局域网用户都能创建开放房。创建请求必须同时提交房间名和创建者昵称；room、房主成员、恢复令牌和 lobby 在同一事务生成，创建者不会被并发加入者抢走房主。接口限制 JSON 类型、4 KiB 请求体、32 字符房间名和 24 字符昵称，但暂未设置用户配额或速率限制。
-- `POST /api/rooms` 只把新房主的原始恢复令牌返回一次；GET 目录不返回奖项、投掷或身份信息。实际恢复/加入仍走带 `roomId` 的 WebSocket protocol v1。password hash 和访问类型继续保留扩展位，但当前 API 不创建或加入密码房。
+- 进程启动时确保 `DEFAULT_ROOM_ID` 对应的永久开放房存在；此外可由 `POST /api/rooms` 创建服务端 UUID 标识的开放或密码房。`GET /api/rooms` 只列出未归档房间的访问类型、名称、阶段和成员计数，不泄露密码哈希。
+- 当前没有账户系统，因此能访问服务的局域网用户都能创建房间。创建请求同时提交房间名、创建者昵称和可选密码；room、房主成员、恢复令牌和 lobby 在同一事务生成。密码长度为 4–64，服务端只保存带随机 salt 的 scrypt 派生值。
+- `POST /api/rooms` 只返回一次原始恢复令牌。首次加入密码房必须通过密码验证；恢复令牌验证通过后可恢复已有成员，不重复传输或保存房间密码。该 WebSocket 会话同时承担房主命令鉴权。
 - 开局按加入顺序锁定座位，开局后以及结束/废弃后才加入的成员为旁观者。
 - 浏览器按 `roomId` 在同源 `localStorage` 分别保存昵称和 256-bit 恢复令牌，受限时回退到同标签页 `sessionStorage`；PostgreSQL 只保存令牌 SHA-256。普通刷新、断线和服务重启会自动恢复，不同房间不会覆盖彼此身份。
 - 强制清房后旧令牌失效；客户端只在首次恢复收到 `not-found` 时保留昵称、丢弃旧令牌并无令牌重绑一次。
 - 切换 host/IP/port、浏览器或无痕窗口会形成不同 origin/身份，这是当前局域网 MVP 的明确边界。
 - WebSocket 关闭只改变内存中的 `connected` 展示，不会立即退房、释放昵称或删除对局；加入/恢复和 20 秒在线心跳把 presence 持久化，但心跳不算游戏操作。
+- 房主可通过已鉴权 WebSocket 二次确认后关闭非默认房。服务端在单个房间事务中终止未完成投掷、把进行中对局记为 `abandoned`、设置 `archived_at`，再向该房全部连接广播 `room-closed` 并断开；非房主和默认房都被拒绝。
 - 生命周期以 PostgreSQL 时间列为真值：未加入过的非默认空房 1 小时后删除；进行中的游戏 30 分钟没有真实命令后转为 `abandoned`，当前 turn 以 `room-abandoned` 跳过且不再创建下一 turn；lobby/finished/abandoned 非默认房在真实活动和最后在线心跳都超过 24 小时后归档并从大厅隐藏；归档 7 天后硬删除。上述时长和 60 秒轮询均可由环境变量调整。
 - `DEFAULT_ROOM_ID` 不参与归档和删除，但其中的闲置进行中游戏仍会废弃，避免默认房产生无限 timeout 写入。废弃局保留奖项和投掷历史，原房主可按锁定阵容再开一局。
 
@@ -194,7 +196,8 @@ error/result ── reset ──▶ idle (round 1)
 - `pnpm test:slow` / `pnpm test:collision:acceptance`：200-seed projected-AABB 完整结果与 canonical 严格等价。
 - `pnpm test:physics`、`test:seed`、`test:acceptance`、`test:physics:ab`、`test:physics:cadence`：从 watch seed 到长样本/A-B 的物理门禁。
 - `pnpm test:e2e` / `test:e2e:soak`：桌面、移动、错误恢复、静态调度和连续投掷。
-- `pnpm test:e2e:multiplayer`：从大厅创建两个随机房间，使用真实服务、数据库和六个浏览器上下文验证分别加入/开局/投掷、广播隔离、定向 WebSocket 中断重连、重复命令幂等、真实进程重启、deadline 推进和身份恢复。
+- `pnpm test:e2e:multiplayer`：使用真实服务、数据库和隔离浏览器上下文验证多房隔离、密码房、房主关闭、完整结束/加投/重开、WebSocket 中断、幂等、进程重启、deadline 和身份恢复。奖池耗尽用例只对当次随机房间使用显式 DB 夹具压缩 63 份前置，后续产品链路不使用测试 HTTP 后门。
+- `pnpm test:e2e:multiplayer:soak`：三个隔离浏览器默认循环 3 局。隔离服务使用 10 秒普通/加投 deadline 与 5 秒结束选择 deadline；每局先让三名玩家连续超时，再执行 3 次真实投掷并用随机房间专属 DB 夹具压缩奖池前置；奇数局等待结束选择 deadline，偶数局选择加投后等待全员 deadline，随后由原房主按原阵容重开。门禁活动回合唯一、命令幂等、奖池守恒、三端历史同步、中途刷新恢复和跨局状态隔离；局数与每局真实投掷数可分别用 `MULTIPLAYER_SOAK_GAMES=2..10`、`MULTIPLAYER_SOAK_ROLLS_PER_GAME=1..20` 调整。
 - `bench:browser:*`：隔离 e2e 构建中的结构预算与配对性能实验。
 - PostgreSQL repository 与多人 E2E 只使用显式 `TEST_DATABASE_URL`；测试房间随机生成并精确清理。开发者明确授权时可指向可丢弃的本地开发库，不能指向生产库。
 

@@ -76,7 +76,7 @@
 
 .room-create-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   align-items: end;
   gap: 10px;
 }
@@ -168,7 +168,8 @@
   text-align: center;
 }
 
-.room-join form {
+.room-join form,
+.room-closed-card {
   width: min(100%, 430px);
   padding: 38px;
   color: #f4e3bc;
@@ -205,6 +206,10 @@
   display: block;
   margin-bottom: 8px;
   font-size: 0.82rem;
+}
+
+.room-join input + label {
+  margin-top: 16px;
 }
 
 .room-join input {
@@ -315,9 +320,31 @@
 
 .room-header-status {
   display: flex;
+  align-items: center;
   gap: 10px;
   color: rgba(247, 231, 197, 0.76);
   font-size: 0.85rem;
+}
+
+.room-close-button {
+  padding: 6px 10px;
+  color: rgba(255, 218, 190, 0.76);
+  background: rgba(112, 32, 25, 0.34);
+  border: 1px solid rgba(234, 133, 104, 0.24);
+  border-radius: 8px;
+  cursor: pointer;
+  font: 600 0.76rem var(--font-body);
+}
+
+.room-close-button.is-confirming {
+  color: #ffe4d7;
+  background: rgba(151, 38, 27, 0.72);
+  border-color: rgba(255, 157, 124, 0.52);
+}
+
+.room-close-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .room-header-status span {
@@ -575,6 +602,11 @@
 
   .room-directory-link {
     font-size: 0.72rem;
+  }
+
+  .room-close-button {
+    padding: 5px 7px;
+    font-size: 0.68rem;
   }
 
   .room-header strong {

@@ -4,6 +4,8 @@ export const MULTIPLAYER_PROTOCOL_VERSION = 1 as const
 
 export const ROOM_DISPLAY_NAME_MAX_LENGTH = 32 as const
 export const PLAYER_DISPLAY_NAME_MAX_LENGTH = 24 as const
+export const ROOM_PASSWORD_MIN_LENGTH = 4 as const
+export const ROOM_PASSWORD_MAX_LENGTH = 64 as const
 
 export interface RoomDirectoryEntry {
   id: string
@@ -18,12 +20,13 @@ export interface RoomDirectoryResponse {
   rooms: RoomDirectoryEntry[]
 }
 
-export interface CreateOpenRoomRequest {
+export interface CreateRoomRequest {
   displayName: string
   creatorDisplayName: string
+  password?: string
 }
 
-export interface CreateOpenRoomResponse {
+export interface CreateRoomResponse {
   roomId: string
   resumeToken: string
 }
@@ -98,11 +101,13 @@ export type ClientMessage =
       roomId: string
       displayName: string
       resumeToken?: string
+      password?: string
     }
   | { type: 'start-game'; commandId: string }
   | { type: 'request-roll'; commandId: string }
   | { type: 'tilt-decision'; commandId: string; decision: 'accept' | 'retry' }
   | { type: 'choose-end'; commandId: string; mode: 'immediate' | 'bonus-round' }
+  | { type: 'close-room'; commandId: string }
   | { type: 'ping'; clientTime: string }
 
 export type ServerMessage =
@@ -134,6 +139,7 @@ export type ServerMessage =
         | 'conflict'
         | 'room-full'
         | 'not-found'
+        | 'room-closed'
         | 'internal-error'
       message: string
       commandId?: string
@@ -143,8 +149,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function parseCreateOpenRoomRequest(value: unknown): CreateOpenRoomRequest {
+export function parseCreateRoomRequest(value: unknown): CreateRoomRequest {
   if (!isRecord(value)) throw new TypeError('创建房间请求必须是对象')
+  const password = optionalRoomPassword(value.password)
   return {
     displayName: stringField(value, 'displayName', {
       min: 1,
@@ -154,7 +161,19 @@ export function parseCreateOpenRoomRequest(value: unknown): CreateOpenRoomReques
       min: 1,
       max: PLAYER_DISPLAY_NAME_MAX_LENGTH,
     }),
+    ...(password === undefined ? {} : { password }),
   }
+}
+
+function optionalRoomPassword(value: unknown): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') throw new TypeError('password 必须是字符串')
+  if (value.length < ROOM_PASSWORD_MIN_LENGTH || value.length > ROOM_PASSWORD_MAX_LENGTH) {
+    throw new RangeError(
+      `password 长度必须在 ${ROOM_PASSWORD_MIN_LENGTH}..${ROOM_PASSWORD_MAX_LENGTH} 之间`,
+    )
+  }
+  return value
 }
 
 function stringField(
@@ -198,6 +217,7 @@ export function parseClientMessage(raw: string): ClientMessage {
         throw new RangeError('客户端协议版本不匹配')
       }
       const resumeToken = decoded.resumeToken
+      const password = optionalRoomPassword(decoded.password)
       if (
         resumeToken !== undefined &&
         (typeof resumeToken !== 'string' || resumeToken.length > 256)
@@ -213,6 +233,7 @@ export function parseClientMessage(raw: string): ClientMessage {
           max: PLAYER_DISPLAY_NAME_MAX_LENGTH,
         }),
         ...(resumeToken ? { resumeToken } : {}),
+        ...(password === undefined ? {} : { password }),
       }
     }
     case 'start-game':
@@ -235,6 +256,8 @@ export function parseClientMessage(raw: string): ClientMessage {
       }
       return { type: 'choose-end', commandId: commandId(decoded), mode: decoded.mode }
     }
+    case 'close-room':
+      return { type: 'close-room', commandId: commandId(decoded) }
     case 'ping':
       return {
         type: 'ping',

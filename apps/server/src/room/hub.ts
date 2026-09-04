@@ -34,7 +34,13 @@ export class RoomHub {
     socket.once('close', () => {
       const session = this.sessions.get(socket)
       this.sessions.delete(socket)
-      if (session) void this.broadcastRoom(session.roomId)
+      if (session) {
+        void this.broadcastRoom(session.roomId).catch((error: unknown) => {
+          // 连接关闭通知可能与房主归档事务竞态；已归档房间无需再广播快照。
+          if (error instanceof RoomRepositoryError && error.code === 'not-found') return
+          console.error('[room] disconnect broadcast failed', error)
+        })
+      }
     })
   }
 
@@ -72,13 +78,13 @@ export class RoomHub {
     })
   }
 
-  archiveRoom(roomId: string): void {
+  archiveRoom(roomId: string, message = '房间长期闲置，已归档'): void {
     for (const [socket, session] of this.sessions) {
       if (session.roomId !== roomId) continue
       this.send(socket, {
         type: 'error',
-        code: 'not-found',
-        message: '房间长期闲置，已归档',
+        code: 'room-closed',
+        message,
       })
       this.sessions.delete(socket)
       socket.close(4001, 'room archived')
@@ -158,6 +164,7 @@ export class RoomHub {
         roomId: message.roomId,
         displayName: message.displayName,
         resumeToken: message.resumeToken,
+        password: message.password,
         maxPlayers: this.config.maxRoomPlayers,
       })
       this.sessions.set(socket, { roomId: message.roomId, playerId: joined.playerId })
@@ -229,6 +236,16 @@ export class RoomHub {
       })
       await this.broadcastRoom(session.roomId)
       return
+    }
+
+    if (message.type === 'close-room') {
+      await this.repository.closeRoom({
+        roomId: session.roomId,
+        playerId: session.playerId,
+        defaultRoomId: this.config.defaultRoomId,
+        now: Date.now(),
+      })
+      this.archiveRoom(session.roomId, '房主已关闭房间')
     }
   }
 

@@ -6,13 +6,14 @@ import { collectBrowserIssues } from './helpers/diagnostics'
 
 interface SocketServerMessage {
   type: string
+  code?: string
+  message?: string
 }
 
 const databaseUrl = process.env.TEST_DATABASE_URL?.trim()
 const runId = process.env.MULTIPLAYER_E2E_RUN_ID?.trim()
-const defaultRoomId = process.env.MULTIPLAYER_E2E_DEFAULT_ROOM_ID?.trim()
-if (!databaseUrl || !runId || !defaultRoomId) {
-  throw new Error('多人 E2E 缺少数据库、运行 ID 或默认房间 ID')
+if (!databaseUrl || !runId) {
+  throw new Error('多人 E2E 缺少数据库或运行 ID')
 }
 
 const displayRunId = runId.slice(0, 12)
@@ -26,8 +27,9 @@ function roomIdFromUrl(page: Page): string {
   return decodeURIComponent(match[1])
 }
 
-async function joinCurrentRoom(page: Page, displayName: string): Promise<void> {
+async function joinCurrentRoom(page: Page, displayName: string, password?: string): Promise<void> {
   await page.getByLabel('玩家昵称').fill(displayName)
+  if (password) await page.getByLabel('房间密码（开放房可留空）').fill(password)
   await page.getByRole('button', { name: '加入房间' }).click()
   await expect(page.locator('.room-header')).toContainText(displayName)
 }
@@ -36,10 +38,12 @@ async function createAndJoinRoom(
   page: Page,
   roomName: string,
   displayName: string,
+  password?: string,
 ): Promise<string> {
   await page.goto('/rooms')
   await page.getByLabel('房间名称').fill(roomName)
   await page.getByLabel('你的昵称').fill(displayName)
+  if (password) await page.getByLabel('房间密码（可选）').fill(password)
   await page.getByRole('button', { name: '创建并进入' }).click()
   await page.waitForURL(/\/room\/[^/]+$/)
   const roomId = roomIdFromUrl(page)
@@ -190,6 +194,13 @@ test('从房间大厅创建两个房间，并保持玩家、游戏、投掷和�
     const bob = await bobContext.newPage()
     const carol = await carolContext.newPage()
     const dan = await danContext.newPage()
+    // 局域网 HTTP 在部分 Chrome 中没有 randomUUID，Alice 的完整命令链固定走兼容分支。
+    await alice.addInitScript(() => {
+      Object.defineProperty(globalThis.crypto, 'randomUUID', {
+        configurable: true,
+        value: undefined,
+      })
+    })
     await installWebSocketInterruptionControl(bob)
     const aliceIssues = collectBrowserIssues(alice)
     const bobIssues = collectBrowserIssues(bob)
@@ -197,17 +208,33 @@ test('从房间大厅创建两个房间，并保持玩家、游戏、投掷和�
     const danIssues = collectBrowserIssues(dan)
 
     await alice.goto('/')
-    await expect(alice.getByText(`房间 ${defaultRoomId}`)).toBeVisible()
+    await expect(alice.getByRole('heading', { name: '博饼房间' })).toBeVisible()
+    await expect(alice.getByRole('button', { name: '创建并进入' })).toBeVisible()
+    await expect(alice.getByLabel('玩家昵称')).toHaveCount(0)
     const firstRoomId = await createAndJoinRoom(alice, roomNames[0], 'Alice E2E')
     await enterListedRoom(bob, roomNames[0])
     expect(roomIdFromUrl(bob)).toBe(firstRoomId)
     await joinCurrentRoom(bob, 'Bob E2E')
 
-    const secondRoomId = await createAndJoinRoom(carol, roomNames[1], 'Carol E2E')
+    const secondRoomPassword = 'e2e-room-secret'
+    const secondRoomId = await createAndJoinRoom(
+      carol,
+      roomNames[1],
+      'Carol E2E',
+      secondRoomPassword,
+    )
     expect(secondRoomId).not.toBe(firstRoomId)
-    await enterListedRoom(dan, roomNames[1])
+    await dan.goto('/rooms')
+    const passwordRoomLink = dan.getByRole('link', { name: new RegExp(roomNames[1]) })
+    await expect(passwordRoomLink).toContainText('密码房')
+    await passwordRoomLink.click()
+    await dan.waitForURL(/\/room\/[^/]+$/)
     expect(roomIdFromUrl(dan)).toBe(secondRoomId)
-    await joinCurrentRoom(dan, 'Dan E2E')
+    await dan.getByLabel('玩家昵称').fill('Dan E2E')
+    await dan.getByLabel('房间密码（开放房可留空）').fill('wrong-password')
+    await dan.getByRole('button', { name: '加入房间' }).click()
+    await expect(dan.getByText('房间密码错误')).toBeVisible()
+    await joinCurrentRoom(dan, 'Dan E2E', secondRoomPassword)
 
     await expect(alice.getByText('2 位玩家已入座')).toBeVisible()
     await expect(carol.getByText('2 位玩家已入座')).toBeVisible()
@@ -282,6 +309,39 @@ test('从房间大厅创建两个房间，并保持玩家、游戏、投掷和�
     } finally {
       duplicateSocket.close()
     }
+
+    const danResumeToken = await readResumeToken(dan, secondRoomId)
+    const nonHostSocket = await openPlayerSocket(secondRoomId, 'Dan E2E', danResumeToken)
+    try {
+      const forbidden = waitForSocketMessage(
+        nonHostSocket,
+        (message) => message.type === 'error' && message.code === 'forbidden',
+      )
+      nonHostSocket.send(JSON.stringify({ type: 'close-room', commandId: randomUUID() }))
+      await expect(forbidden).resolves.toMatchObject({
+        type: 'error',
+        code: 'forbidden',
+      })
+      await expect(carol.locator('.room-header')).toContainText(roomNames[1])
+    } finally {
+      nonHostSocket.close()
+    }
+
+    await expect(dan.getByRole('button', { name: '关闭房间' })).toHaveCount(0)
+    await carol.getByRole('button', { name: '关闭房间' }).click()
+    await carol.getByRole('button', { name: '确认关闭' }).click()
+    await expect(carol.getByRole('heading', { name: '房间已关闭' })).toBeVisible()
+    await expect(dan.getByRole('heading', { name: '房间已关闭' })).toBeVisible()
+    await expect(carol.getByText('房主已关闭房间')).toBeVisible()
+
+    await alice.goto('/rooms')
+    await expect(alice.getByRole('link', { name: new RegExp(roomNames[0]) })).toBeVisible()
+    await expect(alice.getByRole('link', { name: new RegExp(roomNames[1]) })).toHaveCount(0)
+    const archived = await pool.query<{ archived: boolean }>(
+      'SELECT archived_at IS NOT NULL AS archived FROM rooms WHERE id = $1',
+      [secondRoomId],
+    )
+    expect(archived.rows[0]?.archived).toBe(true)
 
     for (const issues of [aliceIssues, bobIssues, carolIssues, danIssues]) {
       expect(issues.pageErrors, 'uncaught page errors').toEqual([])

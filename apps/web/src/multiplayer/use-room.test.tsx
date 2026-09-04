@@ -149,7 +149,7 @@ describe('多人浏览器身份绑定', () => {
 
   it('服务断开后自动使用当前绑定重连', async () => {
     const hook = renderHook(() => useMultiplayerRoom())
-    act(() => hook.result.current.connect('Alice'))
+    act(() => hook.result.current.join('Alice'))
     const firstSocket = FakeWebSocket.instances[0]
     act(() => {
       firstSocket?.open()
@@ -171,7 +171,7 @@ describe('多人浏览器身份绑定', () => {
 
   it('加入后定期发送在线心跳，但不把心跳伪装成游戏命令', async () => {
     const hook = renderHook(() => useMultiplayerRoom())
-    act(() => hook.result.current.connect('Alice'))
+    act(() => hook.result.current.join('Alice'))
     const socket = FakeWebSocket.instances[0]
     act(() => {
       socket?.open()
@@ -181,6 +181,75 @@ describe('多人浏览器身份绑定', () => {
     act(() => vi.advanceTimersByTime(20_000))
     expect(JSON.parse(socket?.sent[1] ?? '{}')).toMatchObject({ type: 'ping' })
     expect(JSON.parse(socket?.sent[1] ?? '{}')).not.toHaveProperty('commandId')
+
+    hook.unmount()
+  })
+
+  it('浏览器没有 randomUUID 时仍生成合法的 v4 命令 ID', () => {
+    vi.stubGlobal('crypto', {
+      getRandomValues: (bytes: Uint8Array) => {
+        bytes.fill(0)
+        return bytes
+      },
+    })
+    const hook = renderHook(() => useMultiplayerRoom())
+    act(() => hook.result.current.join('Alice'))
+    const socket = FakeWebSocket.instances[0]
+    act(() => {
+      socket?.open()
+      socket?.receive(joinedMessage('stable-token'))
+    })
+
+    act(() => expect(hook.result.current.sendCommand({ type: 'start-game' })).toBe(true))
+    expect(JSON.parse(socket?.sent[1] ?? '{}')).toMatchObject({
+      type: 'start-game',
+      commandId: '00000000-0000-4000-8000-000000000000',
+    })
+
+    hook.unmount()
+  })
+
+  it('首次加入密码房会发送密码，但成功后只持久化恢复令牌', () => {
+    const hook = renderHook(() => useMultiplayerRoom('locked-room'))
+    act(() => hook.result.current.join('Alice', 'room-secret'))
+    const socket = FakeWebSocket.instances[0]
+    act(() => socket?.open())
+    expect(JSON.parse(socket?.sent[0] ?? '{}')).toMatchObject({
+      type: 'join-room',
+      roomId: 'locked-room',
+      displayName: 'Alice',
+      password: 'room-secret',
+    })
+
+    act(() => socket?.receive(joinedMessage('locked-token')))
+    expect(JSON.parse(localStorage.getItem('dice-room:locked-room:session-v1') ?? '{}')).toEqual({
+      displayName: 'Alice',
+      resumeToken: 'locked-token',
+    })
+
+    hook.unmount()
+  })
+
+  it('房间关闭后清除恢复凭据并停止自动重连', async () => {
+    const key = 'dice-room:closing-room:session-v1'
+    localStorage.setItem(key, JSON.stringify({ displayName: 'Alice', resumeToken: 'old-token' }))
+    const hook = renderHook(() => useMultiplayerRoom('closing-room'))
+    await flushMicrotasks()
+    const socket = FakeWebSocket.instances[0]
+    act(() => {
+      socket?.open()
+      socket?.receive(joinedMessage('stable-token'))
+      socket?.receive({ type: 'error', code: 'room-closed', message: '房主已关闭房间' })
+    })
+
+    expect(hook.result.current.state).toMatchObject({
+      status: 'closed',
+      playerId: null,
+      error: '房主已关闭房间',
+    })
+    expect(localStorage.getItem(key)).toBeNull()
+    act(() => vi.advanceTimersByTime(1_500))
+    expect(FakeWebSocket.instances).toHaveLength(1)
 
     hook.unmount()
   })

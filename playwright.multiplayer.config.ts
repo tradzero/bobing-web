@@ -7,13 +7,19 @@ if (!databaseUrl) {
 
 const runId = process.env.MULTIPLAYER_E2E_RUN_ID?.trim()
 const defaultRoomId = process.env.MULTIPLAYER_E2E_DEFAULT_ROOM_ID?.trim()
+const soakMode = process.env.MULTIPLAYER_E2E_SOAK === 'true'
 if (!runId || !defaultRoomId) {
   throw new Error('多人 E2E runner 未提供运行 ID 或默认房间 ID')
 }
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['multiplayer.spec.ts', 'multiplayer-restart.spec.ts'],
+  testMatch: [
+    'multiplayer.spec.ts',
+    'multiplayer-game-flow.spec.ts',
+    'multiplayer-restart.spec.ts',
+    'multiplayer-soak.spec.ts',
+  ],
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
@@ -59,10 +65,10 @@ export default defineConfig({
       DEFAULT_ROOM_ID: defaultRoomId,
       AUTO_MIGRATE: 'true',
       MAX_ROOM_PLAYERS: '12',
-      TURN_ACTION_TIMEOUT_MS: '30000',
-      TILT_DECISION_TIMEOUT_MS: '10000',
-      END_DECISION_TIMEOUT_MS: '30000',
-      MAX_AUTO_RETRIES: '5',
+      TURN_ACTION_TIMEOUT_MS: soakMode ? '10000' : '30000',
+      TILT_DECISION_TIMEOUT_MS: soakMode ? '3000' : '10000',
+      END_DECISION_TIMEOUT_MS: soakMode ? '5000' : '30000',
+      MAX_AUTO_RETRIES: soakMode ? '1' : '5',
       SCHEDULER_POLL_INTERVAL_MS: '100',
       ROLL_REVEAL_MIN_MS: '1200',
       ROLL_REVEAL_MAX_MS: '10000',

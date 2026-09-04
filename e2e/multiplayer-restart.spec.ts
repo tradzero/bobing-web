@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { Pool } from 'pg'
 import { collectBrowserIssues } from './helpers/diagnostics'
 
-interface CreateOpenRoomResponse {
+interface CreateRoomResponse {
   roomId: string
   resumeToken: string
 }
@@ -87,14 +87,14 @@ async function stopServer(): Promise<void> {
   await once(child, 'close')
 }
 
-async function createRoom(creatorDisplayName: string): Promise<CreateOpenRoomResponse> {
+async function createRoom(creatorDisplayName: string): Promise<CreateRoomResponse> {
   const response = await fetch(`${origin}/api/rooms`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ displayName: roomName, creatorDisplayName }),
   })
   if (!response.ok) throw new Error(`创建重启测试房间失败: ${response.status}`)
-  return (await response.json()) as CreateOpenRoomResponse
+  return (await response.json()) as CreateRoomResponse
 }
 
 async function restoreCreatedHost(

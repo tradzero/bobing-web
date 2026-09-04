@@ -9,11 +9,14 @@ if (!databaseUrl) {
 }
 
 const runId = randomUUID()
+const soakMode = process.argv.includes('--soak')
 const defaultRoomId = `e2e-default-${runId}`
 const restartDefaultRoomId = `e2e-restart-default-${runId}`
 const displayRunId = runId.slice(0, 12)
 const roomNames = [`多人 E2E ${displayRunId} 甲`, `多人 E2E ${displayRunId} 乙`]
+const gameFlowRoomName = `整局 E2E ${displayRunId}`
 const restartRoomName = `重启 E2E ${displayRunId}`
+const soakRoomName = `多人 Soak ${displayRunId}`
 const packageManager = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 class CommandError extends Error {
@@ -36,23 +39,21 @@ function run(args, extraEnv = {}) {
 let exitCode = 0
 try {
   run(['run', 'build:server'])
-  run(['exec', 'vite', 'build', '--mode', 'multiplayer-e2e'], {
-    VITE_DEFAULT_ROOM_ID: defaultRoomId,
-  })
+  run(['exec', 'vite', 'build', '--mode', 'multiplayer-e2e'])
+  const testFiles = soakMode
+    ? ['e2e/multiplayer-soak.spec.ts']
+    : [
+        'e2e/multiplayer.spec.ts',
+        'e2e/multiplayer-game-flow.spec.ts',
+        'e2e/multiplayer-restart.spec.ts',
+      ]
   run(
-    [
-      'exec',
-      'playwright',
-      'test',
-      'e2e/multiplayer.spec.ts',
-      'e2e/multiplayer-restart.spec.ts',
-      '--config',
-      'playwright.multiplayer.config.ts',
-    ],
+    ['exec', 'playwright', 'test', ...testFiles, '--config', 'playwright.multiplayer.config.ts'],
     {
       MULTIPLAYER_E2E_RUN_ID: runId,
       MULTIPLAYER_E2E_DEFAULT_ROOM_ID: defaultRoomId,
       MULTIPLAYER_E2E_RESTART_DEFAULT_ROOM_ID: restartDefaultRoomId,
+      MULTIPLAYER_E2E_SOAK: soakMode ? 'true' : 'false',
     },
   )
 } catch (error) {
@@ -65,7 +66,7 @@ try {
       'DELETE FROM rooms WHERE id = ANY($1::text[]) OR display_name = ANY($2::text[])',
       [
         [defaultRoomId, restartDefaultRoomId],
-        [...roomNames, restartRoomName],
+        [...roomNames, gameFlowRoomName, restartRoomName, soakRoomName],
       ],
     )
   } catch (error) {

@@ -23,7 +23,7 @@
 
 ### 多人联机
 
-- 启动时保留一个默认开放房兼容入口，同时支持大厅创建多个开放房和按 URL 加入。room ID、协议、表结构和 repository 必须继续保留密码房扩展能力，领域逻辑不得写死 `default`。
+- 启动时保留一个永久默认开放房，根路径先进入大厅，再通过 `/room/<id>` 加入默认房、开放房或密码房。领域逻辑不得写死 `default`。
 - PostgreSQL 是房间、成员、对局、回合、投掷、奖池和状元归属的权威层；只通过环境变量连接，项目不得启动或接管数据库。
 - 每局实体奖项固定为 63 份：状元 1、对堂 2、三红 4、四进 8、二举 16、一秀 32。普通奖项库存为 0 后仍记录投掷，但不得超发。
 - 服务端通过共享 headless 物理生成 seed 和权威结果；客户端只用同一 seed 播放动画，不能提交本地点数、判奖或姿态覆盖服务端结果。
@@ -32,7 +32,8 @@
 - 63 份奖项博完后，只有房主可立即结束或允许锁定玩家每人加投一次；加投不再分配普通奖，但可改变状元。
 - 结束后只有原房主可按上一局锁定阵容再开一局；结束后加入者保持旁观，不得改变下一局座位。
 - 投掷命令使用 UUID 幂等键；奖项扣减、投掷提交、状元更新和下一回合必须处于同一事务。错误、timeout、重放和事务冲突不得重复扣奖或推进。房间成员、广播、deadline、游戏与奖池必须始终按 `roomId` 隔离。
-- 开放房创建必须在同一事务绑定创建者为房主并生成 lobby，不能暴露“先建空房、首位加入者抢房主”的窗口。断开 WebSocket 不等于退出或删除房间。
+- 房间创建必须在同一事务绑定创建者为房主并生成 lobby，不能暴露“先建空房、首位加入者抢房主”的窗口。密码房只保存带随机 salt 的 scrypt 派生值；原始密码不进数据库或浏览器会话存储。
+- 恢复令牌绑定成员和房间，服务端只保存令牌哈希；已恢复的 WebSocket session 作为房主命令的身份边界。只有房主可主动关闭非默认房，关闭必须原子终止进行中对局、归档房间并通知全部连接。普通断线不等于退出或删除房间。
 - 默认房永久保留；非默认空房、闲置房和归档房按 PostgreSQL 时间及环境变量清理。进行中对局长期没有真实操作时必须进入明确 `abandoned` 终态并停止生成新回合，在线心跳只延后房间归档，不得冒充游戏操作。
 
 ### UI 与视觉
@@ -111,20 +112,21 @@ DATABASE_URL=<postgres-url> pnpm db:migrate
 
 ### 物理与浏览器门禁
 
-| 命令                                      | 用途                                           |
-| ----------------------------------------- | ---------------------------------------------- |
-| `pnpm test:physics`                       | 固定 watch seeds 与物理/停稳快速回归           |
-| `pnpm test:seed -- --seed=<seed>`         | 单 seed 完整结构化复现                         |
-| `pnpm test:acceptance`                    | 200 seeds 正式物理验收                         |
-| `pnpm test:physics:ab`                    | 历史/current 命名 preset A/B                   |
-| `pnpm test:physics:cadence`               | reference/cap6/cap4 cadence、守恒和 overload   |
-| `pnpm test:e2e`                           | 桌面/移动单机流程、异常恢复和静态调度          |
-| `pnpm test:e2e:multiplayer`               | 多房间隔离、WebSocket 重连、幂等和进程重启恢复 |
-| `pnpm test:e2e:soak`                      | 正式调度桌面/移动连续多轮                      |
-| `pnpm bench:browser`                      | idle/rolling/settled 结构和性能诊断            |
-| `pnpm bench:browser:render-ab`            | 隔离渲染候选 A/B                               |
-| `pnpm bench:browser:physics-scheduler-ab` | 隔离调度 A/B                                   |
-| `pnpm bench:browser:collision-ab`         | 隔离窄相 A/B                                   |
+| 命令                                      | 用途                                         |
+| ----------------------------------------- | -------------------------------------------- |
+| `pnpm test:physics`                       | 固定 watch seeds 与物理/停稳快速回归         |
+| `pnpm test:seed -- --seed=<seed>`         | 单 seed 完整结构化复现                       |
+| `pnpm test:acceptance`                    | 200 seeds 正式物理验收                       |
+| `pnpm test:physics:ab`                    | 历史/current 命名 preset A/B                 |
+| `pnpm test:physics:cadence`               | reference/cap6/cap4 cadence、守恒和 overload |
+| `pnpm test:e2e`                           | 桌面/移动单机流程、异常恢复和静态调度        |
+| `pnpm test:e2e:multiplayer`               | 多房、密码、关房、整局分支、重连/重启与幂等  |
+| `pnpm test:e2e:multiplayer:soak`          | 三浏览器连续 deadline、真实投掷和多局重开    |
+| `pnpm test:e2e:soak`                      | 正式调度桌面/移动连续多轮                    |
+| `pnpm bench:browser`                      | idle/rolling/settled 结构和性能诊断          |
+| `pnpm bench:browser:render-ab`            | 隔离渲染候选 A/B                             |
+| `pnpm bench:browser:physics-scheduler-ab` | 隔离调度 A/B                                 |
+| `pnpm bench:browser:collision-ab`         | 隔离窄相 A/B                                 |
 
 普通浏览器 e2e 强制走单机入口；只有 `test:e2e:multiplayer` 启动真实服务和随机数据库房间。严格 FPS/毫秒门槛只能在记录机器、浏览器、DPR、电源和 warm-up 的稳定环境中判断；不稳定环境只报告观测值和相对趋势。
 

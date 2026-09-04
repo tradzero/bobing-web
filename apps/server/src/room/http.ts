@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
-  parseCreateOpenRoomRequest,
-  type CreateOpenRoomResponse,
+  parseCreateRoomRequest,
+  type CreateRoomResponse,
   type RoomDirectoryResponse,
 } from '@dice/protocol'
 import type { RoomRepository } from './repository'
@@ -59,15 +59,15 @@ export async function handleRoomHttpRequest(
 
   try {
     if (request.method === 'GET') {
-      const body: RoomDirectoryResponse = { rooms: await repository.listOpenRooms() }
+      const body: RoomDirectoryResponse = { rooms: await repository.listRooms() }
       sendJson(response, 200, body)
       return true
     }
 
     if (request.method === 'POST') {
-      const input = parseCreateOpenRoomRequest(await readJsonBody(request))
-      const created = await repository.createOpenRoomWithHost(input)
-      const body: CreateOpenRoomResponse = {
+      const input = parseCreateRoomRequest(await readJsonBody(request))
+      const created = await repository.createRoomWithHost(input)
+      const body: CreateRoomResponse = {
         roomId: created.room.id,
         resumeToken: created.resumeToken,
       }

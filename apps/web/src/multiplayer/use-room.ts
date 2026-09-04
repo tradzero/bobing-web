@@ -8,7 +8,7 @@ import {
   type ServerMessage,
 } from '@dice/protocol'
 
-type ConnectionStatus = 'idle' | 'connecting' | 'joined' | 'disconnected' | 'error'
+type ConnectionStatus = 'idle' | 'connecting' | 'joined' | 'disconnected' | 'error' | 'closed'
 
 export interface MultiplayerRoomState {
   status: ConnectionStatus
@@ -24,16 +24,45 @@ export type RoomCommand =
   | { type: 'request-roll' }
   | { type: 'tilt-decision'; decision: 'accept' | 'retry' }
   | { type: 'choose-end'; mode: 'immediate' | 'bonus-round' }
+  | { type: 'close-room' }
 
 const RECONNECT_DELAY_MS = 1_500
 const PRESENCE_HEARTBEAT_MS = 20_000
 
-export function defaultRoomId(): string {
-  return import.meta.env.VITE_DEFAULT_ROOM_ID?.trim() || 'default'
-}
-
 function sessionStorageKey(roomId: string): string {
   return `dice-room:${roomId}:session-v1`
+}
+
+function clearRoomSession(roomId: string): void {
+  const key = sessionStorageKey(roomId)
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // 受限存储环境仍继续清理当前标签页凭据。
+  }
+  try {
+    sessionStorage.removeItem(key)
+  } catch {
+    // 两种存储都不可用时，当前内存状态仍会终止重连。
+  }
+}
+
+function createCommandId(): string {
+  const cryptoApi = globalThis.crypto
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID()
+
+  const bytes = new Uint8Array(16)
+  if (typeof cryptoApi?.getRandomValues === 'function') {
+    cryptoApi.getRandomValues(bytes)
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256)
+    }
+  }
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
 function socketUrl(): string {
@@ -101,15 +130,17 @@ const INITIAL_STATE: MultiplayerRoomState = {
   pendingCommand: null,
 }
 
-export function useMultiplayerRoom(roomId = defaultRoomId()) {
+export function useMultiplayerRoom(roomId = 'default') {
   const socketRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
-  const connectRef = useRef<(displayName: string, resumeToken?: string) => void>(() => undefined)
+  const connectRef = useRef<(displayName: string, resumeToken?: string, password?: string) => void>(
+    () => undefined,
+  )
   const nameRef = useRef<string>('')
   const [state, setState] = useState<MultiplayerRoomState>(INITIAL_STATE)
 
   const connect = useCallback(
-    (rawDisplayName: string, resumeToken?: string) => {
+    (rawDisplayName: string, resumeToken?: string, password?: string) => {
       const displayName = rawDisplayName.trim()
       if (!displayName) {
         setState((current) => ({ ...current, status: 'error', error: '请输入昵称' }))
@@ -147,6 +178,7 @@ export function useMultiplayerRoom(roomId = defaultRoomId()) {
           roomId,
           displayName,
           ...(resumeToken ? { resumeToken } : {}),
+          ...(!resumeToken && password ? { password } : {}),
         }
         socket.send(JSON.stringify(message))
       })
@@ -197,6 +229,13 @@ export function useMultiplayerRoom(roomId = defaultRoomId()) {
           return
         }
         if (message.type === 'error') {
+          if (message.code === 'room-closed') {
+            clearRoomSession(roomId)
+            socketRef.current = null
+            socket.close()
+            setState({ ...INITIAL_STATE, status: 'closed', error: message.message })
+            return
+          }
           if (!joined && resumeToken && message.code === 'not-found' && !retryingWithoutToken) {
             retryingWithoutToken = true
             saveRoomSession(roomId, displayName)
@@ -291,7 +330,7 @@ export function useMultiplayerRoom(roomId = defaultRoomId()) {
   const sendCommand = useCallback((message: RoomCommand) => {
     const socket = socketRef.current
     if (!socket || socket.readyState !== WebSocket.OPEN) return false
-    const command = { ...message, commandId: crypto.randomUUID() } as ClientMessage
+    const command = { ...message, commandId: createCommandId() } as ClientMessage
     socket.send(JSON.stringify(command))
     setState((current) => ({ ...current, pendingCommand: command.type, error: null }))
     return true
@@ -302,9 +341,14 @@ export function useMultiplayerRoom(roomId = defaultRoomId()) {
     connect(session?.displayName || nameRef.current, session?.resumeToken)
   }, [connect, roomId])
 
+  const join = useCallback(
+    (displayName: string, password?: string) => connect(displayName, undefined, password),
+    [connect],
+  )
+
   return {
     state,
-    connect,
+    join,
     reconnect,
     sendCommand,
     storedDisplayName: loadSession(roomId)?.displayName ?? '',

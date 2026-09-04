@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   PLAYER_DISPLAY_NAME_MAX_LENGTH,
   ROOM_DISPLAY_NAME_MAX_LENGTH,
-  type CreateOpenRoomResponse,
+  ROOM_PASSWORD_MAX_LENGTH,
+  ROOM_PASSWORD_MIN_LENGTH,
+  type CreateRoomResponse,
   type RoomDirectoryEntry,
   type RoomDirectoryResponse,
 } from '@dice/protocol'
@@ -33,6 +35,7 @@ export function RoomDirectory() {
   const [rooms, setRooms] = useState<RoomDirectoryEntry[]>([])
   const [roomName, setRoomName] = useState('')
   const [creatorName, setCreatorName] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,17 +66,28 @@ export function RoomDirectory() {
     event.preventDefault()
     const displayName = roomName.trim()
     const creatorDisplayName = creatorName.trim()
-    if (!displayName || !creatorDisplayName || creating) return
+    if (
+      !displayName ||
+      !creatorDisplayName ||
+      creating ||
+      (password.length > 0 && password.length < ROOM_PASSWORD_MIN_LENGTH)
+    ) {
+      return
+    }
     setCreating(true)
     setError(null)
     try {
       const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ displayName, creatorDisplayName }),
+        body: JSON.stringify({
+          displayName,
+          creatorDisplayName,
+          ...(password.length > 0 ? { password } : {}),
+        }),
       })
       if (!response.ok) throw new Error(await responseError(response))
-      const body = (await response.json()) as CreateOpenRoomResponse
+      const body = (await response.json()) as CreateRoomResponse
       if (!saveRoomSession(body.roomId, creatorDisplayName, body.resumeToken)) {
         throw new Error('房间已创建，但浏览器无法保存房主身份；请启用站点存储后刷新列表')
       }
@@ -91,7 +105,7 @@ export function RoomDirectory() {
           <div>
             <small>局域网联机</small>
             <h1>博饼房间</h1>
-            <p>创建一个开放房，或进入现有房间；每个房间的游戏和奖池互相独立。</p>
+            <p>创建开放房或密码房，或进入现有房间；每个房间的游戏和奖池互相独立。</p>
           </div>
           <button type="button" disabled={loading} onClick={() => void loadRooms()}>
             {loading ? '加载中…' : '刷新列表'}
@@ -120,7 +134,27 @@ export function RoomDirectory() {
                 placeholder="例如：阿明"
               />
             </label>
-            <button disabled={creating || !roomName.trim() || !creatorName.trim()}>
+            <label htmlFor="room-password">
+              房间密码（可选）
+              <input
+                id="room-password"
+                type="password"
+                value={password}
+                minLength={ROOM_PASSWORD_MIN_LENGTH}
+                maxLength={ROOM_PASSWORD_MAX_LENGTH}
+                autoComplete="new-password"
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder={`留空为开放房，至少 ${ROOM_PASSWORD_MIN_LENGTH} 位`}
+              />
+            </label>
+            <button
+              disabled={
+                creating ||
+                !roomName.trim() ||
+                !creatorName.trim() ||
+                (password.length > 0 && password.length < ROOM_PASSWORD_MIN_LENGTH)
+              }
+            >
               {creating ? '正在创建…' : '创建并进入'}
             </button>
           </div>
@@ -133,12 +167,15 @@ export function RoomDirectory() {
         )}
 
         <div className="room-directory-list" aria-live="polite">
-          {!loading && rooms.length === 0 && <p className="room-directory-empty">还没有开放房间</p>}
+          {!loading && rooms.length === 0 && <p className="room-directory-empty">还没有房间</p>}
           {rooms.map((room) => (
             <a href={`/room/${encodeURIComponent(room.id)}`} key={room.id}>
               <div>
                 <strong>{room.displayName}</strong>
-                <small>{PHASE_LABELS[room.phase]}</small>
+                <small>
+                  {room.accessType === 'password' ? '密码房' : '开放房'} ·{' '}
+                  {PHASE_LABELS[room.phase]}
+                </small>
               </div>
               <span>
                 {room.playerCount} 位玩家

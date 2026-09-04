@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto'
 import type { Pool, PoolClient, QueryResultRow } from 'pg'
 import {
   AwardTier,
@@ -29,6 +29,8 @@ import {
   MULTIPLAYER_PROTOCOL_VERSION,
   PLAYER_DISPLAY_NAME_MAX_LENGTH,
   ROOM_DISPLAY_NAME_MAX_LENGTH,
+  ROOM_PASSWORD_MAX_LENGTH,
+  ROOM_PASSWORD_MIN_LENGTH,
   type RoomDirectoryEntry,
   type RoomSnapshot,
 } from '@dice/protocol'
@@ -42,6 +44,11 @@ interface RoomRow extends QueryResultRow {
 
 interface RoomSnapshotRoomRow extends RoomRow {
   display_name: string
+}
+
+interface RoomAccessRow extends RoomRow {
+  access_type: 'open' | 'password'
+  password_hash: string | null
 }
 
 interface RoomDirectoryRow extends QueryResultRow {
@@ -161,7 +168,7 @@ export interface JoinedMember {
   role: 'player' | 'spectator'
 }
 
-interface CreatedOpenRoom {
+interface CreatedRoom {
   room: RoomDirectoryEntry
   playerId: string
   resumeToken: string
@@ -278,6 +285,47 @@ function hashResumeToken(token: string): Buffer {
   return createHash('sha256').update(token).digest()
 }
 
+function validateRoomPassword(password: string): void {
+  if (password.length < ROOM_PASSWORD_MIN_LENGTH || password.length > ROOM_PASSWORD_MAX_LENGTH) {
+    throw new RangeError(
+      `房间密码长度必须在 ${ROOM_PASSWORD_MIN_LENGTH}..${ROOM_PASSWORD_MAX_LENGTH} 之间`,
+    )
+  }
+}
+
+function deriveRoomPassword(password: string, salt: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, 32, (error, derivedKey) => {
+      if (error) reject(error)
+      else resolve(Buffer.from(derivedKey))
+    })
+  })
+}
+
+async function hashRoomPassword(password: string): Promise<string> {
+  validateRoomPassword(password)
+  const salt = randomBytes(16)
+  const digest = await deriveRoomPassword(password, salt)
+  return `scrypt-v1$${salt.toString('base64url')}$${digest.toString('base64url')}`
+}
+
+async function verifyRoomPassword(password: string | undefined, encoded: string): Promise<boolean> {
+  if (
+    password === undefined ||
+    password.length < ROOM_PASSWORD_MIN_LENGTH ||
+    password.length > ROOM_PASSWORD_MAX_LENGTH
+  ) {
+    return false
+  }
+  const [version, saltValue, digestValue, extra] = encoded.split('$')
+  if (version !== 'scrypt-v1' || !saltValue || !digestValue || extra !== undefined) {
+    throw new Error('数据库中的房间密码哈希格式无效')
+  }
+  const expected = Buffer.from(digestValue, 'base64url')
+  const actual = await deriveRoomPassword(password, Buffer.from(saltValue, 'base64url'))
+  return expected.length === actual.length && timingSafeEqual(expected, actual)
+}
+
 function parsePhase(value: string): GamePhaseType {
   if (Object.values(GamePhase).includes(value as GamePhaseType)) return value as GamePhaseType
   throw new Error(`数据库中存在未知游戏阶段 ${value}`)
@@ -318,11 +366,12 @@ export class RoomRepository {
     )
   }
 
-  async createOpenRoomWithHost(input: {
+  async createRoomWithHost(input: {
     displayName: string
     creatorDisplayName: string
+    password?: string
     now?: number
-  }): Promise<CreatedOpenRoom> {
+  }): Promise<CreatedRoom> {
     if (input.now !== undefined && (!Number.isFinite(input.now) || input.now < 0)) {
       throw new RangeError('创建时间必须是非负有限数字')
     }
@@ -332,17 +381,20 @@ export class RoomRepository {
     const playerId = randomUUID()
     const resumeToken = randomBytes(32).toString('base64url')
     const timestamp = new Date(input.now ?? Date.now())
+    const passwordHash =
+      input.password === undefined ? null : await hashRoomPassword(input.password)
+    const accessType = passwordHash === null ? 'open' : 'password'
 
     return this.withTransaction(async (client) => {
       const roomResult = await client.query<RoomDirectoryRow>(
         `
           INSERT INTO rooms (
-            id, display_name, access_type, last_activity_at
-          ) VALUES ($1, $2, 'open', $3)
+            id, display_name, access_type, password_hash, last_activity_at
+          ) VALUES ($1, $2, $3, $4, $5)
           RETURNING id, display_name, access_type, 'lobby'::text AS phase,
                     '1'::text AS player_count, '0'::text AS spectator_count
         `,
-        [roomId, roomDisplayName, timestamp],
+        [roomId, roomDisplayName, accessType, passwordHash, timestamp],
       )
       await client.query(
         `
@@ -372,7 +424,7 @@ export class RoomRepository {
     })
   }
 
-  async listOpenRooms(): Promise<RoomDirectoryEntry[]> {
+  async listRooms(): Promise<RoomDirectoryEntry[]> {
     const result = await this.pool.query<RoomDirectoryRow>(
       `
         SELECT
@@ -391,7 +443,7 @@ export class RoomRepository {
           LIMIT 1
         ) latest_game ON true
         LEFT JOIN room_members m ON m.room_id = r.id AND m.retired_at IS NULL
-        WHERE r.access_type = 'open' AND r.archived_at IS NULL
+        WHERE r.archived_at IS NULL
         GROUP BY r.id, latest_game.status
         ORDER BY r.created_at DESC, r.id
       `,
@@ -484,16 +536,7 @@ export class RoomRepository {
         ) {
           return false
         }
-        if (before.activeTurn) {
-          await client.query(
-            `
-              UPDATE roll_attempts
-              SET status = 'rejected'
-              WHERE turn_id = $1 AND status IN ('computed', 'awaiting-tilt')
-            `,
-            [before.activeTurn.id],
-          )
-        }
+        if (before.activeTurn) await this.rejectPendingRollAttempts(client, before.activeTurn.id)
         const after = abandonMultiplayerGame(before, now)
         await this.persistStateTransition(client, before, after, 'game-abandoned-idle')
         return true
@@ -548,6 +591,60 @@ export class RoomRepository {
         ...archivedDeleted.rows.map(({ id }) => id),
       ],
     }
+  }
+
+  async closeRoom(input: {
+    roomId: string
+    playerId: string
+    defaultRoomId: string
+    now: number
+  }): Promise<void> {
+    if (!Number.isFinite(input.now) || input.now < 0) {
+      throw new RangeError('关闭房间时间必须是非负有限数字')
+    }
+    if (input.roomId === input.defaultRoomId) {
+      throw new RoomRepositoryError('forbidden', '永久默认房不能关闭')
+    }
+    await this.withTransaction(async (client) => {
+      const roomResult = await client.query<RoomRow>(
+        `
+          SELECT id, host_member_id, last_activity_at, archived_at
+          FROM rooms WHERE id = $1 FOR UPDATE
+        `,
+        [input.roomId],
+      )
+      const room = roomResult.rows[0]
+      if (!room || room.archived_at !== null) {
+        throw new RoomRepositoryError('not-found', '房间不存在或已经关闭')
+      }
+      if (room.host_member_id !== input.playerId) {
+        throw new RoomRepositoryError('forbidden', '只有房主可以关闭房间')
+      }
+
+      const before = await this.loadActiveGame(client, input.roomId, true)
+      if (
+        before.phase === GamePhase.Playing ||
+        before.phase === GamePhase.EndDecision ||
+        before.phase === GamePhase.BonusRound
+      ) {
+        if (before.activeTurn) await this.rejectPendingRollAttempts(client, before.activeTurn.id)
+        const after = abandonMultiplayerGame(before, input.now)
+        await this.persistStateTransition(client, before, after, 'room-closed-by-host')
+      }
+      const archived = await client.query(
+        `
+          UPDATE rooms
+          SET archived_at = $2,
+              last_activity_at = GREATEST(last_activity_at, $2),
+              updated_at = GREATEST(updated_at, $2)
+          WHERE id = $1 AND archived_at IS NULL
+        `,
+        [input.roomId, new Date(input.now)],
+      )
+      if (archived.rowCount !== 1) {
+        throw new RoomRepositoryError('conflict', '房间关闭状态已发生变化')
+      }
+    })
   }
 
   /**
@@ -608,13 +705,14 @@ export class RoomRepository {
     roomId: string
     displayName: string
     resumeToken?: string
+    password?: string
     maxPlayers: number
   }): Promise<JoinedMember> {
     const name = normalizedName(input.displayName)
     return this.withTransaction(async (client) => {
-      const roomResult = await client.query<RoomRow>(
+      const roomResult = await client.query<RoomAccessRow>(
         `
-          SELECT id, host_member_id, last_activity_at, archived_at
+          SELECT id, host_member_id, last_activity_at, archived_at, access_type, password_hash
           FROM rooms WHERE id = $1 FOR UPDATE
         `,
         [input.roomId],
@@ -638,6 +736,13 @@ export class RoomRepository {
         const member = resumed.rows[0]
         if (!member) throw new RoomRepositoryError('not-found', '恢复凭据无效或已失效')
         return { playerId: member.id, resumeToken: input.resumeToken, role: member.member_role }
+      }
+
+      if (
+        room.access_type === 'password' &&
+        (!room.password_hash || !(await verifyRoomPassword(input.password, room.password_hash)))
+      ) {
+        throw new RoomRepositoryError('forbidden', '房间密码错误')
       }
 
       const latestGameResult = await client.query<GameRow>(
@@ -1726,6 +1831,17 @@ export class RoomRepository {
         WHERE id = $1 AND archived_at IS NULL
       `,
       [roomId, timestamp],
+    )
+  }
+
+  private async rejectPendingRollAttempts(client: PoolClient, turnId: string): Promise<void> {
+    await client.query(
+      `
+        UPDATE roll_attempts
+        SET status = 'rejected'
+        WHERE turn_id = $1 AND status IN ('computed', 'awaiting-tilt')
+      `,
+      [turnId],
     )
   }
 
