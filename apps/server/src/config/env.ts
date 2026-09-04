@@ -93,7 +93,7 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     rollRevealMaxMs,
     timing: {
       turnActionTimeoutMs: integer(env, 'TURN_ACTION_TIMEOUT_MS', 30_000, {
-        min: 5_000,
+        min: 10_000,
         max: 300_000,
       }),
       tiltDecisionTimeoutMs: integer(env, 'TILT_DECISION_TIMEOUT_MS', 10_000, {

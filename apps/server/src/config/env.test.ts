@@ -61,9 +61,15 @@ describe('服务端环境变量', () => {
     expect(() =>
       loadServerConfig({
         DATABASE_URL: 'postgresql://localhost/dice',
-        TURN_ACTION_TIMEOUT_MS: '1',
+        TURN_ACTION_TIMEOUT_MS: '9999',
       }),
-    ).toThrow(/TURN_ACTION_TIMEOUT_MS/)
+    ).toThrow(/TURN_ACTION_TIMEOUT_MS 必须是 10000\.\.300000/)
+    expect(
+      loadServerConfig({
+        DATABASE_URL: 'postgresql://localhost/dice',
+        TURN_ACTION_TIMEOUT_MS: '10000',
+      }).timing.turnActionTimeoutMs,
+    ).toBe(10_000)
     expect(() =>
       loadServerConfig({ DATABASE_URL: 'postgresql://localhost/dice', SERVER_PORT: '1.5' }),
     ).toThrow(/SERVER_PORT/)
