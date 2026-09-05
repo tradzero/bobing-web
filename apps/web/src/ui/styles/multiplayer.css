@@ -503,18 +503,26 @@
   color: rgba(247, 229, 195, 0.46);
 }
 
-.room-action-card {
+.room-stage-footer {
   position: absolute;
   left: 50%;
   bottom: 24px;
+  width: min(430px, 42vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+}
+
+.room-action-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  min-width: min(430px, 82vw);
+  width: 100%;
   padding: 16px 20px;
   border-radius: 16px;
-  transform: translateX(-50%);
 }
 
 .room-action-card > strong {
@@ -526,6 +534,20 @@
 .room-action-card > span {
   color: rgba(246, 230, 197, 0.64);
   font-size: 0.78rem;
+}
+
+/* 揭晓后收紧桌面操作区，避免投掷按钮把结果条向上顶进碗里。 */
+@media (min-width: 769px) {
+  .room-stage-footer:has(.result-announcement) .room-action-card:has(> .room-primary-button) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 18px;
+  }
+
+  .room-stage-footer:has(.result-announcement) .room-action-card > .room-primary-button {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
 }
 
 .room-action-warning {
@@ -646,9 +668,11 @@
     display: none;
   }
 
-  .room-action-card {
+  .room-stage-footer {
     bottom: 10px;
-    min-width: calc(100vw - 16px);
+  }
+
+  .room-action-card {
     padding: 12px;
   }
 
@@ -703,6 +727,7 @@
   .room-header strong {
     font-size: 1.05rem;
   }
+  .room-stage-footer,
   .room-action-card,
   .room-awards,
   .room-history,
@@ -716,7 +741,7 @@
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
-  .room-action-card {
+  .room-stage-footer {
     order: 0;
   }
   .room-connection-banner,

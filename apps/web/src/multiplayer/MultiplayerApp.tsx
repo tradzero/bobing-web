@@ -7,7 +7,7 @@ import {
   type RoomSnapshot,
 } from '@dice/protocol'
 import { GameViewport } from '@/ui/components/GameViewport'
-import { RollSeedBridge } from './RollSeedBridge'
+import { RoomResultAnnouncement } from './RoomResultAnnouncement'
 import { useGameStore } from '@/ui/components/GameStoreContext'
 import { useMultiplayerRoom, type MultiplayerRoomState, type RoomCommand } from './use-room'
 import '@/ui/styles/multiplayer.css'
@@ -255,7 +255,6 @@ function RoomOverlay({
   const isHost = snapshot.hostPlayerId === playerId
   return (
     <div className={`room-overlay room-view-${detailsView} phase-${phase}`}>
-      <RollSeedBridge activeRoll={state.activeRoll} />
       <header className="room-header">
         <div>
           <small>房间 · {snapshot.roomId}</small>
@@ -326,7 +325,10 @@ function RoomOverlay({
           </div>
         ))}
       </div>
-      <RoomAction state={state} sendCommand={sendCommand} />
+      <div className="room-stage-footer">
+        <RoomResultAnnouncement state={state} />
+        <RoomAction state={state} sendCommand={sendCommand} />
+      </div>
     </div>
   )
 }

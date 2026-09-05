@@ -352,7 +352,7 @@ test('从房间大厅创建两个房间，并保持玩家、游戏、投掷和�
   }
 })
 
-test('移动端保留奖池、全员获取与最近结果，并上下排列画布和操作', async ({ page }) => {
+test('移动端保留奖池、全员获取与最近结果，并向桌面旁观者同步揭晓', async ({ page, browser }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const roomId = await createAndJoinRoom(page, `${roomNames[0]} 移动端`, 'MobileHost')
   await expect(page.getByRole('navigation', { name: '房间信息' })).toBeVisible()
@@ -371,18 +371,58 @@ test('移动端保留奖池、全员获取与最近结果，并上下排列画�
   await expect(page.locator('.room-awards')).toBeHidden()
   await page.getByRole('button', { name: '奖池与奖项' }).click()
   await page.getByRole('button', { name: '开始博饼' }).click()
-  await page.getByRole('button', { name: '投掷六骰', exact: true }).click()
-  await expect
-    .poll(async () => {
-      const result = await pool.query(
-        'SELECT count(*)::int AS count FROM roll_attempts a JOIN games g ON g.id = a.game_id WHERE g.room_id = $1',
-        [roomId],
-      )
-      return result.rows[0].count as number
+  const spectatorContext = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+  try {
+    const spectator = await spectatorContext.newPage()
+    await spectator.goto(`/room/${roomId}`)
+    await joinCurrentRoom(spectator, '看客')
+    await page.getByRole('button', { name: '投掷六骰', exact: true }).click()
+    await expect
+      .poll(async () => {
+        const result = await pool.query(
+          'SELECT count(*)::int AS count FROM roll_attempts a JOIN games g ON g.id = a.game_id WHERE g.room_id = $1',
+          [roomId],
+        )
+        return result.rows[0].count as number
+      })
+      .toBeGreaterThan(0)
+    await page.getByRole('button', { name: '最近结果', exact: true }).click()
+    await acceptTiltIfNeeded(page)
+    await expect(page.locator('.result-announcement')).toBeVisible()
+    await expect(page.locator('.result-announcement-player')).toContainText('MobileHost')
+    await expect(spectator.locator('.result-announcement')).toBeVisible()
+    await expect(spectator.locator('.result-announcement-player')).toContainText('MobileHost')
+    expect(await spectator.locator('.result-announcement').innerText()).toBe(
+      await page.locator('.result-announcement').innerText(),
+    )
+    for (const client of [page, spectator]) {
+      await client.locator('.result-announcement').evaluate(async (element) => {
+        await Promise.all(
+          element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+        )
+      })
+    }
+    const announcement = await page.locator('.result-announcement').boundingBox()
+    const nextAction = await page.locator('.room-action-card').boundingBox()
+    const settledCanvas = await page.locator('canvas').boundingBox()
+    expect(announcement!.y).toBeGreaterThanOrEqual(settledCanvas!.y + settledCanvas!.height)
+    expect(announcement!.y + announcement!.height).toBeLessThanOrEqual(nextAction!.y)
+    await page.screenshot({ path: 'artifacts/multiplayer-mobile.png', fullPage: true })
+    await spectator.screenshot({
+      path: 'artifacts/result-announcement-multiplayer-desktop.png',
+      fullPage: true,
     })
-    .toBeGreaterThan(0)
-  await page.screenshot({ path: 'artifacts/multiplayer-mobile.png', fullPage: true })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
-    true,
-  )
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await expect(page.getByRole('button', { name: '投掷六骰', exact: true })).toBeVisible()
+    expect((await page.locator('.room-action-card').boundingBox())!.height).toBeLessThan(100)
+    await page.screenshot({
+      path: 'artifacts/result-announcement-multiplayer-host.png',
+      fullPage: true,
+    })
+  } finally {
+    await spectatorContext.close()
+  }
 })

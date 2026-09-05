@@ -168,6 +168,21 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
   for (const label of faceLabels) expect(label).toMatch(/^骰子点数 [1-6]$/)
   await expect(page.locator('.round-display-value')).toHaveText('第 2 轮')
   await expect(page.locator('.history-item')).toHaveCount(1)
+  await expect(page.locator('.result-announcement')).toBeVisible()
+  await expect(page.locator('.result-announcement-player')).toContainText('你')
+  const announcementBox = await page.locator('.result-announcement').boundingBox()
+  const throwBox = await page.getByRole('button', { name: '掷骰', exact: true }).boundingBox()
+  expect(announcementBox!.y + announcementBox!.height).toBeLessThanOrEqual(throwBox!.y)
+  await page.screenshot({
+    path: `artifacts/result-announcement-${testInfo.project.name}.png`,
+    fullPage: true,
+  })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(page.locator('.result-announcement')).toHaveCSS('animation-name', 'none')
+  await expect(page.locator('.result-announcement .result-prize')).toHaveCSS(
+    'animation-name',
+    'none',
+  )
 
   const settled = await waitForPostRender(page, {
     mode: 'settled',
