@@ -1,6 +1,5 @@
 import { useGameStore } from './GameStoreContext'
-import { PRIZE_NAMES, Prize } from '@dice/game-domain'
-import { DiceFace } from './DiceFace'
+import { ResultAnnouncement } from './ResultAnnouncement'
 
 /** 结果面板：显示当轮点数、奖级、带数 */
 export function ResultPanel() {
@@ -11,26 +10,5 @@ export function ResultPanel() {
   // result 态显示正式结果；tilt-confirm 态不显示（由 TiltWarning 接管）
   if (phase !== 'result' || !currentResult) return null
 
-  const isNone = currentResult.prize === Prize.None
-
-  return (
-    <div className={`result-panel ${isNone ? 'result-panel-none' : 'result-panel-win'}`}>
-      <div className="result-panel-decor result-panel-decor-left" aria-hidden="true" />
-      <div className="result-panel-decor result-panel-decor-right" aria-hidden="true" />
-      <div className="result-panel-lantern" aria-hidden="true" />
-      <div className="result-kicker">本轮结算</div>
-      <div className={`result-prize ${isNone ? 'no-prize' : ''}`}>
-        {PRIZE_NAMES[currentResult.prize]}
-      </div>
-      {currentResult.carryScore > 0 && (
-        <div className="result-carry">带{currentResult.carryScore}</div>
-      )}
-      <div className="result-dice">
-        {diceValues.map((v, i) => (
-          <DiceFace key={i} value={v} />
-        ))}
-      </div>
-      <div className="result-panel-footnote">六骰同观，奖级以最高优先级结算</div>
-    </div>
-  )
+  return <ResultAnnouncement playerName="你" result={currentResult} diceValues={diceValues} />
 }
