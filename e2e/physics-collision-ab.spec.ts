@@ -187,14 +187,14 @@ function expectProductionRender(
 ): void {
   expect(diagnostics.renderExperiment).toEqual({
     version: 1,
-    explicit: false,
-    variant: 'rolling-dpr-reduced-tier',
-    rollingDprPreset: 'cap-1x-reduced-tier',
+    explicit: true,
+    variant: 'rolling-dpr-1x',
+    rollingDprPreset: 'cap-1x',
     rollingShadowPreset: 'every-frame',
   })
   expect(diagnostics.render.quality).toMatchObject({
     phase,
-    rollingDprPreset: 'cap-1x-reduced-tier',
+    rollingDprPreset: 'cap-1x',
   })
   expect(diagnostics.engine.rollingShadow.preset).toBe('every-frame')
 }
@@ -505,6 +505,8 @@ async function runVariant(
     perfProfileVersion: String(ROLLING_CPU_PROFILE_VERSION),
     physicsCollisionExperimentVersion: String(PHYSICS_COLLISION_EXPERIMENT_VERSION),
     physicsCollisionVariant: variant,
+    renderExperimentVersion: '1',
+    renderVariant: 'rolling-dpr-1x',
   })
   await page.goto(`/?${query}`)
   await expect(page.locator('canvas')).toHaveCount(1)
@@ -635,7 +637,8 @@ test('@physics-collision-ab cannon-default vs projected-aabb-v1', async ({
     executionPattern: 'ABBA/BAAB alternating by seed',
     fixedRuntimeContracts: {
       scheduler: 'exact-cap6 production default; no scheduler experiment query',
-      render: 'rolling-dpr-reduced-tier production default; no render experiment query',
+      render:
+        'explicit rolling-dpr-1x for both variants; adaptive quality excluded from collision comparison',
       profileVersion: ROLLING_CPU_PROFILE_VERSION,
     },
     equivalencePolicy:

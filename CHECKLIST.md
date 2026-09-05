@@ -20,7 +20,7 @@
 - [x] 骰子单材质 atlas + 6-instance 渲染和明确资源释放
 - [x] 程序化木纹桌面、传统海碗、固定俯视轻倾镜头
 - [x] 单张无缝青花 WebP、首帧加载遮罩和程序化纹样失败回退
-- [x] reduced 质量档 rolling DPR 限 1x；静态恢复基础 DPR
+- [x] rolling 慢帧自适应 DPR（最低 0.75x）；静态恢复基础 DPR
 - [x] Playwright 桌面/移动正常流程、异常恢复、soak 与结构性能门禁
 
 ## 已完成：多人 MVP
@@ -31,6 +31,8 @@
 - [x] 多房间成员/游戏/奖池/deadline/广播隔离；创建者原子绑定房主、开局锁座、开局后旁观者
 - [x] WebSocket protocol v1、RoomHub 广播、版本化 RoomSnapshot
 - [x] 服务端共享 headless 物理、seed 广播和客户端动画
+- [x] 固定物理 worker 池、有界队列、幂等合并和计算前/提交时双重校验
+- [x] 大厅按需加载 3D；移动端多人奖池、全员获取和历史页签
 - [x] PostgreSQL 绝对 deadline：操作、揭晓、倾斜确认、结束选择
 - [x] 63 份实体奖项、库存原子扣减、个人/全员查看和抢状元
 - [x] 奖池清空后立即结束/锁定玩家加投一轮
@@ -45,7 +47,7 @@
 - [x] Web 删除重复规则 façade，统一依赖 `@dice/game-domain`
 - [x] `physics-core` 持有 headless roll 编排，调用方统一依赖共享包
 - [x] 正式 throw/settle/world 与 lab 变体分层；普通 Web/Server build 不再携带历史候选
-- [x] 生产固定 stratified-ring、assist off、exact-cap6、cannon-default；e2e/lab 保留历史 A/B
+- [x] 生产固定 stratified-ring、assist off、exact-cap6；浏览器 cannon-default、服务端等价 projected-aabb-v1；e2e/lab 保留历史 A/B
 - [x] 删除无引用场景装饰、旧碗图、根目录生成图和一次性历史 sweep
 - [x] 删除只被测试消费的单骰 Mesh API、deadline 旧包装 API 和无状态 RollAuthority 类
 - [x] 默认 `pnpm test` 排除 200-seed 慢用例；慢证据迁入 `pnpm test:slow`

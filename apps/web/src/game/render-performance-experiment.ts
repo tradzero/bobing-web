@@ -10,6 +10,10 @@ export interface RenderPerformanceVariant {
 }
 
 const VARIANTS = {
+  adaptive: {
+    rollingDprPreset: 'adaptive',
+    rollingShadowPreset: 'every-frame',
+  },
   baseline: {
     rollingDprPreset: 'baseline',
     rollingShadowPreset: 'every-frame',
@@ -44,9 +48,8 @@ const EXPLICIT_EXPERIMENT_VARIANT_IDS = new Set<RenderPerformanceVariantId>([
   'shadow-frozen',
 ])
 
-/** reduced 基础质量档 rolling 限为 1x；full 档保持基础 DPR，静态阶段始终恢复。 */
-export const DEFAULT_RUNTIME_RENDER_VARIANT_ID: RenderPerformanceVariantId =
-  'rolling-dpr-reduced-tier'
+/** 正式渲染根据持续慢帧自适应降档，静态阶段恢复基础 DPR。 */
+export const DEFAULT_RUNTIME_RENDER_VARIANT_ID: RenderPerformanceVariantId = 'adaptive'
 
 /**
  * 只解析版本化、预注册的浏览器性能实验，避免 query string 变成任意运行时调参入口。

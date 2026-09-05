@@ -1044,10 +1044,6 @@
     min-height: 100dvh;
   }
 
-  .game-viewport:has(.content-peek) {
-    --mobile-stage-height: clamp(520px, 76dvh, 760px);
-  }
-
   .canvas-host {
     height: var(--mobile-stage-height);
     min-height: var(--mobile-stage-height);

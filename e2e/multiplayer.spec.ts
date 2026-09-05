@@ -351,3 +351,38 @@ test('从房间大厅创建两个房间，并保持玩家、游戏、投掷和�
     await Promise.all(contexts.map((context) => context.close()))
   }
 })
+
+test('移动端保留奖池、全员获取与最近结果，并上下排列画布和操作', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const roomId = await createAndJoinRoom(page, `${roomNames[0]} 移动端`, 'MobileHost')
+  await expect(page.getByRole('navigation', { name: '房间信息' })).toBeVisible()
+  await expect(page.locator('.room-award small')).toHaveCount(6)
+  await expect(page.locator('.room-award small').first()).toBeVisible()
+  const canvas = await page.locator('canvas').boundingBox()
+  const action = await page.locator('.room-action-card').boundingBox()
+  expect(canvas).not.toBeNull()
+  expect(action!.y).toBeGreaterThanOrEqual(canvas!.y + canvas!.height)
+  await page.getByRole('button', { name: '全员获奖' }).click()
+  await expect(page.locator('.room-player-awards')).toBeVisible()
+  await expect(page.locator('.room-player-awards')).toContainText('MobileHost')
+  await expect(page.locator('.room-award-grid')).toBeHidden()
+  await page.getByRole('button', { name: '最近结果', exact: true }).click()
+  await expect(page.locator('.room-history')).toBeVisible()
+  await expect(page.locator('.room-awards')).toBeHidden()
+  await page.getByRole('button', { name: '奖池与奖项' }).click()
+  await page.getByRole('button', { name: '开始博饼' }).click()
+  await page.getByRole('button', { name: '投掷六骰', exact: true }).click()
+  await expect
+    .poll(async () => {
+      const result = await pool.query(
+        'SELECT count(*)::int AS count FROM roll_attempts a JOIN games g ON g.id = a.game_id WHERE g.room_id = $1',
+        [roomId],
+      )
+      return result.rows[0].count as number
+    })
+    .toBeGreaterThan(0)
+  await page.screenshot({ path: 'artifacts/multiplayer-mobile.png', fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+})

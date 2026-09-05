@@ -357,7 +357,7 @@ function createVisualResources(): DiceVisualResources {
   const chamferRadius = hs * DICE_RENDER.chamferRatio
   const geometry =
     chamferRadius > 0
-      ? new RoundedBoxGeometry(hs * 2, hs * 2, hs * 2, 6, chamferRadius)
+      ? new RoundedBoxGeometry(hs * 2, hs * 2, hs * 2, DICE_RENDER.segments, chamferRadius)
       : new THREE.BoxGeometry(hs * 2, hs * 2, hs * 2)
   remapGeometryToAtlas(geometry)
 

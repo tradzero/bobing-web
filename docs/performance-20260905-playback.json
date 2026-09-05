@@ -1,0 +1,132 @@
+{
+  "browser": "151.0.7922.34",
+  "measurement": "single before/after observation; software WebGL; not an absolute FPS gate",
+  "runs": [
+    {
+      "device": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900,
+        "dpr": 2
+      },
+      "environment": {
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+        "dpr": 2,
+        "width": 1440,
+        "height": 900
+      },
+      "seed": 42,
+      "beforeWallMs": 3810.750542,
+      "afterWallMs": 2431.6414589999995,
+      "simulationSeconds": 1.5333333333333332,
+      "finalHash": "eff2c4203745671d",
+      "beforeDiscardedMs": 1725.2759999999998,
+      "afterDiscardedMs": 533.5740000000005
+    },
+    {
+      "device": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900,
+        "dpr": 2
+      },
+      "environment": {
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+        "dpr": 2,
+        "width": 1440,
+        "height": 900
+      },
+      "seed": 50000,
+      "beforeWallMs": 4374.066625,
+      "afterWallMs": 2366.0316669999993,
+      "simulationSeconds": 2.1333333333333333,
+      "finalHash": "61ae80896376df10",
+      "beforeDiscardedMs": 1949.5999999999995,
+      "afterDiscardedMs": 0
+    },
+    {
+      "device": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900,
+        "dpr": 2
+      },
+      "environment": {
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+        "dpr": 2,
+        "width": 1440,
+        "height": 900
+      },
+      "seed": 105000,
+      "beforeWallMs": 15957.0205,
+      "afterWallMs": 8512.571792,
+      "simulationSeconds": 8.2,
+      "finalHash": "a97c8a4b54440194",
+      "beforeDiscardedMs": 7475,
+      "afterDiscardedMs": 0
+    },
+    {
+      "device": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844,
+        "dpr": 3
+      },
+      "environment": {
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+        "dpr": 3,
+        "width": 390,
+        "height": 844
+      },
+      "seed": 42,
+      "beforeWallMs": 1749.2451660000042,
+      "afterWallMs": 1682.050000000003,
+      "simulationSeconds": 1.5333333333333332,
+      "finalHash": "eff2c4203745671d",
+      "beforeDiscardedMs": 0,
+      "afterDiscardedMs": 41.36799999999994
+    },
+    {
+      "device": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844,
+        "dpr": 3
+      },
+      "environment": {
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+        "dpr": 3,
+        "width": 390,
+        "height": 844
+      },
+      "seed": 50000,
+      "beforeWallMs": 2261.2026659999974,
+      "afterWallMs": 2255.691584,
+      "simulationSeconds": 2.1333333333333333,
+      "finalHash": "61ae80896376df10",
+      "beforeDiscardedMs": 16.600000000000364,
+      "afterDiscardedMs": 0
+    },
+    {
+      "device": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844,
+        "dpr": 3
+      },
+      "environment": {
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+        "dpr": 3,
+        "width": 390,
+        "height": 844
+      },
+      "seed": 105000,
+      "beforeWallMs": 8422.135666000002,
+      "afterWallMs": 8337.733250000001,
+      "simulationSeconds": 8.2,
+      "finalHash": "a97c8a4b54440194",
+      "beforeDiscardedMs": 59.100000000000364,
+      "afterDiscardedMs": 0
+    }
+  ]
+}

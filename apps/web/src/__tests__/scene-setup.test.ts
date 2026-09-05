@@ -143,6 +143,25 @@ describe('场景 resize 与渲染失效', () => {
     vi.unstubAllGlobals()
   })
 
+  it('慢帧降低 rolling 分辨率，静态恢复清晰度且下轮保留档位', () => {
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'clientWidth', { value: 1280 })
+    Object.defineProperty(parent, 'clientHeight', { value: 720 })
+    const canvas = document.createElement('canvas')
+    parent.appendChild(canvas)
+    const context = createScene(canvas, { rollingDprPreset: 'adaptive' })
+    const renderer = threeMocks.rendererInstances[0]
+    context.setRenderPhase?.('rolling')
+    for (let i = 0; i < 12; i++) context.observeRollingFrame?.(80)
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(0.75)
+    context.setRenderPhase?.('static')
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1.5)
+    context.setRenderPhase?.('rolling')
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(0.75)
+    expect(threeMocks.directionalLights[0].shadow.mapSize.set).toHaveBeenCalledOnce()
+    context.dispose()
+  })
+
   it('初始化质量、阴影按需更新，并跳过完全相同的 resize', () => {
     let width = 1280
     let height = 720

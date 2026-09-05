@@ -202,14 +202,14 @@ function expectRenderContract(
 ): void {
   expect(diagnostics.renderExperiment).toEqual({
     version: 1,
-    explicit: false,
-    variant: 'rolling-dpr-reduced-tier',
-    rollingDprPreset: 'cap-1x-reduced-tier',
+    explicit: true,
+    variant: 'rolling-dpr-1x',
+    rollingDprPreset: 'cap-1x',
     rollingShadowPreset: 'every-frame',
   })
   expect(diagnostics.render.quality).toMatchObject({
     phase,
-    rollingDprPreset: 'cap-1x-reduced-tier',
+    rollingDprPreset: 'cap-1x',
   })
   expect(diagnostics.engine.rollingShadow.preset).toBe('every-frame')
 }
@@ -336,6 +336,8 @@ async function runVariant(
     pageErrors: issues.pageErrors.length,
   }
   const query = new URLSearchParams({
+    renderExperimentVersion: '1',
+    renderVariant: 'rolling-dpr-1x',
     nextSeed: String(seed),
     perfProfile: '1',
     perfProfileVersion: String(PROFILE_VERSION),

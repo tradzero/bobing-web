@@ -56,23 +56,25 @@ pnpm dev:multiplayer
 
 ## 常用命令
 
-| 命令                             | 说明                                   |
-| -------------------------------- | -------------------------------------- |
-| `pnpm db:migrate`                | 应用并校验 PostgreSQL 迁移             |
-| `pnpm room:reset`                | 强制清空指定房间（破坏性运维命令）     |
-| `pnpm dev:singleplayer`          | 启动单机 Vite 开发服务器               |
-| `pnpm dev:multiplayer`           | 构建 Web 并启动多人源码服务            |
-| `pnpm dev:server`                | 启动服务端源码                         |
-| `pnpm build`                     | 构建 Web 和服务端生产产物              |
-| `pnpm start`                     | 启动生产服务                           |
-| `pnpm typecheck`                 | 检查生产、测试与 e2e TypeScript        |
-| `pnpm test`                      | 运行快速 Vitest 默认门禁               |
-| `pnpm test:slow`                 | 运行独立的慢速物理等价验收             |
-| `pnpm test:e2e`                  | 运行桌面端和移动端 Playwright 流程测试 |
-| `pnpm test:e2e:multiplayer`      | 运行多房间、断线与服务重启恢复流程     |
-| `pnpm test:e2e:multiplayer:soak` | 运行三浏览器 deadline 与多局循环慢门禁 |
-| `pnpm test:db`                   | 运行 PostgreSQL repository 集成测试    |
-| `pnpm lint`                      | 运行 ESLint                            |
+| 命令                             | 说明                                     |
+| -------------------------------- | ---------------------------------------- |
+| `pnpm db:migrate`                | 应用并校验 PostgreSQL 迁移               |
+| `pnpm room:reset`                | 强制清空指定房间（破坏性运维命令）       |
+| `pnpm dev:singleplayer`          | 启动单机 Vite 开发服务器                 |
+| `pnpm dev:multiplayer`           | 构建 Web 并启动多人源码服务              |
+| `pnpm dev:server`                | 构建并启动服务端及物理 worker            |
+| `pnpm build`                     | 构建 Web 和服务端生产产物                |
+| `pnpm start`                     | 启动生产服务                             |
+| `pnpm typecheck`                 | 检查生产、测试与 e2e TypeScript          |
+| `pnpm test`                      | 运行快速 Vitest 默认门禁                 |
+| `pnpm test:slow`                 | 运行独立的慢速物理等价验收               |
+| `pnpm test:roll-worker`          | 校验构建后的 worker 结果等价和主线程响应 |
+| `pnpm test:physics:solver-ab`    | 1000 seeds 求解器实验，失败候选不启用    |
+| `pnpm test:e2e`                  | 运行桌面端和移动端 Playwright 流程测试   |
+| `pnpm test:e2e:multiplayer`      | 运行多房间、断线与服务重启恢复流程       |
+| `pnpm test:e2e:multiplayer:soak` | 运行三浏览器 deadline 与多局循环慢门禁   |
+| `pnpm test:db`                   | 运行 PostgreSQL repository 集成测试      |
+| `pnpm lint`                      | 运行 ESLint                              |
 
 数据库测试不会自动读取普通 `DATABASE_URL`，需要显式提供：
 
@@ -109,9 +111,10 @@ packages/
 
 ## 文档
 
-| 文档                                 | 内容                           |
-| ------------------------------------ | ------------------------------ |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | 架构、数据流、状态机与验收基线 |
-| [CHECKLIST.md](./CHECKLIST.md)       | 当前完成度与后续任务           |
-| [AGENTS.md](./AGENTS.md)             | 产品契约与开发工作流           |
-| [UI-CHECKLIST.md](./UI-CHECKLIST.md) | UI、移动端和素材规范           |
+| 文档                                           | 内容                              |
+| ---------------------------------------------- | --------------------------------- |
+| [ARCHITECTURE.md](./ARCHITECTURE.md)           | 架构、数据流、状态机与验收基线    |
+| [CHECKLIST.md](./CHECKLIST.md)                 | 当前完成度与后续任务              |
+| [AGENTS.md](./AGENTS.md)                       | 产品契约与开发工作流              |
+| [UI-CHECKLIST.md](./UI-CHECKLIST.md)           | UI、移动端和素材规范              |
+| [性能验证记录](./docs/performance-20260905.md) | 碰撞、渲染、worker 和停稳候选证据 |

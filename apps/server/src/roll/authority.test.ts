@@ -14,6 +14,13 @@ describe('服务端权威投掷', () => {
     expect(outcome.diagnostics).toMatchObject({ seed: 50_000, nanDetected: false })
   })
 
+  it('保留批量扫描发现的异常反弹 seed，不能作为正常中奖提交', () => {
+    const outcome = computeAuthoritativeRoll({ revealMinMs: 1_200, revealMaxMs: 10_000 }, 991_817)
+    expect(outcome.kind).toBe('error')
+    expect(outcome.errorReason).toBe('floor-relaunch-event')
+    expect(outcome.diagnostics).toMatchObject({ seed: 991_817 })
+  })
+
   it('展示延迟上下界不改变物理结果', () => {
     const fast = computeAuthoritativeRoll({ revealMinMs: 0, revealMaxMs: 1_000 }, 50_000)
     const normal = computeAuthoritativeRoll({ revealMinMs: 5_000, revealMaxMs: 6_000 }, 50_000)

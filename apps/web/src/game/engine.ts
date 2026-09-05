@@ -1,4 +1,5 @@
 import type * as CANNON from 'cannon-es'
+import { ADAPTIVE_RENDER } from '@/config/render'
 import { PHYSICS } from '@dice/physics-core/config/physics'
 import {
   PHYSICS_CADENCE_MAX_ACCEPTED_WALL_DELTA_MS,
@@ -196,6 +197,7 @@ export function createEngine(opts: EngineOptions): Engine {
   let settleState: SettleState | null = null
   let previousRollingTimestamp: number | null = null
   let rollingElapsed = 0
+  let discardedVisibleWallMs = 0
   let renderCount = 0
   let physicsStepCount = 0
   let disposed = false
@@ -456,14 +458,17 @@ export function createEngine(opts: EngineOptions): Engine {
       throw new Error('exact scheduler 尚未初始化')
     }
 
+    sceneCtx.observeRollingFrame?.(rawDeltaMs)
     const plan = exactAccumulator.planFrame({
       rawWallDeltaMs: Math.max(rawDeltaMs, 0),
       paused: false,
       maxSteps: physicsSchedulerVariant.maxStepsPerFrame,
     })
     let settlement: SettleResult | null = null
+    discardedVisibleWallMs += plan.discardedByClampMs
+    const wallTimeOverload = discardedVisibleWallMs > ADAPTIVE_RENDER.maxDiscardedWallMs
 
-    for (let step = 0; step < plan.maxExecutableSteps; step++) {
+    for (let step = 0; !wallTimeOverload && step < plan.maxExecutableSteps; step++) {
       const advance = exactSession.advanceExactStep()
       if (rollingCpuProfile) {
         rollingCpuProfile.recordExactStep({
@@ -495,7 +500,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     const frame = exactAccumulator.finishFrame()
 
-    if (plan.overload.active) {
+    if (plan.overload.active || wallTimeOverload) {
       saveTerminalAbandoned('timing-overload')
       const session = finishExactSession()
       mode = 'error'
@@ -506,6 +511,7 @@ export function createEngine(opts: EngineOptions): Engine {
         queuedMs: frame.queuedMs,
         highWaterMs: plan.overload.highWaterMs,
         executedSteps: session?.simulationStep ?? 0,
+        ...(wallTimeOverload ? { discardedWallMs: discardedVisibleWallMs } : {}),
       })
       if (renderAfter) {
         renderExactStaticFrame()
@@ -680,6 +686,7 @@ export function createEngine(opts: EngineOptions): Engine {
       throw new Error('exact scheduler 已在 rolling，不能重复 beginSettle')
     }
 
+    discardedVisibleWallMs = 0
     mode = 'rolling'
     rollingElapsed = 0
     previousRollingTimestamp = null

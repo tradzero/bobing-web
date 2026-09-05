@@ -259,12 +259,26 @@ describeDatabase('PostgreSQL 房间 repository', () => {
       diagnostics: { seed: 51_000 },
       requiresTiltDecision: false,
     }
+    expect(await repository.prepareAuthoritativeRoll(request)).toBeNull()
+    await expect(
+      repository.prepareAuthoritativeRoll({ ...request, playerId: randomUUID() }),
+    ).rejects.toThrow('还没有轮到')
+    await expect(repository.prepareAuthoritativeRoll({ ...request, now: 999_999 })).rejects.toThrow(
+      '已超时',
+    )
     const results = await Promise.all([
       repository.beginAuthoritativeRoll(request),
       repository.beginAuthoritativeRoll({ ...request, seed: 51_001 }),
     ])
 
     expect(new Set(results.map(({ rollId }) => rollId)).size).toBe(1)
+    expect(await repository.prepareAuthoritativeRoll(request)).toMatchObject({
+      rollId: results[0].rollId,
+      duplicate: true,
+    })
+    await expect(
+      repository.prepareAuthoritativeRoll({ ...request, playerId: randomUUID() }),
+    ).rejects.toThrow('不属于当前玩家')
     const winningSeeds = results.map(({ seed }) => seed)
     expect(new Set(winningSeeds).size).toBe(1)
     expect([51_000, 51_001]).toContain(winningSeeds[0])

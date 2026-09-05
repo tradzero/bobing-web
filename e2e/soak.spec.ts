@@ -227,14 +227,12 @@ test.describe('@soak 连续多轮真实浏览器 soak', () => {
           expectRenderBudgets(rolling, testInfo.project.name)
           expect(rolling.render.quality).toMatchObject({
             phase: 'rolling',
-            rollingDprPreset: 'cap-1x-reduced-tier',
+            rollingDprPreset: 'adaptive',
           })
-          expect(rolling.render.quality?.effectivePixelRatio).toBeCloseTo(
-            rolling.render.quality?.tier === 'reduced'
-              ? BROWSER_BUDGETS.reducedTierRollingPixelRatio
-              : (rolling.render.quality?.basePixelRatio ?? Number.NaN),
-            8,
+          expect(rolling.render.pixelRatio).toBeLessThanOrEqual(
+            rolling.render.quality!.basePixelRatio,
           )
+          expect(rolling.render.pixelRatio).toBeGreaterThanOrEqual(0.75)
           expect(rolling.engine.rollingShadow).toMatchObject({
             version: 1,
             preset: 'every-frame',
@@ -259,7 +257,7 @@ test.describe('@soak 连续多轮真实浏览器 soak', () => {
           expect(settled.roll.seed, `round ${index + 1} settled seed`).toBe(expectedSeed)
           expect(settled.render.quality).toMatchObject({
             phase: 'static',
-            rollingDprPreset: 'cap-1x-reduced-tier',
+            rollingDprPreset: 'adaptive',
           })
           expect(settled.render.quality?.effectivePixelRatio).toBeCloseTo(
             settled.render.quality?.basePixelRatio ?? Number.NaN,
