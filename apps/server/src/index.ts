@@ -11,6 +11,7 @@ import { RoomHub } from './room/hub'
 import { handleRoomHttpRequest, sendJson } from './room/http'
 import { RoomRepository } from './room/repository'
 import { RoomRollService } from './roll/service'
+import { RollWorkerPool } from './roll/worker-pool'
 import { RoomDeadlineScheduler } from './scheduler/deadlines'
 import { RoomLifecycleScheduler } from './scheduler/room-lifecycle'
 
@@ -55,7 +56,10 @@ async function main(): Promise<void> {
   })
 
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 })
-  const rollService = new RoomRollService(repository, config)
+  const rollWorkers = new RollWorkerPool(config.rollWorkers)
+  const rollService = new RoomRollService(repository, config, {
+    compute: (options) => rollWorkers.run(options),
+  })
   const roomHub = new RoomHub(repository, rollService, config)
   const deadlineScheduler = new RoomDeadlineScheduler({
     repository,
@@ -100,6 +104,8 @@ async function main(): Promise<void> {
   const shutdown = () => {
     deadlineScheduler.stop()
     lifecycleScheduler.stop()
+    void rollWorkers.close()
+    for (const socket of sockets.clients) socket.terminate()
     sockets.close()
     server.close(() => {
       void pool.end().finally(() => process.exit(0))

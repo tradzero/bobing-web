@@ -20,4 +20,6 @@ export type RollError =
       highWaterMs: number
       /** 本轮已完整执行的固定物理步数。 */
       executedSteps: number
+      /** 可见慢帧被 clamp 丢弃的累计墙钟；与尚未执行的队列分开记录。 */
+      discardedWallMs?: number
     }

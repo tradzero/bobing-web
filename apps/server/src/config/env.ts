@@ -13,6 +13,7 @@ export interface ServerConfig {
   lifecyclePollIntervalMs: number
   rollRevealMinMs: number
   rollRevealMaxMs: number
+  rollWorkers: { size: number; maxQueue: number; timeoutMs: number }
   timing: GameTimingConfig
   lifecycle: RoomLifecycleConfig
 }
@@ -91,6 +92,11 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     }),
     rollRevealMinMs,
     rollRevealMaxMs,
+    rollWorkers: {
+      size: integer(env, 'ROLL_WORKERS', 2, { min: 1, max: 16 }),
+      maxQueue: integer(env, 'ROLL_QUEUE_LIMIT', 32, { min: 0, max: 256 }),
+      timeoutMs: integer(env, 'ROLL_COMPUTE_TIMEOUT_MS', 10_000, { min: 1_000, max: 60_000 }),
+    },
     timing: {
       turnActionTimeoutMs: integer(env, 'TURN_ACTION_TIMEOUT_MS', 30_000, {
         min: 10_000,

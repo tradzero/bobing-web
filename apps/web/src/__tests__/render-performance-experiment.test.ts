@@ -42,11 +42,11 @@ describe('浏览器渲染性能实验 preset', () => {
     }
   })
 
-  it('生产默认仅在 reduced 档 rolling 限为 1x，阴影仍逐帧刷新', () => {
-    expect(DEFAULT_RUNTIME_RENDER_VARIANT_ID).toBe('rolling-dpr-reduced-tier')
+  it('生产默认按慢帧自适应分辨率，阴影仍逐帧刷新', () => {
+    expect(DEFAULT_RUNTIME_RENDER_VARIANT_ID).toBe('adaptive')
     expect(getRenderPerformanceVariant(DEFAULT_RUNTIME_RENDER_VARIANT_ID)).toEqual({
-      id: 'rolling-dpr-reduced-tier',
-      rollingDprPreset: 'cap-1x-reduced-tier',
+      id: 'adaptive',
+      rollingDprPreset: 'adaptive',
       rollingShadowPreset: 'every-frame',
     })
   })

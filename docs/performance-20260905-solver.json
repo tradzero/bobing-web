@@ -1,0 +1,2393 @@
+{
+  "environment": {
+    "platform": "macOS arm64, Apple M1 Max",
+    "node": "v24.11.1",
+    "date": "2026-09-05",
+    "note": "20 iterations measured before narrowphase promotion, 15 after promotion; compare CPU only within each paired run"
+  },
+  "solver20": {
+    "schemaVersion": 1,
+    "commit": "b80bb6fda90f52014e8c160bd3e7ebaafac99bcb",
+    "node": "v24.11.1",
+    "budgets": {
+      "p95Ratio": 0.9,
+      "p99Ratio": 0.9,
+      "maxTiltRateIncrease": 0.01,
+      "maxPenetration": 0.1
+    },
+    "passed": false,
+    "baseline": {
+      "count": 1000,
+      "p95": 3.0666666666666664,
+      "p99": 4.933333333333334,
+      "max": 8.55,
+      "tiltRate": 0.057,
+      "meanCpuMs": 86.39320477600012,
+      "meanStepCpuMs": 0.7781815314417865,
+      "maxPenetration": 0.09158581024963669,
+      "reasons": {
+        "natural-sleep": 993,
+        "pose-stable-window": 7
+      },
+      "safetyFailures": [991817]
+    },
+    "candidate": {
+      "count": 1000,
+      "p95": 2.533333333333333,
+      "p99": 4.083333333333333,
+      "max": 5.816666666666666,
+      "tiltRate": 0.064,
+      "meanCpuMs": 85.52231432000004,
+      "meanStepCpuMs": 0.8350106656145165,
+      "maxPenetration": 0.08141055134138792,
+      "reasons": {
+        "natural-sleep": 998,
+        "pose-stable-window": 2
+      },
+      "safetyFailures": [935649]
+    },
+    "watch": {
+      "baseline": {
+        "count": 32,
+        "p95": 7.666666666666667,
+        "p99": 8.2,
+        "max": 8.2,
+        "tiltRate": 0.09375,
+        "meanCpuMs": 99.66149609375005,
+        "meanStepCpuMs": 0.7051028639547369,
+        "maxPenetration": 0.07446704865118853,
+        "reasons": {
+          "natural-sleep": 30,
+          "pose-stable-window": 2
+        },
+        "safetyFailures": []
+      },
+      "candidate": {
+        "count": 32,
+        "p95": 2.533333333333333,
+        "p99": 9.066666666666666,
+        "max": 9.066666666666666,
+        "tiltRate": 0.03125,
+        "meanCpuMs": 89.91065884375006,
+        "meanStepCpuMs": 0.8323845558770544,
+        "maxPenetration": 0.07287492945497402,
+        "reasons": {
+          "natural-sleep": 31,
+          "pose-stable-window": 1
+        },
+        "safetyFailures": []
+      }
+    },
+    "continuations": [
+      {
+        "seed": 1673000,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 113000,
+        "iterations": 20,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 1776308201964,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 96138,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 262636,
+        "iterations": 20,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 322816,
+        "iterations": 20,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 388011,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 705962,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 732040,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 770154,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 778178,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 890514,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      }
+    ],
+    "failedRecords": [
+      {
+        "group": "batch",
+        "iterations": 20,
+        "cpuMs": 94.12875000000349,
+        "result": {
+          "seed": 935649,
+          "simulationStep": 114,
+          "simulationTime": 1.9,
+          "maxRadius": 0.5671578792773112,
+          "maxHeight": 1.5147045337595046,
+          "maxSpeed": 4.853296767547025,
+          "maxAngularSpeed": 16.765325948612478,
+          "maxContactPenetration": 0.06191821854191097,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 1,
+          "poseStableBrokenCount": 8,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 0,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.0005347247233041316,
+          "maxStableWindowAngularDrift": 0.0025218657398525346,
+          "longestStableWindow": 0.10000000000000009,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 1,
+            "floorOnlySecondaryEpisodeCount": 1,
+            "relaunchEventCount": 1,
+            "maxFloorOnlySecondaryClearance": 0.01061690538370973,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0.005230041796781326,
+            "maxPreExternalSecondaryClearance": 0.01061690538370973,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0.005230041796781326,
+            "legacyUnorderedPost100WorldYRange": 0.00022123946607177647,
+            "events": [
+              {
+                "dieIndex": 4,
+                "airborneSteps": 6,
+                "peakClearance": 0.01061690538370973,
+                "orderedWorldYRise": 0.005230041796781326,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.01061690538370973,
+                "preExternalOrderedWorldYRise": 0.005230041796781326,
+                "qualifiesAsRelaunch": true
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 1.9,
+          "settleFrame": 114,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 6,
+              "confidence": 0.988479
+            },
+            {
+              "value": 5,
+              "confidence": 0.945973
+            },
+            {
+              "value": 2,
+              "confidence": 0.9432
+            },
+            {
+              "value": 1,
+              "confidence": 0.954833
+            },
+            {
+              "value": 5,
+              "confidence": 0.991259
+            },
+            {
+              "value": 6,
+              "confidence": 0.949913
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "39d9f1e8794b0392",
+            "bodies": [
+              {
+                "position": [-0.2944711814328616, 0.14599869503825227, -0.29469832093003584],
+                "quaternion": [
+                  0.3234054989458775, -0.06632801786496344, 0.9432118184067748, 0.03689095980668432
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.30916403330987874, 0.18106535086783274, -0.4601330245134317],
+                "quaternion": [
+                  -0.37808852924145087, 0.15319102461405926, 0.6155662350867018, -0.674284646314088
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.5478319772175043, 0.18272923171590702, 0.10644578902472795],
+                "quaternion": [
+                  -0.5477672368813021, -0.40683668223331154, -0.41182336185146673,
+                  -0.6040169590517892
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.41465661452517427, 0.1761550466700503, 0.3323784695902976],
+                "quaternion": [
+                  -0.06570115813631444, -0.0521685738845497, 0.13515548611400488, 0.9872663228793365
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.13906770772851412, 0.13504227262964796, -0.06787629395843196],
+                "quaternion": [
+                  0.6014003318217944, -0.6458578702417768, -0.37112500465124787, 0.28887970377650823
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.5340140756438904, 0.17832414253512643, -0.09792393335076158],
+                "quaternion": [
+                  -0.48391525534015617, -0.11360514064906062, 0.860687324568668,
+                  -0.11016908365783513
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.558077576384446,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "batch",
+        "iterations": 10,
+        "cpuMs": 79.35033299998031,
+        "result": {
+          "seed": 935649,
+          "simulationStep": 104,
+          "simulationTime": 1.7333333333333334,
+          "maxRadius": 0.561948637079931,
+          "maxHeight": 1.5147045337595046,
+          "maxSpeed": 4.853296767547025,
+          "maxAngularSpeed": 16.593296943208507,
+          "maxContactPenetration": 0.061922898978642456,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 2,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 0,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.0007307204791231581,
+          "maxStableWindowAngularDrift": 0.002088627212202187,
+          "longestStableWindow": 0.3333333333333335,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 1,
+            "floorOnlySecondaryEpisodeCount": 1,
+            "relaunchEventCount": 0,
+            "maxFloorOnlySecondaryClearance": 0.003490537706970432,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0,
+            "maxPreExternalSecondaryClearance": 0.003490537706970432,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0,
+            "legacyUnorderedPost100WorldYRange": 5.985706846428629e-6,
+            "events": [
+              {
+                "dieIndex": 4,
+                "airborneSteps": 4,
+                "peakClearance": 0.003490537706970432,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.003490537706970432,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 1.7333333333333334,
+          "settleFrame": 104,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 6,
+              "confidence": 0.988137
+            },
+            {
+              "value": 4,
+              "confidence": 0.992569
+            },
+            {
+              "value": 2,
+              "confidence": 0.943471
+            },
+            {
+              "value": 1,
+              "confidence": 0.951768
+            },
+            {
+              "value": 3,
+              "confidence": 0.999987
+            },
+            {
+              "value": 6,
+              "confidence": 0.953247
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "87300d68e8c5f503",
+            "bodies": [
+              {
+                "position": [-0.29961864060273186, 0.14397571397173328, -0.2615499902785949],
+                "quaternion": [
+                  0.2396103933949919, -0.06930096963050676, 0.967809478275757, 0.0336013205838088
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.1634103177115043, 0.13816407167738542, -0.32079541857282956],
+                "quaternion": [
+                  -0.6738388612654892, -0.30973674377397237, 0.23701147231984343,
+                  -0.6275586829878985
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.5472831966886107, 0.1825269524031315, 0.10716243556304973],
+                "quaternion": [
+                  -0.5503776712954552, -0.4095343169503767, -0.40970372051003706,
+                  -0.6012561214487664
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.4369865500264142, 0.17953547060501857, 0.32008670674634726],
+                "quaternion": [
+                  -0.06957594062094638, 0.0034705689913479545, 0.13883439346422594,
+                  0.9878624169533972
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.04330047107485811, 0.12092294002883155, 0.03950222760317634],
+                "quaternion": [
+                  0.2013202842280653, -0.6791790267033289, -0.6774431258240265, -0.19813329886321993
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.5254826889247629, 0.17656841043109556, -0.09960806603900874],
+                "quaternion": [
+                  -0.4353170804364653, -0.10795528872614768, 0.8871991434208853,
+                  -0.10826991747283007
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.5576761470365299,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "batch",
+        "iterations": 20,
+        "cpuMs": 93.81304199999431,
+        "result": {
+          "seed": 991817,
+          "simulationStep": 115,
+          "simulationTime": 1.9166666666666667,
+          "maxRadius": 0.5500000000000002,
+          "maxHeight": 1.5774931397289038,
+          "maxSpeed": 5.131444568504239,
+          "maxAngularSpeed": 15.122421314123137,
+          "maxContactPenetration": 0.03975312566184478,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 2,
+          "poseStableBrokenCount": 3,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 2,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.0008924168422537494,
+          "maxStableWindowAngularDrift": 0.007329585324318535,
+          "longestStableWindow": 0.28333333333333344,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 5,
+            "secondaryEpisodeCount": 1,
+            "floorOnlySecondaryEpisodeCount": 0,
+            "relaunchEventCount": 0,
+            "maxFloorOnlySecondaryClearance": 0,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0,
+            "maxPreExternalSecondaryClearance": 0.0008979986904904918,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0,
+            "legacyUnorderedPost100WorldYRange": 0.00023394432226356288,
+            "events": [
+              {
+                "dieIndex": 2,
+                "airborneSteps": 1,
+                "peakClearance": 0.0008979986904904918,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.0008979986904904918,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 1.9166666666666667,
+          "settleFrame": 115,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 1,
+              "confidence": 0.981134
+            },
+            {
+              "value": 3,
+              "confidence": 0.967145
+            },
+            {
+              "value": 4,
+              "confidence": 0.990217
+            },
+            {
+              "value": 2,
+              "confidence": 0.989543
+            },
+            {
+              "value": 6,
+              "confidence": 0.984062
+            },
+            {
+              "value": 4,
+              "confidence": 0.970377
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "b270f6cebb1dcf8a",
+            "bodies": [
+              {
+                "position": [-0.3561836941508381, 0.15670087226731752, -0.2885752454096537],
+                "quaternion": [
+                  0.07916174832302778, 0.9857065992623979, 0.056271644159494615, -0.1376568917148266
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.49004661741613337, 0.16602171595618062, 0.083126427007015],
+                "quaternion": [
+                  0.5091421065120157, 0.4914783372746041, 0.345359872713677, -0.6164007768371893
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.14697603101418108, 0.1358046707633168, 0.015117241077597229],
+                "quaternion": [
+                  -0.5524611196783816, 0.44622247228096623, -0.5143460014906673, -0.4807498385082761
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.14794427348046466, 0.14212398159851605, -0.36541066707764097],
+                "quaternion": [
+                  -0.03877023710510094, -0.13892669626506302, 0.7099570164295563, 0.6893165286007088
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.3951661046636886, 0.15609089106634103, -0.17882778411732522],
+                "quaternion": [
+                  -0.7343053269540324, -0.06461108178339499, 0.6729238621510073,
+                  -0.061600086570419245
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.47035218300127146, 0.1630454049998626, 0.12140309303955801],
+                "quaternion": [
+                  0.1877727811811232, -0.6435804730233542, 0.6489120109296697, 0.35980377910988365
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.49704696972011275,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "batch",
+        "iterations": 10,
+        "cpuMs": 94.97229100001277,
+        "result": {
+          "seed": 991817,
+          "simulationStep": 125,
+          "simulationTime": 2.0833333333333335,
+          "maxRadius": 0.5500000000000002,
+          "maxHeight": 1.5774931397289038,
+          "maxSpeed": 5.131444568504239,
+          "maxAngularSpeed": 14.27047272356432,
+          "maxContactPenetration": 0.04207457435729986,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 10,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 1,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.0003855090688666746,
+          "maxStableWindowAngularDrift": 0.0014918331137153404,
+          "longestStableWindow": 0.3333333333333335,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 2,
+            "floorOnlySecondaryEpisodeCount": 1,
+            "relaunchEventCount": 1,
+            "maxFloorOnlySecondaryClearance": 0.021863444872075328,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0.014724458844070587,
+            "maxPreExternalSecondaryClearance": 0.021863444872075328,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0.014724458844070587,
+            "legacyUnorderedPost100WorldYRange": 0.00019898238777521504,
+            "events": [
+              {
+                "dieIndex": 2,
+                "airborneSteps": 7,
+                "peakClearance": 0.021863444872075328,
+                "orderedWorldYRise": 0.014724458844070587,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.021863444872075328,
+                "preExternalOrderedWorldYRise": 0.014724458844070587,
+                "qualifiesAsRelaunch": true
+              },
+              {
+                "dieIndex": 3,
+                "airborneSteps": 1,
+                "peakClearance": 0.0008544385092160087,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.0008544385092160087,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 2.0833333333333335,
+          "settleFrame": 125,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 1,
+              "confidence": 0.9767
+            },
+            {
+              "value": 3,
+              "confidence": 0.970801
+            },
+            {
+              "value": 6,
+              "confidence": 0.986186
+            },
+            {
+              "value": 2,
+              "confidence": 0.98956
+            },
+            {
+              "value": 6,
+              "confidence": 0.983704
+            },
+            {
+              "value": 4,
+              "confidence": 0.977721
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "1b2ba3025067e366",
+            "bodies": [
+              {
+                "position": [-0.36560709194034813, 0.15770520002788566, -0.2832337089874934],
+                "quaternion": [
+                  0.05619970475248056, 0.9830056097951971, 0.09214860514367139, -0.1484930936676273
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.4595049022285889, 0.16258254099272973, 0.1563501205215385],
+                "quaternion": [
+                  0.497184925412727, 0.5215664857114983, 0.37422398419394504, -0.5837225030602372
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.05408532686984204, 0.139408482581189, -0.111739780593534],
+                "quaternion": [
+                  0.05585316258362447, 0.000732307284768515, -0.9949740382662976,
+                  0.08310566245150827
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.15152934372030968, 0.14209188641938916, -0.36149553476488167],
+                "quaternion": [
+                  -0.023907227307597298, -0.1237873060546603, 0.712146947957887, 0.6906170225649376
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.3915313638911767, 0.14996106590703517, -0.17013499167002655],
+                "quaternion": [
+                  -0.7567722477673192, -0.07847293687159348, 0.6474160964545659,
+                  -0.04461122324570997
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.4464056680807644, 0.1570846166636056, 0.11241765059608191],
+                "quaternion": [
+                  0.22994050746462616, -0.6331364856948463, 0.6344104344650159, 0.379195139935627
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.4853762616354498,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      }
+    ]
+  },
+  "solver15": {
+    "schemaVersion": 1,
+    "commit": "b80bb6fda90f52014e8c160bd3e7ebaafac99bcb",
+    "node": "v24.11.1",
+    "candidateIterations": 15,
+    "budgets": {
+      "p95Ratio": 0.9,
+      "p99Ratio": 0.9,
+      "maxTiltRateIncrease": 0.01,
+      "maxPenetration": 0.1
+    },
+    "passed": false,
+    "baseline": {
+      "count": 1000,
+      "p95": 3.0666666666666664,
+      "p99": 4.933333333333334,
+      "max": 8.55,
+      "tiltRate": 0.057,
+      "meanCpuMs": 62.59349545600005,
+      "meanStepCpuMs": 0.5651713129534669,
+      "maxPenetration": 0.09158581024963669,
+      "reasons": {
+        "natural-sleep": 993,
+        "pose-stable-window": 7
+      },
+      "safetyFailures": [991817]
+    },
+    "candidate": {
+      "count": 1000,
+      "p95": 2.95,
+      "p99": 5.683333333333334,
+      "max": 6.75,
+      "tiltRate": 0.058,
+      "meanCpuMs": 63.88553092000009,
+      "meanStepCpuMs": 0.5974107501624764,
+      "maxPenetration": 0.09057437903187114,
+      "reasons": {
+        "natural-sleep": 994,
+        "pose-stable-window": 6
+      },
+      "safetyFailures": []
+    },
+    "watch": {
+      "baseline": {
+        "count": 34,
+        "p95": 7.666666666666667,
+        "p99": 8.2,
+        "max": 8.2,
+        "tiltRate": 0.08823529411764706,
+        "meanCpuMs": 71.74017397058827,
+        "meanStepCpuMs": 0.5130188919728309,
+        "maxPenetration": 0.07446704865118853,
+        "reasons": {
+          "natural-sleep": 32,
+          "pose-stable-window": 2
+        },
+        "safetyFailures": [991817]
+      },
+      "candidate": {
+        "count": 34,
+        "p95": 4.566666666666666,
+        "p99": 6.4,
+        "max": 6.4,
+        "tiltRate": 0,
+        "meanCpuMs": 63.48711761764701,
+        "meanStepCpuMs": 0.5580449418519169,
+        "maxPenetration": 0.07343655453288152,
+        "reasons": {
+          "natural-sleep": 34
+        },
+        "safetyFailures": []
+      }
+    },
+    "continuations": [
+      {
+        "seed": 1673000,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 1776308201964,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 93129,
+        "iterations": 15,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 96138,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 388011,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 412083,
+        "iterations": 15,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 648791,
+        "iterations": 15,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 705962,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 732040,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 766142,
+        "iterations": 15,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 770154,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 778178,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 890514,
+        "iterations": 10,
+        "comparison": {
+          "settleReason": "continuation-budget-exhausted",
+          "exhausted": true,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 890514,
+        "iterations": 15,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      },
+      {
+        "seed": 1035949,
+        "iterations": 15,
+        "comparison": {
+          "settleReason": "natural-sleep",
+          "exhausted": false,
+          "faceDiff": false,
+          "tiltDiff": false,
+          "prizeDiff": false,
+          "safetyFailures": []
+        }
+      }
+    ],
+    "failedRecords": [
+      {
+        "group": "watch",
+        "iterations": 15,
+        "cpuMs": 61.37087500000007,
+        "result": {
+          "seed": 991817,
+          "simulationStep": 100,
+          "simulationTime": 1.6666666666666667,
+          "maxRadius": 0.5500000000000002,
+          "maxHeight": 1.5774931397289038,
+          "maxSpeed": 5.131444568504239,
+          "maxAngularSpeed": 14.13103900188917,
+          "maxContactPenetration": 0.0408665181195783,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 2,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 0,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.00022199978306911252,
+          "maxStableWindowAngularDrift": 0.001186830287685388,
+          "longestStableWindow": 0.28333333333333344,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 2,
+            "floorOnlySecondaryEpisodeCount": 0,
+            "relaunchEventCount": 0,
+            "maxFloorOnlySecondaryClearance": 0,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0,
+            "maxPreExternalSecondaryClearance": 0.0011454753449163478,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0,
+            "legacyUnorderedPost100WorldYRange": 0,
+            "events": [
+              {
+                "dieIndex": 2,
+                "airborneSteps": 1,
+                "peakClearance": 0.0011454753449163478,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.0011454753449163478,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              },
+              {
+                "dieIndex": 0,
+                "airborneSteps": 1,
+                "peakClearance": 0.0005533506903159791,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.0005533506903159791,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 1.6666666666666667,
+          "settleFrame": 100,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 1,
+              "confidence": 0.979268
+            },
+            {
+              "value": 3,
+              "confidence": 0.963353
+            },
+            {
+              "value": 4,
+              "confidence": 0.999772
+            },
+            {
+              "value": 2,
+              "confidence": 0.989483
+            },
+            {
+              "value": 6,
+              "confidence": 0.985134
+            },
+            {
+              "value": 4,
+              "confidence": 0.97654
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "070ea86eea99b479",
+            "bodies": [
+              {
+                "position": [-0.35252264261576394, 0.15489270952345435, -0.28236427529169233],
+                "quaternion": [
+                  0.05152116245990565, 0.9804967814843767, 0.08781638765961915, -0.16810685106792744
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.49484314681486113, 0.1698188858345454, 0.12761393505481813],
+                "quaternion": [
+                  0.5229571929367874, 0.4867770015444094, 0.32235912177440657, -0.6210060561153516
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.13620673418689536, 0.12275039395201098, 0.08232947597516704],
+                "quaternion": [
+                  -0.3470087871927858, 0.6115244129019206, -0.6246997260166466, -0.33966608065963866
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.16231025170508537, 0.14303474620581585, -0.35940645483720846],
+                "quaternion": [
+                  0.0010968541379080445, -0.09765552330682166, 0.7174169802094144,
+                  0.6897645048753059
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.3912316734709819, 0.14977645211742863, -0.16727129254123893],
+                "quaternion": [
+                  -0.759553900310535, -0.07825617202182994, 0.6447054247771588,
+                  -0.036176778829064504
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.4600290198753326, 0.16152115488378244, 0.13312513714925742],
+                "quaternion": [
+                  0.22989375333705447, -0.6634236101442422, 0.606980445174537, 0.3722804250232653
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.5110333221716657,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "watch",
+        "iterations": 10,
+        "cpuMs": 65.14887499999986,
+        "result": {
+          "seed": 991817,
+          "simulationStep": 125,
+          "simulationTime": 2.0833333333333335,
+          "maxRadius": 0.5500000000000002,
+          "maxHeight": 1.5774931397289038,
+          "maxSpeed": 5.131444568504239,
+          "maxAngularSpeed": 14.27047272356432,
+          "maxContactPenetration": 0.04207457435729986,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 10,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 1,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.0003855090688666746,
+          "maxStableWindowAngularDrift": 0.0014918331137153404,
+          "longestStableWindow": 0.3333333333333335,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 2,
+            "floorOnlySecondaryEpisodeCount": 1,
+            "relaunchEventCount": 1,
+            "maxFloorOnlySecondaryClearance": 0.021863444872075328,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0.014724458844070587,
+            "maxPreExternalSecondaryClearance": 0.021863444872075328,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0.014724458844070587,
+            "legacyUnorderedPost100WorldYRange": 0.00019898238777521504,
+            "events": [
+              {
+                "dieIndex": 2,
+                "airborneSteps": 7,
+                "peakClearance": 0.021863444872075328,
+                "orderedWorldYRise": 0.014724458844070587,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.021863444872075328,
+                "preExternalOrderedWorldYRise": 0.014724458844070587,
+                "qualifiesAsRelaunch": true
+              },
+              {
+                "dieIndex": 3,
+                "airborneSteps": 1,
+                "peakClearance": 0.0008544385092160087,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.0008544385092160087,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 2.0833333333333335,
+          "settleFrame": 125,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 1,
+              "confidence": 0.9767
+            },
+            {
+              "value": 3,
+              "confidence": 0.970801
+            },
+            {
+              "value": 6,
+              "confidence": 0.986186
+            },
+            {
+              "value": 2,
+              "confidence": 0.98956
+            },
+            {
+              "value": 6,
+              "confidence": 0.983704
+            },
+            {
+              "value": 4,
+              "confidence": 0.977721
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "1b2ba3025067e366",
+            "bodies": [
+              {
+                "position": [-0.36560709194034813, 0.15770520002788566, -0.2832337089874934],
+                "quaternion": [
+                  0.05619970475248056, 0.9830056097951971, 0.09214860514367139, -0.1484930936676273
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.4595049022285889, 0.16258254099272973, 0.1563501205215385],
+                "quaternion": [
+                  0.497184925412727, 0.5215664857114983, 0.37422398419394504, -0.5837225030602372
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.05408532686984204, 0.139408482581189, -0.111739780593534],
+                "quaternion": [
+                  0.05585316258362447, 0.000732307284768515, -0.9949740382662976,
+                  0.08310566245150827
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.15152934372030968, 0.14209188641938916, -0.36149553476488167],
+                "quaternion": [
+                  -0.023907227307597298, -0.1237873060546603, 0.712146947957887, 0.6906170225649376
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.3915313638911767, 0.14996106590703517, -0.17013499167002655],
+                "quaternion": [
+                  -0.7567722477673192, -0.07847293687159348, 0.6474160964545659,
+                  -0.04461122324570997
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.4464056680807644, 0.1570846166636056, 0.11241765059608191],
+                "quaternion": [
+                  0.22994050746462616, -0.6331364856948463, 0.6344104344650159, 0.379195139935627
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.4853762616354498,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "watch",
+        "iterations": 10,
+        "cpuMs": 60.83020799999986,
+        "result": {
+          "seed": 935649,
+          "simulationStep": 104,
+          "simulationTime": 1.7333333333333334,
+          "maxRadius": 0.561948637079931,
+          "maxHeight": 1.5147045337595046,
+          "maxSpeed": 4.853296767547025,
+          "maxAngularSpeed": 16.593296943208507,
+          "maxContactPenetration": 0.061922898978642456,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 2,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 0,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.0007307204791231581,
+          "maxStableWindowAngularDrift": 0.002088627212202187,
+          "longestStableWindow": 0.3333333333333335,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 1,
+            "floorOnlySecondaryEpisodeCount": 1,
+            "relaunchEventCount": 0,
+            "maxFloorOnlySecondaryClearance": 0.003490537706970432,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0,
+            "maxPreExternalSecondaryClearance": 0.003490537706970432,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0,
+            "legacyUnorderedPost100WorldYRange": 5.985706846428629e-6,
+            "events": [
+              {
+                "dieIndex": 4,
+                "airborneSteps": 4,
+                "peakClearance": 0.003490537706970432,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.003490537706970432,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 1.7333333333333334,
+          "settleFrame": 104,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 6,
+              "confidence": 0.988137
+            },
+            {
+              "value": 4,
+              "confidence": 0.992569
+            },
+            {
+              "value": 2,
+              "confidence": 0.943471
+            },
+            {
+              "value": 1,
+              "confidence": 0.951768
+            },
+            {
+              "value": 3,
+              "confidence": 0.999987
+            },
+            {
+              "value": 6,
+              "confidence": 0.953247
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "87300d68e8c5f503",
+            "bodies": [
+              {
+                "position": [-0.29961864060273186, 0.14397571397173328, -0.2615499902785949],
+                "quaternion": [
+                  0.2396103933949919, -0.06930096963050676, 0.967809478275757, 0.0336013205838088
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.1634103177115043, 0.13816407167738542, -0.32079541857282956],
+                "quaternion": [
+                  -0.6738388612654892, -0.30973674377397237, 0.23701147231984343,
+                  -0.6275586829878985
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.5472831966886107, 0.1825269524031315, 0.10716243556304973],
+                "quaternion": [
+                  -0.5503776712954552, -0.4095343169503767, -0.40970372051003706,
+                  -0.6012561214487664
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.4369865500264142, 0.17953547060501857, 0.32008670674634726],
+                "quaternion": [
+                  -0.06957594062094638, 0.0034705689913479545, 0.13883439346422594,
+                  0.9878624169533972
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.04330047107485811, 0.12092294002883155, 0.03950222760317634],
+                "quaternion": [
+                  0.2013202842280653, -0.6791790267033289, -0.6774431258240265, -0.19813329886321993
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.5254826889247629, 0.17656841043109556, -0.09960806603900874],
+                "quaternion": [
+                  -0.4353170804364653, -0.10795528872614768, 0.8871991434208853,
+                  -0.10826991747283007
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.5576761470365299,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "watch",
+        "iterations": 15,
+        "cpuMs": 64.1692909999997,
+        "result": {
+          "seed": 935649,
+          "simulationStep": 94,
+          "simulationTime": 1.5666666666666667,
+          "maxRadius": 0.5614932150791972,
+          "maxHeight": 1.5147045337595046,
+          "maxSpeed": 4.853296767547025,
+          "maxAngularSpeed": 16.679767689307827,
+          "maxContactPenetration": 0.061927060141321044,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 0,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 0,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.00025676176178042795,
+          "maxStableWindowAngularDrift": 0.002544129921089957,
+          "longestStableWindow": 0.33333333333333326,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 1,
+            "floorOnlySecondaryEpisodeCount": 1,
+            "relaunchEventCount": 0,
+            "maxFloorOnlySecondaryClearance": 0.010846586139369441,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0.0007445514069651937,
+            "maxPreExternalSecondaryClearance": 0.010846586139369441,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0.0007445514069651937,
+            "legacyUnorderedPost100WorldYRange": 0,
+            "events": [
+              {
+                "dieIndex": 4,
+                "airborneSteps": 5,
+                "peakClearance": 0.010846586139369441,
+                "orderedWorldYRise": 0.0007445514069651937,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.010846586139369441,
+                "preExternalOrderedWorldYRise": 0.0007445514069651937,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 1.5666666666666667,
+          "settleFrame": 94,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 6,
+              "confidence": 0.994318
+            },
+            {
+              "value": 4,
+              "confidence": 0.992831
+            },
+            {
+              "value": 2,
+              "confidence": 0.943701
+            },
+            {
+              "value": 1,
+              "confidence": 0.951189
+            },
+            {
+              "value": 5,
+              "confidence": 0.763216
+            },
+            {
+              "value": 6,
+              "confidence": 0.960186
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "466a246df46c27be",
+            "bodies": [
+              {
+                "position": [-0.2948093498728131, 0.14762668391742825, -0.2713191941587849],
+                "quaternion": [
+                  0.2485641816955253, -0.03496021703048884, 0.967147872494144, 0.040232120665778935
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.15616585020413046, 0.13786375506003193, -0.32036404220207426],
+                "quaternion": [
+                  -0.6768789618698521, -0.30141274941250656, 0.23037983318999447,
+                  -0.6308013617050419
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.5465332100267349, 0.18236356313228078, 0.1065106738545965],
+                "quaternion": [
+                  -0.5465007053177238, -0.4061946533229083, -0.4132652847404841, -0.6046111867369636
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.42327803500750344, 0.17822118637748754, 0.33334290966605823],
+                "quaternion": [
+                  -0.06677080029361153, -0.07411976592295257, 0.1412337891217606, 0.9849370220161224
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.07219026187836174, 0.1694602740798452, -0.05340268532038867],
+                "quaternion": [
+                  0.5464395267917126, -0.7074988878907529, -0.4480231650531336,
+                  -0.011153957538465114
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.5140407512008602, 0.17307018536588406, -0.08430207819364155],
+                "quaternion": [
+                  -0.3638195856727646, -0.09318806189450356, 0.9207217209240101,
+                  -0.10593774973999308
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.556815115911096,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "batch",
+        "iterations": 15,
+        "cpuMs": 65.69545900000958,
+        "result": {
+          "seed": 935649,
+          "simulationStep": 94,
+          "simulationTime": 1.5666666666666667,
+          "maxRadius": 0.5614932150791972,
+          "maxHeight": 1.5147045337595046,
+          "maxSpeed": 4.853296767547025,
+          "maxAngularSpeed": 16.679767689307827,
+          "maxContactPenetration": 0.061927060141321044,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 0,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 0,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.00025676176178042795,
+          "maxStableWindowAngularDrift": 0.002544129921089957,
+          "longestStableWindow": 0.33333333333333326,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 1,
+            "floorOnlySecondaryEpisodeCount": 1,
+            "relaunchEventCount": 0,
+            "maxFloorOnlySecondaryClearance": 0.010846586139369441,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0.0007445514069651937,
+            "maxPreExternalSecondaryClearance": 0.010846586139369441,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0.0007445514069651937,
+            "legacyUnorderedPost100WorldYRange": 0,
+            "events": [
+              {
+                "dieIndex": 4,
+                "airborneSteps": 5,
+                "peakClearance": 0.010846586139369441,
+                "orderedWorldYRise": 0.0007445514069651937,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.010846586139369441,
+                "preExternalOrderedWorldYRise": 0.0007445514069651937,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 1.5666666666666667,
+          "settleFrame": 94,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 6,
+              "confidence": 0.994318
+            },
+            {
+              "value": 4,
+              "confidence": 0.992831
+            },
+            {
+              "value": 2,
+              "confidence": 0.943701
+            },
+            {
+              "value": 1,
+              "confidence": 0.951189
+            },
+            {
+              "value": 5,
+              "confidence": 0.763216
+            },
+            {
+              "value": 6,
+              "confidence": 0.960186
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "466a246df46c27be",
+            "bodies": [
+              {
+                "position": [-0.2948093498728131, 0.14762668391742825, -0.2713191941587849],
+                "quaternion": [
+                  0.2485641816955253, -0.03496021703048884, 0.967147872494144, 0.040232120665778935
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.15616585020413046, 0.13786375506003193, -0.32036404220207426],
+                "quaternion": [
+                  -0.6768789618698521, -0.30141274941250656, 0.23037983318999447,
+                  -0.6308013617050419
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.5465332100267349, 0.18236356313228078, 0.1065106738545965],
+                "quaternion": [
+                  -0.5465007053177238, -0.4061946533229083, -0.4132652847404841, -0.6046111867369636
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.42327803500750344, 0.17822118637748754, 0.33334290966605823],
+                "quaternion": [
+                  -0.06677080029361153, -0.07411976592295257, 0.1412337891217606, 0.9849370220161224
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.07219026187836174, 0.1694602740798452, -0.05340268532038867],
+                "quaternion": [
+                  0.5464395267917126, -0.7074988878907529, -0.4480231650531336,
+                  -0.011153957538465114
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.5140407512008602, 0.17307018536588406, -0.08430207819364155],
+                "quaternion": [
+                  -0.3638195856727646, -0.09318806189450356, 0.9207217209240101,
+                  -0.10593774973999308
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.556815115911096,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "batch",
+        "iterations": 10,
+        "cpuMs": 57.93391700000211,
+        "result": {
+          "seed": 935649,
+          "simulationStep": 104,
+          "simulationTime": 1.7333333333333334,
+          "maxRadius": 0.561948637079931,
+          "maxHeight": 1.5147045337595046,
+          "maxSpeed": 4.853296767547025,
+          "maxAngularSpeed": 16.593296943208507,
+          "maxContactPenetration": 0.061922898978642456,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 2,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 0,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.0007307204791231581,
+          "maxStableWindowAngularDrift": 0.002088627212202187,
+          "longestStableWindow": 0.3333333333333335,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 1,
+            "floorOnlySecondaryEpisodeCount": 1,
+            "relaunchEventCount": 0,
+            "maxFloorOnlySecondaryClearance": 0.003490537706970432,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0,
+            "maxPreExternalSecondaryClearance": 0.003490537706970432,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0,
+            "legacyUnorderedPost100WorldYRange": 5.985706846428629e-6,
+            "events": [
+              {
+                "dieIndex": 4,
+                "airborneSteps": 4,
+                "peakClearance": 0.003490537706970432,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.003490537706970432,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 1.7333333333333334,
+          "settleFrame": 104,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 6,
+              "confidence": 0.988137
+            },
+            {
+              "value": 4,
+              "confidence": 0.992569
+            },
+            {
+              "value": 2,
+              "confidence": 0.943471
+            },
+            {
+              "value": 1,
+              "confidence": 0.951768
+            },
+            {
+              "value": 3,
+              "confidence": 0.999987
+            },
+            {
+              "value": 6,
+              "confidence": 0.953247
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "87300d68e8c5f503",
+            "bodies": [
+              {
+                "position": [-0.29961864060273186, 0.14397571397173328, -0.2615499902785949],
+                "quaternion": [
+                  0.2396103933949919, -0.06930096963050676, 0.967809478275757, 0.0336013205838088
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.1634103177115043, 0.13816407167738542, -0.32079541857282956],
+                "quaternion": [
+                  -0.6738388612654892, -0.30973674377397237, 0.23701147231984343,
+                  -0.6275586829878985
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.5472831966886107, 0.1825269524031315, 0.10716243556304973],
+                "quaternion": [
+                  -0.5503776712954552, -0.4095343169503767, -0.40970372051003706,
+                  -0.6012561214487664
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.4369865500264142, 0.17953547060501857, 0.32008670674634726],
+                "quaternion": [
+                  -0.06957594062094638, 0.0034705689913479545, 0.13883439346422594,
+                  0.9878624169533972
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.04330047107485811, 0.12092294002883155, 0.03950222760317634],
+                "quaternion": [
+                  0.2013202842280653, -0.6791790267033289, -0.6774431258240265, -0.19813329886321993
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.5254826889247629, 0.17656841043109556, -0.09960806603900874],
+                "quaternion": [
+                  -0.4353170804364653, -0.10795528872614768, 0.8871991434208853,
+                  -0.10826991747283007
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.5576761470365299,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "batch",
+        "iterations": 15,
+        "cpuMs": 104.3765829999902,
+        "result": {
+          "seed": 991817,
+          "simulationStep": 100,
+          "simulationTime": 1.6666666666666667,
+          "maxRadius": 0.5500000000000002,
+          "maxHeight": 1.5774931397289038,
+          "maxSpeed": 5.131444568504239,
+          "maxAngularSpeed": 14.13103900188917,
+          "maxContactPenetration": 0.0408665181195783,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 2,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 0,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.00022199978306911252,
+          "maxStableWindowAngularDrift": 0.001186830287685388,
+          "longestStableWindow": 0.28333333333333344,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 2,
+            "floorOnlySecondaryEpisodeCount": 0,
+            "relaunchEventCount": 0,
+            "maxFloorOnlySecondaryClearance": 0,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0,
+            "maxPreExternalSecondaryClearance": 0.0011454753449163478,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0,
+            "legacyUnorderedPost100WorldYRange": 0,
+            "events": [
+              {
+                "dieIndex": 2,
+                "airborneSteps": 1,
+                "peakClearance": 0.0011454753449163478,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.0011454753449163478,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              },
+              {
+                "dieIndex": 0,
+                "airborneSteps": 1,
+                "peakClearance": 0.0005533506903159791,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.0005533506903159791,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 1.6666666666666667,
+          "settleFrame": 100,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 1,
+              "confidence": 0.979268
+            },
+            {
+              "value": 3,
+              "confidence": 0.963353
+            },
+            {
+              "value": 4,
+              "confidence": 0.999772
+            },
+            {
+              "value": 2,
+              "confidence": 0.989483
+            },
+            {
+              "value": 6,
+              "confidence": 0.985134
+            },
+            {
+              "value": 4,
+              "confidence": 0.97654
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "070ea86eea99b479",
+            "bodies": [
+              {
+                "position": [-0.35252264261576394, 0.15489270952345435, -0.28236427529169233],
+                "quaternion": [
+                  0.05152116245990565, 0.9804967814843767, 0.08781638765961915, -0.16810685106792744
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.49484314681486113, 0.1698188858345454, 0.12761393505481813],
+                "quaternion": [
+                  0.5229571929367874, 0.4867770015444094, 0.32235912177440657, -0.6210060561153516
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.13620673418689536, 0.12275039395201098, 0.08232947597516704],
+                "quaternion": [
+                  -0.3470087871927858, 0.6115244129019206, -0.6246997260166466, -0.33966608065963866
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.16231025170508537, 0.14303474620581585, -0.35940645483720846],
+                "quaternion": [
+                  0.0010968541379080445, -0.09765552330682166, 0.7174169802094144,
+                  0.6897645048753059
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.3912316734709819, 0.14977645211742863, -0.16727129254123893],
+                "quaternion": [
+                  -0.759553900310535, -0.07825617202182994, 0.6447054247771588,
+                  -0.036176778829064504
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.4600290198753326, 0.16152115488378244, 0.13312513714925742],
+                "quaternion": [
+                  0.22989375333705447, -0.6634236101442422, 0.606980445174537, 0.3722804250232653
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.5110333221716657,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      },
+      {
+        "group": "batch",
+        "iterations": 10,
+        "cpuMs": 68.23170800000662,
+        "result": {
+          "seed": 991817,
+          "simulationStep": 125,
+          "simulationTime": 2.0833333333333335,
+          "maxRadius": 0.5500000000000002,
+          "maxHeight": 1.5774931397289038,
+          "maxSpeed": 5.131444568504239,
+          "maxAngularSpeed": 14.27047272356432,
+          "maxContactPenetration": 0.04207457435729986,
+          "conservativeBoundaryCrossings": 0,
+          "wallCenterCrossings": 0,
+          "nanDetected": false,
+          "stableBrokenCount": 0,
+          "poseStableBrokenCount": 10,
+          "assistInterventionCount": 0,
+          "escapeGuardInterventionCount": 0,
+          "sleepWakeCount": 1,
+          "faceChangedDuringStableWindow": false,
+          "maxStableWindowPositionDrift": 0.0003855090688666746,
+          "maxStableWindowAngularDrift": 0.0014918331137153404,
+          "longestStableWindow": 0.3333333333333335,
+          "floorRelaunch": {
+            "version": 1,
+            "available": true,
+            "unavailableReason": null,
+            "initialContactObservedDiceCount": 6,
+            "armedDiceCount": 6,
+            "secondaryEpisodeCount": 2,
+            "floorOnlySecondaryEpisodeCount": 1,
+            "relaunchEventCount": 1,
+            "maxFloorOnlySecondaryClearance": 0.021863444872075328,
+            "maxFloorOnlySecondaryOrderedWorldYRise": 0.014724458844070587,
+            "maxPreExternalSecondaryClearance": 0.021863444872075328,
+            "maxPreExternalSecondaryOrderedWorldYRise": 0.014724458844070587,
+            "legacyUnorderedPost100WorldYRange": 0.00019898238777521504,
+            "events": [
+              {
+                "dieIndex": 2,
+                "airborneSteps": 7,
+                "peakClearance": 0.021863444872075328,
+                "orderedWorldYRise": 0.014724458844070587,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.021863444872075328,
+                "preExternalOrderedWorldYRise": 0.014724458844070587,
+                "qualifiesAsRelaunch": true
+              },
+              {
+                "dieIndex": 3,
+                "airborneSteps": 1,
+                "peakClearance": 0.0008544385092160087,
+                "orderedWorldYRise": 0,
+                "externalContactObserved": false,
+                "preExternalPeakClearance": 0.0008544385092160087,
+                "preExternalOrderedWorldYRise": 0,
+                "qualifiesAsRelaunch": false
+              }
+            ]
+          },
+          "settleReason": "natural-sleep",
+          "settleTime": 2.0833333333333335,
+          "settleFrame": 125,
+          "throwDiagnostics": {
+            "algorithm": "stratified-ring",
+            "attempts": 0,
+            "restarts": 0,
+            "groupAttempts": 1,
+            "randomPlanVersion": 1,
+            "placementPath": "constructive",
+            "fallbackLayout": null
+          },
+          "finalFaces": [
+            {
+              "value": 1,
+              "confidence": 0.9767
+            },
+            {
+              "value": 3,
+              "confidence": 0.970801
+            },
+            {
+              "value": 6,
+              "confidence": 0.986186
+            },
+            {
+              "value": 2,
+              "confidence": 0.98956
+            },
+            {
+              "value": 6,
+              "confidence": 0.983704
+            },
+            {
+              "value": 4,
+              "confidence": 0.977721
+            }
+          ],
+          "finalState": {
+            "version": 1,
+            "floatEncoding": "ieee754-float64-be",
+            "hashAlgorithm": "fnv1a64",
+            "hash": "1b2ba3025067e366",
+            "bodies": [
+              {
+                "position": [-0.36560709194034813, 0.15770520002788566, -0.2832337089874934],
+                "quaternion": [
+                  0.05619970475248056, 0.9830056097951971, 0.09214860514367139, -0.1484930936676273
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.4595049022285889, 0.16258254099272973, 0.1563501205215385],
+                "quaternion": [
+                  0.497184925412727, 0.5215664857114983, 0.37422398419394504, -0.5837225030602372
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.05408532686984204, 0.139408482581189, -0.111739780593534],
+                "quaternion": [
+                  0.05585316258362447, 0.000732307284768515, -0.9949740382662976,
+                  0.08310566245150827
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.15152934372030968, 0.14209188641938916, -0.36149553476488167],
+                "quaternion": [
+                  -0.023907227307597298, -0.1237873060546603, 0.712146947957887, 0.6906170225649376
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [0.3915313638911767, 0.14996106590703517, -0.17013499167002655],
+                "quaternion": [
+                  -0.7567722477673192, -0.07847293687159348, 0.6474160964545659,
+                  -0.04461122324570997
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              },
+              {
+                "position": [-0.4464056680807644, 0.1570846166636056, 0.11241765059608191],
+                "quaternion": [
+                  0.22994050746462616, -0.6331364856948463, 0.6344104344650159, 0.379195139935627
+                ],
+                "velocity": [0, 0, 0],
+                "angularVelocity": [0, 0, 0]
+              }
+            ]
+          },
+          "finalRadius": 0.4853762616354498,
+          "finalMaxSpeed": 0,
+          "finalMaxAngularSpeed": 0,
+          "ambiguousDiceCount": 0
+        }
+      }
+    ]
+  }
+}

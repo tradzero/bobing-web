@@ -296,6 +296,33 @@ describe('Engine 按需调度', () => {
     expect(pendingFrames.size).toBe(0)
   })
 
+  it('持续丢弃可见墙钟时间时明确中止，不结算仍在运动的骰子', () => {
+    const dicePairs = makeDicePairs()
+    dicePairs[0].body.allowSleep = false
+    dicePairs[0].body.velocity.set(1, 0, 0)
+    const onSettled = vi.fn()
+    const onRollError = vi.fn()
+    const { engine } = createExactFixture({
+      variant: 'exact-cap6',
+      dicePairs,
+      onSettled,
+      onRollError,
+    })
+    engine.start()
+    engine.beginSettle()
+    for (let frame = 1; frame <= 40 && pendingFrames.size; frame++) {
+      runNextFrame(frame * 200)
+      if (frame === 20) expect(() => engine.beginSettle()).toThrow('不能重复 beginSettle')
+    }
+    expect(onSettled).not.toHaveBeenCalled()
+    expect(onRollError).toHaveBeenCalledOnce()
+    expect(onRollError).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'timing-overload', discardedWallMs: 3_100 }),
+    )
+    expect(engine.getDiagnostics()).toMatchObject({ mode: 'error', frameScheduled: false })
+    expect(dicePairs[0].body.sleepState).not.toBe(CANNON.Body.SLEEPING)
+  })
+
   it('exact settle 只消费真实完成的步，并把同帧剩余 backlog 记为 abandoned', () => {
     const dicePairs = makeDicePairs(1, true)
     const onSettled = vi.fn()

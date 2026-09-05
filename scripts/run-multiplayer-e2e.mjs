@@ -66,7 +66,7 @@ try {
       'DELETE FROM rooms WHERE id = ANY($1::text[]) OR display_name = ANY($2::text[])',
       [
         [defaultRoomId, restartDefaultRoomId],
-        [...roomNames, gameFlowRoomName, restartRoomName, soakRoomName],
+        [...roomNames, `${roomNames[0]} 移动端`, gameFlowRoomName, restartRoomName, soakRoomName],
       ],
     )
   } catch (error) {

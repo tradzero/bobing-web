@@ -10,7 +10,7 @@
   "scripts": {
     "dev:singleplayer": "vite --mode singleplayer",
     "dev:multiplayer": "pnpm run build:web && pnpm run dev:server",
-    "dev:server": "vite-node --config apps/server/vite.config.ts apps/server/src/index.ts",
+    "dev:server": "pnpm run build:server && node dist-server/index.js",
     "build": "pnpm run build:web && pnpm run build:server",
     "typecheck": "tsc -b && tsc -p tsconfig.test.json",
     "build:web": "tsc -b tsconfig.app.json && vite build",
@@ -43,6 +43,8 @@
     "bench:browser:physics-scheduler-ab": "playwright test e2e/physics-scheduler-ab.spec.ts",
     "prebench:browser:collision-ab": "pnpm run build:e2e",
     "bench:browser:collision-ab": "playwright test e2e/physics-collision-ab.spec.ts",
+    "test:roll-worker": "pnpm run build:server && vite-node --mode lab scripts/check-roll-worker.ts",
+    "test:physics:solver-ab": "vite-node --mode lab scripts/physics-solver-ab.ts",
     "test:physics": "vitest run apps/web/src/__tests__/physics-acceptance.test.ts apps/web/src/__tests__/floor-relaunch.test.ts apps/web/src/__tests__/physics-smoke.test.ts apps/web/src/__tests__/dice-escape.test.ts apps/web/src/__tests__/freeze-consistency.test.ts apps/web/src/__tests__/contact-cluster-assist.test.ts apps/web/src/__tests__/settle.test.ts",
     "test:seed": "vite-node --mode lab scripts/physics-acceptance.ts",
     "test:acceptance": "vite-node --mode lab scripts/physics-acceptance.ts --seeds=200",

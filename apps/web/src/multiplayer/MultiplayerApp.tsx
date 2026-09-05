@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { AwardTier, type AwardTier as AwardTierType } from '@dice/game-domain'
 import {
   PLAYER_DISPLAY_NAME_MAX_LENGTH,
@@ -7,7 +7,8 @@ import {
   type RoomSnapshot,
 } from '@dice/protocol'
 import { GameViewport } from '@/ui/components/GameViewport'
-import { useGameController } from '@/ui/components/GameControllerContext'
+import { RollSeedBridge } from './RollSeedBridge'
+import { useGameStore } from '@/ui/components/GameStoreContext'
 import { useMultiplayerRoom, type MultiplayerRoomState, type RoomCommand } from './use-room'
 import '@/ui/styles/multiplayer.css'
 
@@ -29,22 +30,15 @@ const AWARD_LABELS: Record<AwardTierType, string> = {
   yixiu: '一秀',
 }
 
-function RollSeedBridge({ activeRoll }: Pick<MultiplayerRoomState, 'activeRoll'>) {
-  const controller = useGameController()
-  const lastRollId = useRef<string | null>(null)
-  useEffect(() => {
-    if (!activeRoll || lastRollId.current === activeRoll.id) return
-    if (controller.throwAuthoritative(activeRoll.seed)) lastRollId.current = activeRoll.id
-  }, [activeRoll, controller])
-  return null
-}
-
 function useRemainingMs(deadlineAt: string | null, serverTime: string | null): number | null {
   const [remaining, setRemaining] = useState<number | null>(null)
   useEffect(() => {
     if (!deadlineAt || !serverTime) return
     const offset = Date.parse(serverTime) - Date.now()
-    const update = () => setRemaining(Math.max(0, Date.parse(deadlineAt) - (Date.now() + offset)))
+    const update = () =>
+      setRemaining(
+        Math.ceil(Math.max(0, Date.parse(deadlineAt) - (Date.now() + offset)) / 1_000) * 1_000,
+      )
     const initial = window.setTimeout(update, 0)
     const timer = window.setInterval(update, 250)
     return () => {
@@ -52,7 +46,7 @@ function useRemainingMs(deadlineAt: string | null, serverTime: string | null): n
       window.clearInterval(timer)
     }
   }, [deadlineAt, serverTime])
-  return remaining
+  return deadlineAt && serverTime ? remaining : null
 }
 
 function PlayerName({ snapshot, playerId }: { snapshot: RoomSnapshot; playerId: string }) {
@@ -216,9 +210,7 @@ function RoomAction({
   if (turn.status === 'rolling' || pendingCommand === 'request-roll') {
     return (
       <div className="room-action-card">
-        <strong>
-          {pendingCommand === 'request-roll' ? '服务端正在计算真实物理' : '骰子翻滚中'}
-        </strong>
+        <strong>{pendingCommand === 'request-roll' ? '正在准备投掷…' : '骰子翻滚中'}</strong>
         <span>
           <PlayerName snapshot={snapshot} playerId={turn.playerId} /> 正在投掷
         </span>
@@ -256,10 +248,13 @@ function RoomOverlay({
 }) {
   const { snapshot, playerId } = state
   const [confirmingClose, setConfirmingClose] = useState(false)
+  const [detailsView, setDetailsView] = useState<'awards' | 'players' | 'history'>('awards')
+  const phase = useGameStore((store) => store.phase)
+  const playbackError = useGameStore((store) => store.rollError)
   if (!snapshot || !playerId) return null
   const isHost = snapshot.hostPlayerId === playerId
   return (
-    <div className="room-overlay">
+    <div className={`room-overlay room-view-${detailsView} phase-${phase}`}>
       <RollSeedBridge activeRoll={state.activeRoll} />
       <header className="room-header">
         <div>
@@ -296,8 +291,31 @@ function RoomOverlay({
         </div>
       )}
       {state.error && <div className="room-error-banner">{state.error}</div>}
+      {playbackError && (
+        <div className="room-error-banner" role="status">
+          本机动画未能完成，请以房间投掷记录为准。
+        </div>
+      )}
+      <nav className="room-mobile-tabs" aria-label="房间信息">
+        {(
+          [
+            ['awards', '奖池与奖项'],
+            ['players', '全员获奖'],
+            ['history', '最近结果'],
+          ] as const
+        ).map(([view, label]) => (
+          <button
+            key={view}
+            aria-pressed={detailsView === view}
+            onClick={() => setDetailsView(view)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
       <AwardInventory snapshot={snapshot} playerId={playerId} />
       <div className="room-history" aria-label="最近结果">
+        {snapshot.recentRolls.length === 0 && <p className="room-history-empty">还没有投掷记录</p>}
         {snapshot.recentRolls.slice(0, 5).map((roll) => (
           <div key={roll.id}>
             <span>

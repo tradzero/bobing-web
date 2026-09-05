@@ -14,7 +14,7 @@ import { RoundDisplay } from '@/ui/components/RoundDisplay'
 import { SoundToggle } from '@/ui/components/SoundToggle'
 import { TiltWarning } from '@/ui/components/TiltWarning'
 import { RollErrorPanel } from '@/ui/components/RollErrorPanel'
-import { GameOverlay } from '@/App'
+import { GameOverlay } from '@/SingleplayerApp'
 import { Prize } from '@dice/game-domain'
 import type { DicePair } from '@/dice/create'
 import { createDiceBody } from '@dice/physics-core/dice/dice-body'
@@ -414,7 +414,7 @@ describe('RollErrorPanel', () => {
     render(<RollErrorPanel />, { wrapper: Wrapper })
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      /页面帧调度持续落后.*物理模拟积压超过安全上限.*未读取点数.*未计入记录/,
+      /页面运行较慢.*本轮投掷未能完成.*未计入记录/,
     )
     expect(screen.getByText(/队列 266\.7 毫秒/)).toBeInTheDocument()
     expect(screen.getByText(/安全上限 250\.0 毫秒/)).toBeInTheDocument()

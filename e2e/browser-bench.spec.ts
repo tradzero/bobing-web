@@ -62,8 +62,8 @@ test('WebGL 结构预算与调度 bench', async ({ page, browser }, testInfo) =>
     })
     expect(idle.renderExperiment).toMatchObject({
       explicit: false,
-      variant: 'rolling-dpr-reduced-tier',
-      rollingDprPreset: 'cap-1x-reduced-tier',
+      variant: 'adaptive',
+      rollingDprPreset: 'adaptive',
       rollingShadowPreset: 'every-frame',
     })
     expectRenderBudgets(idle, testInfo.project.name)

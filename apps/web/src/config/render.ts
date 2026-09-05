@@ -15,11 +15,22 @@ export const RENDER_QUALITY = {
 /** 只影响 Three.js 骰子网格，不进入共享物理配置。 */
 export const DICE_RENDER = {
   chamferRatio: 0.14,
+  segments: 3,
+} as const
+
+export const ADAPTIVE_RENDER = {
+  pixelRatioCaps: [Infinity, 1, 0.75],
+  slowFrameMs: 40,
+  slowFrameCount: 6,
+  fastFrameMs: 22,
+  fastFrameCount: 120,
+  /** 可见慢帧累计丢弃超过此预算必须退出本轮，不能无限慢放。 */
+  maxDiscardedWallMs: 3_000,
 } as const
 
 export type RenderQualityTier = 'full' | 'reduced'
 export type RenderPhase = 'static' | 'rolling'
-export type RollingDprPreset = 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier'
+export type RollingDprPreset = 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier' | 'adaptive'
 
 export interface RenderQuality {
   pixelRatio: number
@@ -41,7 +52,8 @@ export function resolveRenderPhasePixelRatio(
   const shouldCapRollingDpr =
     phase === 'rolling' &&
     (rollingDprPreset === 'cap-1x' ||
-      (rollingDprPreset === 'cap-1x-reduced-tier' && baseTier === 'reduced'))
+      ((rollingDprPreset === 'cap-1x-reduced-tier' || rollingDprPreset === 'adaptive') &&
+        baseTier === 'reduced'))
 
   if (shouldCapRollingDpr) {
     return Math.min(basePixelRatio, RENDER_QUALITY.minPixelRatio)

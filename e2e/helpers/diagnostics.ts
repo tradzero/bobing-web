@@ -12,7 +12,7 @@ export const E2E_NEXT_SEED = 42
 export const BROWSER_BUDGETS = {
   diagnosticsSchemaVersion: 9,
   mainPassCalls: 8,
-  mainPassTriangles: 41_288,
+  mainPassTriangles: 32_648,
   geometries: 8,
   maxTextures: 6,
   maxPrograms: {
@@ -127,9 +127,10 @@ export interface DiceRuntimeDiagnostics {
       | 'baseline'
       | 'rolling-dpr-1x'
       | 'rolling-dpr-reduced-tier'
+      | 'adaptive'
       | 'shadow-alternate'
       | 'shadow-frozen'
-    rollingDprPreset: 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier'
+    rollingDprPreset: 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier' | 'adaptive'
     rollingShadowPreset: 'every-frame' | 'alternate' | 'frozen-after-first'
   }
   roll: {
@@ -175,7 +176,7 @@ export interface DiceRuntimeDiagnostics {
     programs: number
     quality: {
       phase: 'static' | 'rolling'
-      rollingDprPreset: 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier'
+      rollingDprPreset: 'baseline' | 'cap-1x' | 'cap-1x-reduced-tier' | 'adaptive'
       basePixelRatio: number
       effectivePixelRatio: number
       tier: 'full' | 'reduced'
@@ -328,7 +329,9 @@ export function expectRenderBudgets(
   expect(render.quality!.shadowMapSize).toBe(render.quality!.tier === 'full' ? 1024 : 512)
 
   expect(render.pixelRatio, `[${projectName}] pixelRatio lower bound`).toBeGreaterThanOrEqual(
-    BROWSER_BUDGETS.minPixelRatio,
+    engine.mode === 'rolling' && render.quality!.rollingDprPreset === 'adaptive'
+      ? 0.75
+      : BROWSER_BUDGETS.minPixelRatio,
   )
   expect(render.pixelRatio, `[${projectName}] pixelRatio upper bound`).toBeLessThanOrEqual(
     BROWSER_BUDGETS.maxPixelRatio,
@@ -345,7 +348,10 @@ export function expectRenderBudgets(
     render.drawingBufferPixels,
     `[${projectName}] drawing-buffer pixel budget`,
   ).toBeLessThanOrEqual(BROWSER_BUDGETS.maxDrawingBufferPixels)
-  if (engine.mode === 'rolling') {
+  if (engine.mode === 'rolling' && render.quality!.rollingDprPreset === 'adaptive') {
+    expect(render.pixelRatio).toBeLessThanOrEqual(render.quality!.basePixelRatio)
+    expect([0.75, 1, render.quality!.basePixelRatio]).toContain(render.pixelRatio)
+  } else if (engine.mode === 'rolling') {
     const expectedRollingPixelRatio =
       render.quality!.rollingDprPreset === 'cap-1x' ||
       (render.quality!.rollingDprPreset === 'cap-1x-reduced-tier' &&

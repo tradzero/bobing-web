@@ -879,41 +879,55 @@ export class RoomRepository {
     })
   }
 
-  async beginAuthoritativeRoll(input: ComputedRollInput): Promise<StartedRoll> {
-    return this.withTransaction(async (client) => {
-      await this.lockActiveRoom(client, input.roomId)
-      const state = await this.loadActiveGame(client, input.roomId, true)
-      if (
-        (state.phase !== GamePhase.Playing && state.phase !== GamePhase.BonusRound) ||
-        !state.activeTurn
-      ) {
-        throw new RoomRepositoryError('conflict', '当前房间不接受投掷')
-      }
+  /** 计算前短事务检查身份/回合/幂等；提交时复用同一检查，不能依赖预检快照写入。 */
+  async prepareAuthoritativeRoll(
+    input: Pick<ComputedRollInput, 'roomId' | 'playerId' | 'commandId' | 'now'>,
+  ): Promise<StartedRoll | null> {
+    return this.withTransaction(
+      async (client) => (await this.authorizeRoll(client, input)).duplicate,
+    )
+  }
 
-      const existingResult = await client.query<ComputedRollRow>(
-        `
+  private async authorizeRoll(
+    client: PoolClient,
+    input: Pick<ComputedRollInput, 'roomId' | 'playerId' | 'commandId' | 'now'>,
+  ): Promise<
+    { duplicate: StartedRoll } | { duplicate: null; state: MultiplayerGameState; turn: TurnRow }
+  > {
+    await this.lockActiveRoom(client, input.roomId)
+    const state = await this.loadActiveGame(client, input.roomId, true)
+    if (
+      (state.phase !== GamePhase.Playing && state.phase !== GamePhase.BonusRound) ||
+      !state.activeTurn
+    ) {
+      throw new RoomRepositoryError('conflict', '当前房间不接受投掷')
+    }
+
+    const existingResult = await client.query<ComputedRollRow>(
+      `
           SELECT id, turn_id, player_id, seed, status, dice_values, judge_result, diagnostics,
                  reveal_at, throw_algorithm_version, settle_algorithm_version,
                  requires_tilt_decision
           FROM roll_attempts
           WHERE game_id = $1 AND command_id = $2
         `,
-        [state.id, input.commandId],
-      )
-      const existing = existingResult.rows[0]
-      if (existing) {
-        if (existing.player_id !== input.playerId) {
-          throw new RoomRepositoryError('forbidden', '幂等命令不属于当前玩家')
-        }
-        if (
-          existing.status === 'error' ||
-          existing.status === 'rejected' ||
-          existing.reveal_at === null
-        ) {
-          throw new RoomRepositoryError('conflict', '该投掷命令已经终止，请以最新房间状态为准')
-        }
-        await this.touchRoomActivity(client, input.roomId, input.now)
-        return {
+      [state.id, input.commandId],
+    )
+    const existing = existingResult.rows[0]
+    if (existing) {
+      if (existing.player_id !== input.playerId) {
+        throw new RoomRepositoryError('forbidden', '幂等命令不属于当前玩家')
+      }
+      if (
+        existing.status === 'error' ||
+        existing.status === 'rejected' ||
+        existing.reveal_at === null
+      ) {
+        throw new RoomRepositoryError('conflict', '该投掷命令已经终止，请以最新房间状态为准')
+      }
+      await this.touchRoomActivity(client, input.roomId, input.now)
+      return {
+        duplicate: {
           rollId: existing.id,
           seed: Number(existing.seed),
           revealAt: existing.reveal_at.getTime(),
@@ -921,23 +935,32 @@ export class RoomRepository {
           throwAlgorithmVersion: existing.throw_algorithm_version,
           settleAlgorithmVersion: existing.settle_algorithm_version,
           duplicate: true,
-        }
+        },
       }
+    }
 
-      if (state.activeTurn.playerId !== input.playerId) {
-        throw new RoomRepositoryError('forbidden', '还没有轮到当前玩家')
-      }
-      const turnResult = await client.query<TurnRow>(
-        'SELECT * FROM turns WHERE id = $1 FOR UPDATE',
-        [state.activeTurn.id],
-      )
-      const turn = turnResult.rows[0]
-      if (!turn || turn.status !== 'awaiting-roll') {
-        throw new RoomRepositoryError('conflict', '当前回合已经开始投掷')
-      }
-      if (input.now >= turn.deadline_at.getTime()) {
-        throw new RoomRepositoryError('conflict', '当前回合已超时')
-      }
+    if (state.activeTurn.playerId !== input.playerId) {
+      throw new RoomRepositoryError('forbidden', '还没有轮到当前玩家')
+    }
+    const turnResult = await client.query<TurnRow>('SELECT * FROM turns WHERE id = $1 FOR UPDATE', [
+      state.activeTurn.id,
+    ])
+    const turn = turnResult.rows[0]
+    if (!turn || turn.status !== 'awaiting-roll') {
+      throw new RoomRepositoryError('conflict', '当前回合已经开始投掷')
+    }
+    if (input.now >= turn.deadline_at.getTime()) {
+      throw new RoomRepositoryError('conflict', '当前回合已超时')
+    }
+
+    return { duplicate: null, state, turn }
+  }
+
+  async beginAuthoritativeRoll(input: ComputedRollInput): Promise<StartedRoll> {
+    return this.withTransaction(async (client) => {
+      const authorized = await this.authorizeRoll(client, input)
+      if (authorized.duplicate) return authorized.duplicate
+      const { state, turn } = authorized
 
       const rollId = randomUUID()
       const result = judge(input.diceValues)

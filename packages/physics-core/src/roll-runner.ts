@@ -40,6 +40,8 @@ export const ROLL_DIAGNOSTICS_SCHEMA_VERSION = 4
 
 export interface HeadlessRollSimulationOptions {
   seed: number
+  /** 求解器 A/B 复用正式单步链路；省略时使用版本化运行时配置。 */
+  solverIterations?: number
   /** runtime 使用正式停稳状态机；natural-continuation 只等自然 sleep 或独立帧预算。 */
   settlementPolicy?: RollSettlementPolicy
   /** 显式选择投掷位置算法；A/B 两侧仍复用同一完整运行链路。 */
@@ -117,10 +119,11 @@ export function createHeadlessRollSimulation(
     contactClusterAssistEnabled,
     poseStableWindowEnabled,
     heightfieldNarrowphaseMode,
+    solverIterations,
   } = options
 
   reseed(seed)
-  const physics = createPhysicsWorld({ heightfieldNarrowphaseMode })
+  const physics = createPhysicsWorld({ heightfieldNarrowphaseMode, solverIterations })
 
   try {
     setupContactMaterials(physics.world)

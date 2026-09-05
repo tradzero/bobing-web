@@ -49,14 +49,14 @@
 - React 负责 DOM overlay；Three.js/cannon-es 保持命令式、可独立驱动。`GameController`（或等价编排层）拥有业务写入，Zustand store 不自行组合矛盾状态。
 - `packages/game-domain` 是判奖、奖池和多人聚合真源；Web 不再维护规则 façade。
 - `packages/physics-core` 持有服务端与浏览器共享的 Cannon 配置、PRNG、刚体、读面、停稳、调度、诊断和 headless roll 编排。服务端不得直接引入 DOM/React/Three 渲染代码；`apps/web` 只持有 Three 网格、渲染同步和 UI。
-- 正式物理与实验物理分层：生产构建使用 `throw-runtime`、`settle-runtime`、`world-runtime`、`exact-cap6`、`cannon-default`；历史 throw、contact-cluster assist、projected-AABB、legacy/cap4 scheduler、CPU profile 和渲染候选只允许从测试、显式 `lab` mode 脚本或 `e2e` 构建进入。
+- 正式物理与实验物理分层：生产构建使用 `throw-runtime`、`settle-runtime`、`exact-cap6`；浏览器使用 `world-runtime` / `cannon-default`，服务端使用 `world-optimized-runtime` / `projected-aabb-v1`，两者接触与轨迹严格等价。历史 throw、contact-cluster assist、浏览器 projected-AABB 候选、legacy/cap4 scheduler、CPU profile 和渲染候选只允许从测试、显式 `lab` mode 脚本或 `e2e` 构建进入。
 - 正式路径和实验路径必须复用当前算法的同一实现，不允许复制一套近似生产算法供测试。
 - 共享物理/投掷/停稳参数集中在 `packages/physics-core/src/config/`，Web 渲染/UI 参数集中在 `apps/web/src/config/`；服务端连接与时限集中在 `apps/server/src/config/` 并从环境变量读取。
 - 骰面材质映射与读面法线共享真源。关键中文注释解释规则优先级、读面、碰撞边界、停稳原因和非直观兜底。
 
 ## 物理与诊断原则
 
-- 当前可复现版本为 THROW v3 / SETTLE v4；正式投掷为 `stratified-ring`，contact-cluster assist 关闭，调度为 `exact-cap6`，窄相为 cannon 默认实现。
+- 当前可复现版本为 THROW v3 / SETTLE v4；正式投掷为 `stratified-ring`，contact-cluster assist 关闭，调度为 `exact-cap6`。浏览器保留 Cannon 默认窄相；服务端使用与 Cannon 0.20.0 严格等价的 `projected-aabb-v1`。
 - 读面依据最终物理四元数与面法线，不使用欧拉角区间，也不得在读面前后改写姿态以制造目标点数。
 - 强制 sleep、速度清零、姿态吸附、逃逸反射或截断必须记录为可观察原因；timeout 只提供流程出口，不授权读取仍运动的姿态。
 - 逃逸验收以真实碗边界和全过程极值为准；飞出后落回、被 guard 反射后落回仍属于发生过介入。

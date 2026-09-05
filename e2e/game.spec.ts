@@ -88,6 +88,7 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
     frameScheduled: false,
   })
   idle = await waitForStaticQuiescence(page, idle)
+  const initialCanvasHeight = (await page.locator('canvas').boundingBox())!.height
   expectDefaultExactScheduler(idle)
   expect(idle.engine.physicsTiming).toMatchObject({
     simulationStep: null,
@@ -99,8 +100,8 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
   expect(idle.engine.performanceProfile).toBeUndefined()
   expect(idle.renderExperiment).toMatchObject({
     explicit: false,
-    variant: 'rolling-dpr-reduced-tier',
-    rollingDprPreset: 'cap-1x-reduced-tier',
+    variant: 'adaptive',
+    rollingDprPreset: 'adaptive',
     rollingShadowPreset: 'every-frame',
   })
   expect(idle.render.quality?.phase).toBe('static')
@@ -126,8 +127,8 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.innerWidth + 1)
     expect(layout.canvas.left).toBeGreaterThanOrEqual(-1)
     expect(layout.canvas.right).toBeLessThanOrEqual(layout.innerWidth + 1)
-    expect(layout.canvas.height).toBeGreaterThanOrEqual(519)
-    expect(layout.canvas.height).toBeLessThanOrEqual(761)
+    expect(layout.canvas.height).toBeGreaterThanOrEqual(379)
+    expect(layout.canvas.height).toBeLessThanOrEqual(521)
     expect(layout.button.left).toBeGreaterThanOrEqual(-1)
     expect(layout.button.right).toBeLessThanOrEqual(layout.innerWidth + 1)
   }
@@ -150,11 +151,12 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
     rolling.render.quality?.tier === 'reduced'
       ? BROWSER_BUDGETS.reducedTierRollingPixelRatio
       : idle.render.pixelRatio
-  expect(rolling.render.pixelRatio).toBeCloseTo(expectedRollingPixelRatio, 8)
+  expect(rolling.render.pixelRatio).toBeLessThanOrEqual(expectedRollingPixelRatio)
+  expect(rolling.render.pixelRatio).toBeGreaterThanOrEqual(0.75)
   if (rolling.render.quality?.tier === 'reduced') {
     expect(rolling.render.drawingBufferPixels).toBeLessThan(idle.render.drawingBufferPixels)
   } else {
-    expect(rolling.render.drawingBufferPixels).toBe(idle.render.drawingBufferPixels)
+    expect(rolling.render.drawingBufferPixels).toBeLessThanOrEqual(idle.render.drawingBufferPixels)
   }
   expect(rolling.engine.rollingShadow.preset).toBe('every-frame')
 
@@ -175,6 +177,9 @@ test('desktop/mobile 完整投掷流程与静态调度契约', async ({ page }, 
     timeout: BROWSER_BUDGETS.settlementWallTimeoutMs,
   })
   expectSettledExactTiming(settled)
+  if (testInfo.project.name.includes('mobile')) {
+    expect((await page.locator('canvas').boundingBox())!.height).toBeCloseTo(initialCanvasHeight, 0)
+  }
   expect(settled.roll.seed).toBe(E2E_NEXT_SEED)
   expect(settled.roll.settleReason).not.toBeNull()
   expect(settled.engine.performanceProfile).toBeUndefined()
@@ -402,7 +407,7 @@ test('exact-cap4 六个 100ms 慢帧进入显式 overload，绝不提交结果',
     },
   })
   await expect(page.getByRole('alert')).toContainText('本轮未结算')
-  await expect(page.getByRole('alert')).toContainText('物理模拟积压超过安全上限')
+  await expect(page.getByRole('alert')).toContainText('页面运行较慢')
   await expect(page.getByRole('alert')).toContainText('已模拟 0.33 秒 / 20 步')
   await expect(page.locator('.result-panel')).toHaveCount(0)
   await expect(page.locator('.history-item')).toHaveCount(0)

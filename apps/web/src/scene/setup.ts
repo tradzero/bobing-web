@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { createAdaptiveQuality } from '@/game/adaptive-quality'
 import {
   resolveRenderPhasePixelRatio,
   resolveRenderQuality,
@@ -35,6 +36,7 @@ export interface SceneContext {
   clearRenderInvalidationCallback?: () => void
   /** 切换静态/rolling 主画布质量；真实 SceneContext 必定提供，保留可选以兼容轻量测试替身。 */
   setRenderPhase?: (phase: RenderPhase) => void
+  observeRollingFrame?: (deltaMs: number) => void
   /** 返回最近一次有效 resize 对应的质量快照；canvas 尚无有效尺寸时返回 null。 */
   getRenderQualityDiagnostics?: () => RenderQualityDiagnostics | null
   dispose: () => void
@@ -106,6 +108,22 @@ export function createScene(
   let renderPhase: RenderPhase = 'static'
   let baseQuality: RenderQuality | null = null
   let effectivePixelRatio: number | null = null
+  const adaptiveQuality = createAdaptiveQuality()
+  const phasePixelRatio = (quality: RenderQuality) =>
+    Math.min(
+      resolveRenderPhasePixelRatio(quality.pixelRatio, quality.tier, renderPhase, rollingDprPreset),
+      rollingDprPreset === 'adaptive' && renderPhase === 'rolling'
+        ? adaptiveQuality.pixelRatioCap
+        : Infinity,
+    )
+  const observeRollingFrame = (deltaMs: number) => {
+    if (rollingDprPreset !== 'adaptive' || !baseQuality || renderPhase !== 'rolling') return
+    if (!adaptiveQuality.observe(deltaMs)) return
+    const pixelRatio = phasePixelRatio(baseQuality)
+    if (pixelRatio === effectivePixelRatio) return
+    effectivePixelRatio = pixelRatio
+    renderer.setPixelRatio(pixelRatio)
+  }
 
   const setRenderInvalidationCallback = (callback: RenderInvalidationCallback) => {
     renderInvalidationCallback = callback
@@ -130,14 +148,10 @@ export function createScene(
   const setRenderPhase = (phase: RenderPhase) => {
     if (renderPhase === phase) return
     renderPhase = phase
+    adaptiveQuality.resetWindow()
     if (!baseQuality) return
 
-    const nextPixelRatio = resolveRenderPhasePixelRatio(
-      baseQuality.pixelRatio,
-      baseQuality.tier,
-      renderPhase,
-      rollingDprPreset,
-    )
+    const nextPixelRatio = phasePixelRatio(baseQuality)
     if (effectivePixelRatio === nextPixelRatio) return
 
     effectivePixelRatio = nextPixelRatio
@@ -167,12 +181,7 @@ export function createScene(
     lastResize = { width, height, devicePixelRatio }
 
     const quality = resolveRenderQuality(width, height, devicePixelRatio)
-    const nextPixelRatio = resolveRenderPhasePixelRatio(
-      quality.pixelRatio,
-      quality.tier,
-      renderPhase,
-      rollingDprPreset,
-    )
+    const nextPixelRatio = phasePixelRatio(quality)
     baseQuality = quality
     effectivePixelRatio = nextPixelRatio
     renderer.setPixelRatio(nextPixelRatio)
@@ -221,6 +230,7 @@ export function createScene(
     setRenderInvalidationCallback,
     clearRenderInvalidationCallback,
     setRenderPhase,
+    observeRollingFrame,
     getRenderQualityDiagnostics,
     dispose,
   }

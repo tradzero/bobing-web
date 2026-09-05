@@ -20,11 +20,13 @@ export function RollErrorPanel() {
       <div className="tilt-warning-text">
         {isTimeout
           ? '骰子在限定时间内未能可信停稳，本轮未读取点数，也未计入记录。'
-          : '页面帧调度持续落后，物理模拟积压超过安全上限，本轮未读取点数，也未计入记录。'}
+          : '页面运行较慢，本轮投掷未能完成，也未计入记录。请关闭其他繁忙页面后重试。'}
       </div>
       <div className="roll-error-detail">
         {isTimeout ? (
           <>异常原因：结算超时（{rollError.elapsed.toFixed(1)} 秒）</>
+        ) : rollError.discardedWallMs !== undefined ? (
+          <>投掷播放持续落后，已停止本轮。</>
         ) : (
           <>
             异常原因：物理时间积压（队列 {rollError.queuedMs.toFixed(1)} 毫秒，安全上限{' '}

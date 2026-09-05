@@ -41,7 +41,7 @@ e2e/                        单机浏览器流程、soak 与隔离性能实验
 
 不保留只启动 Vite 的通用 `dev` 脚本：多人开发入口必须同时提供 HTTP、WebSocket 和静态产物。浏览器命令 UUID 优先使用 `crypto.randomUUID()`；普通局域网 HTTP 不提供该 API 时，使用 `crypto.getRandomValues()` 生成符合 RFC 4122 variant/version 位的 v4 UUID。
 
-普通测试/e2e 构建强制走单机入口，避免数据库成为物理/UI 浏览器门禁的隐式依赖。`test:e2e:multiplayer` 独立构建多人入口并启动真实 HTTP/WebSocket/PostgreSQL 链路，覆盖多房隔离、密码验证、房主关闭、完整结束分支、断线与进程重启恢复。
+大厅首屏不加载 Three/Cannon；单机和多人入口动态加载，共用 GameViewport chunk。普通测试/e2e 构建强制走单机入口，避免数据库成为物理/UI 浏览器门禁的隐式依赖。`test:e2e:multiplayer` 独立构建多人入口并启动真实 HTTP/WebSocket/PostgreSQL 链路，覆盖多房隔离、密码验证、房主关闭、完整结束分支、断线与进程重启恢复。
 
 ## 多人权威链路
 
@@ -63,7 +63,7 @@ RoomRepository ── PostgreSQL 事务
 game-domain ── 回合推进、库存扣减、抢状元、结束/加投语义
 ```
 
-服务端先在数据库事务外完成 CPU 物理，再以短事务锁定当前 room/game/turn。投掷使用 UUID command ID 幂等；同一事务提交 attempt、奖项、状元归属和下一回合，避免错误重试造成双扣奖或双推进。
+服务端先以短事务预检 room/game/turn 和幂等命令，再交给固定 worker 池在事务外完成 CPU 物理，最后以短事务重新锁定并校验 room/game/turn。预检与提交复用同一校验函数；计算期间没有数据库锁。同一房间/玩家/command 的并发请求共用一个 Promise，已持久化命令直接重放。worker 默认 2 个、等待队列 32 个，10 秒超时包含排队；队列满或 worker 异常拒绝请求，不伪造物理结果。投掷使用 UUID command ID 幂等；同一事务提交 attempt、奖项、状元归属和下一回合，避免错误重试造成双扣奖或双推进。
 
 客户端收到 seed 后播放同一初始条件，但客户端读面和判奖仅供画面核对，不具备权威写入权。服务端发生 timeout、NaN、越界、guard 介入、floor tracker 不可用/命中或预算耗尽时，只记录错误并按配置重试/结束当前操作。
 
@@ -118,24 +118,26 @@ React 只负责 DOM overlay。`GameViewport` 创建/销毁 scene、physics、`Di
 - `rolling`：连续 rAF，以显式 accumulator 接纳墙钟并逐个执行 Cannon 固定步；
 - `stopped`：不再调度。
 
-页面隐藏时间记入 paused/discarded，不偷偷形成恢复后的巨大 backlog。持续过载进入独立 `timing-overload` 错误；timeout 同样冻结 raw 画面并禁止正常结算。
+页面隐藏时间记入 paused/discarded，不偷偷形成恢复后的巨大 backlog。持续过载或一轮内可见慢帧 clamp 累计丢弃超过 3000ms 时，进入独立 `timing-overload` 错误；timeout 同样冻结 raw 画面并禁止正常结算。
 
 ### 正式运行时与实验层
 
 正式构建通过 Vite 精确 alias 只装入当前实现：
 
-| 维度    | 正式实现                                   | 实验入口                                      |
-| ------- | ------------------------------------------ | --------------------------------------------- |
-| 投掷    | `dice/throw-runtime.ts`：`stratified-ring` | `dice/throw.ts`：legacy/radial/uniform 适配   |
-| 停稳    | `dice/settle-runtime.ts`：无 assist        | `dice/settle.ts`：显式 contact-cluster assist |
-| 世界    | `physics/world-runtime.ts`：cannon-default | `physics/world.ts`：projected-AABB 候选       |
-| 调度    | exact-cap6 runtime preset                  | legacy-batched / exact-cap4 e2e preset        |
-| profile | 生产禁用                                   | e2e rolling CPU profile v2                    |
-| 渲染    | reduced tier rolling DPR 1x，阴影逐帧      | e2e DPR/阴影候选                              |
+| 维度    | 正式实现                                                                                       | 实验入口                                      |
+| ------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| 投掷    | `dice/throw-runtime.ts`：`stratified-ring`                                                     | `dice/throw.ts`：legacy/radial/uniform 适配   |
+| 停稳    | `dice/settle-runtime.ts`：无 assist                                                            | `dice/settle.ts`：显式 contact-cluster assist |
+| 世界    | Web `world-runtime.ts`：cannon-default；Server `world-optimized-runtime.ts`：projected-aabb-v1 | `physics/world.ts`：两种窄相 A/B              |
+| 调度    | exact-cap6 runtime preset                                                                      | legacy-batched / exact-cap4 e2e preset        |
+| profile | 生产禁用                                                                                       | e2e rolling CPU profile v2                    |
+| 渲染    | adaptive rolling DPR，阴影逐帧                                                                 | e2e DPR/阴影候选                              |
 
 Vitest、显式 `vite-node --mode lab` 脚本和 `vite build --mode e2e` 使用实验适配层，因此历史证据仍可复现；普通 Web/Server build 不携带这些候选实现。当前算法的实际函数只存在一份，实验适配层调用正式函数，不复制近似实现。
 
 ### 投掷、停稳与读面
+
+adaptive 渲染先沿用 reduced 档 rolling 1x、full 档基础 DPR；连续 6 帧超过 40ms 降一档（1x / 0.75x），连续 120 帧低于 22ms 才恢复一档。档位跨轮保留，静态始终恢复基础 DPR，阴影分辨率与物理步长不变。阈值集中在 Web `config/render.ts`。
 
 - THROW v3 使用 seed 派生独立 layout/dynamics 子流；六骰在随机旋转的六扇区环上构造，并随机打乱骰子到槽位映射。
 - SETTLE v4 依次识别 timeout、Cannon natural sleep、只读姿态稳定窗口和连续低速窗口。正式路径不执行 contact-cluster 冻结。
@@ -145,7 +147,7 @@ Vitest、显式 `vite-node --mode lab` 脚本和 `vite build --mode e2e` 使用�
 ### 碗、骰子与安全诊断
 
 - 碗底是由共享曲线生成的 51×51 Heightfield；16 个薄 Box 组成内侧挡墙；桌面平面是极端情况兜底。
-- 骰子物理采用 `CANNON.Box`，视觉采用 RoundedBox geometry + 单材质 atlas 的 6-instance `InstancedMesh`。视觉圆角不改变物理形状。
+- 骰子物理采用 `CANNON.Box`，视觉采用 RoundedBox geometry + 单材质 atlas 的 6-instance `InstancedMesh`。圆角细分从 6 降为 3，主场景由 41,288 降为 32,648 个三角形；视觉圆角不改变物理形状。
 - 每个 exact step 按固定顺序执行世界推进、未介入安全采样、floor-relaunch tracker、escape guard、settle 检测。
 - floor-relaunch 只有在已观察真实碗底接触并建立持续支撑后，二次离地持续时间、clearance 和有序上升同时过阈值才锁存。tracker 前提不满足时明确返回 unavailable。
 - 诊断记录 seed、算法版本、initial/final Float64 canonical state 和 hash、settlement、速度/角速度、边界/穿透、guard、姿态与 floor tracker 数据。
@@ -188,7 +190,7 @@ error/result ── reset ──▶ idle (round 1)
 
 海碗当前只使用 `bowl-blue-white-seamless-v2.webp`。纹样通过半幅重排/镜像拼接隐藏 UV 接缝；解码和首次材质上传完成前显示不透明加载页。加载失败或 8 秒超时后替换为程序化 CanvasTexture，两条路径同时只保留一个活动 wall texture。
 
-桌面继续使用程序化木纹。移动端为真实上下文档流：当前结果/确认优先，主操作其次，历史和累计数据最后；不维护可拖拽浮层状态。
+桌面继续使用程序化木纹。移动端为真实上下文档流：当前结果/确认优先，主操作其次，历史和累计数据最后；不维护可拖拽浮层状态。单机首轮和结果态使用同一画布高度；多人移动端在画布下排列操作，并通过页签查看奖池、全员获取和最近结果，rolling 时关闭面板背景模糊。
 
 ## 验证分层
 

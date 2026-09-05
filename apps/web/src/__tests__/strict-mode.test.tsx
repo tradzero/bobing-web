@@ -337,8 +337,8 @@ describe('StrictMode 重挂载', () => {
       renderExperiment: {
         version: 1,
         explicit: false,
-        variant: 'rolling-dpr-reduced-tier',
-        rollingDprPreset: 'cap-1x-reduced-tier',
+        variant: 'adaptive',
+        rollingDprPreset: 'adaptive',
         rollingShadowPreset: 'every-frame',
       },
       roll: {

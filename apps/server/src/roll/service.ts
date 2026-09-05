@@ -1,7 +1,20 @@
 import { randomUUID } from 'node:crypto'
 import type { ServerConfig } from '../config/env'
-import { RoomRepository, type StartedRoll, type TiltDecisionInput } from '../room/repository'
-import { computeAuthoritativeRoll, type RollAuthorityOptions } from './authority'
+import {
+  RoomRepository,
+  RoomRepositoryError,
+  type StartedRoll,
+  type TiltDecisionInput,
+} from '../room/repository'
+import type { AuthoritativeRoll, RollAuthorityOptions } from './authority'
+import { RollWorkerPoolError } from './worker-pool'
+type RollRepository = Pick<
+  RoomRepository,
+  | 'prepareAuthoritativeRoll'
+  | 'beginAuthoritativeRoll'
+  | 'recordAuthoritativeRollError'
+  | 'resolveTiltDecision'
+>
 
 export interface RoomRollRequest {
   roomId: string
@@ -14,15 +27,20 @@ export interface RoomRollRequest {
  * 权威计算异常会记录完整诊断；配置允许时由服务端换 seed 自动重试。
  */
 export class RoomRollService {
-  private readonly repository: RoomRepository
+  private readonly repository: RollRepository
   private readonly authorityOptions: RollAuthorityOptions
   private readonly config: ServerConfig
+  private readonly compute: (options: RollAuthorityOptions) => Promise<AuthoritativeRoll>
+  private readonly inFlight = new Map<string, Promise<StartedRoll | null>>()
   private readonly now: () => number
 
   constructor(
-    repository: RoomRepository,
+    repository: RollRepository,
     config: ServerConfig,
-    options: { now?: () => number } = {},
+    options: {
+      now?: () => number
+      compute: (options: RollAuthorityOptions) => Promise<AuthoritativeRoll>
+    },
   ) {
     this.repository = repository
     this.config = config
@@ -30,13 +48,35 @@ export class RoomRollService {
       revealMinMs: config.rollRevealMinMs,
       revealMaxMs: config.rollRevealMaxMs,
     }
+    this.compute = options.compute
     this.now = options.now ?? Date.now
   }
 
-  async requestRoll(request: RoomRollRequest): Promise<StartedRoll | null> {
+  requestRoll(request: RoomRollRequest): Promise<StartedRoll | null> {
+    const key = JSON.stringify([request.roomId, request.playerId, request.commandId])
+    const existing = this.inFlight.get(key)
+    if (existing) return existing
+    const pending = this.runRequest(request)
+      .catch((error: unknown) => {
+        if (error instanceof RollWorkerPoolError)
+          throw new RoomRepositoryError('conflict', error.message)
+        throw error
+      })
+      .finally(() => this.inFlight.delete(key))
+    this.inFlight.set(key, pending)
+    return pending
+  }
+
+  private async runRequest(request: RoomRollRequest): Promise<StartedRoll | null> {
     let commandId = request.commandId
     for (;;) {
-      const outcome = computeAuthoritativeRoll(this.authorityOptions)
+      const duplicate = await this.repository.prepareAuthoritativeRoll({
+        ...request,
+        commandId,
+        now: this.now(),
+      })
+      if (duplicate) return duplicate
+      const outcome = await this.compute(this.authorityOptions)
       const now = this.now()
       if (outcome.kind === 'error') {
         const recorded = await this.repository.recordAuthoritativeRollError({
